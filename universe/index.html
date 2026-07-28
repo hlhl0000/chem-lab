@@ -1,0 +1,5102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>우주 팽창과 입자 결합 시뮬레이터</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000; color: #fff;
+      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+      overflow: hidden; user-select: none;
+    }
+    #app { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+
+    /* ── Header ── */
+    #header {
+      flex-shrink: 0; padding: 9px 20px;
+      background: rgba(0,0,0,0.85);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: flex; align-items: center; gap: 12px; z-index: 20;
+    }
+    #header h1 { font-size: 15px; font-weight: 700; color: #FFD700; letter-spacing: 0.5px; }
+    .stage-badge {
+      font-size: 10px; border-radius: 20px; padding: 2px 9px;
+      border: 1px solid rgba(255,176,32,0.55); color: rgba(255,176,32,0.85);
+      transition: opacity 0.4s;
+    }
+    /* ── Pause Button ── */
+    #pauseBtn {
+      margin-left: auto;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 8px; color: #FFD700;
+      font-size: 16px; padding: 4px 14px;
+      cursor: pointer; transition: background 0.2s, border-color 0.2s;
+      outline: none; line-height: 1.4;
+    }
+    #pauseBtn:hover { background: rgba(255,215,0,0.14); border-color: rgba(255,215,0,0.4); }
+    #pauseBtn.paused { color: #88FF88; border-color: rgba(100,255,100,0.32); }
+
+    /* ── 5차 개선: 포획 가속 버튼 ── */
+    #captureAccelBtn {
+      position: absolute;
+      bottom: 14px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 25;
+      padding: 7px 20px;
+      background: rgba(255,180,0,0.12);
+      border: 1px solid rgba(255,180,0,0.38);
+      border-radius: 8px;
+      color: rgba(255,210,80,0.92);
+      font-size: 13px; font-weight: 600;
+      cursor: pointer; letter-spacing: 0.4px;
+      transition: all 0.2s; display: none;
+      backdrop-filter: blur(2px);
+    }
+    #captureAccelBtn:hover {
+      background: rgba(255,190,0,0.24);
+      border-color: rgba(255,225,0,0.6);
+      transform: translateX(-50%) scale(1.04);
+    }
+    #captureAccelBtn.done {
+      color: #88ffaa; border-color: rgba(100,255,130,0.38);
+      background: rgba(60,255,120,0.08); cursor: default;
+    }
+    #captureAccelBtn.visible { display: block; }
+
+    /* ── 5차 개선: 입자 돋보기 ── */
+    #particleMagnifier {
+      position: absolute; z-index: 35;
+      background: rgba(4,8,30,0.93);
+      border: 1px solid rgba(120,180,255,0.32);
+      border-radius: 12px; padding: 10px 14px;
+      pointer-events: none; opacity: 0;
+      transition: opacity 0.15s; min-width: 145px;
+      backdrop-filter: blur(6px);
+    }
+    #particleMagnifier.visible { opacity: 1; }
+    .pm-title {
+      font-size: 12px; font-weight: 700;
+      color: #aaddff; margin-bottom: 7px; text-align: center;
+    }
+    .pm-quarks {
+      display: flex; justify-content: center;
+      gap: 6px; margin-bottom: 7px;
+    }
+    .pm-quark {
+      width: 30px; height: 30px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 800; color: #fff;
+      box-shadow: 0 0 6px rgba(0,0,0,0.5);
+    }
+    .pm-quark.up   { background: radial-gradient(circle at 38% 36%, #ffdd77, #ff7700); }
+    .pm-quark.down { background: radial-gradient(circle at 38% 36%, #cc88ff, #7722dd); }
+    .pm-sep { width: 1px; background: rgba(120,180,255,0.2); margin: 3px 0; }
+    .pm-desc { font-size: 10px; color: rgba(180,210,255,0.78); text-align: center; margin-bottom: 4px; line-height: 1.4; }
+    .pm-formula { font-size: 13px; font-weight: 700; color: #88ffcc; text-align: center; letter-spacing: 4px; }
+
+    /* ── Canvas wrapper ── */
+    #canvasWrapper { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+    #universeCanvas { display: block; width: 100%; height: 100%; }
+
+    /* ── Status Panel ── */
+    #statusPanel {
+      position: absolute; top: 14px; left: 14px;
+      background: rgba(4,4,18,0.84);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px; padding: 14px 17px; min-width: 220px;
+      backdrop-filter: blur(6px); z-index: 10;
+    }
+    .sp-title { font-size: 13px; font-weight: 700; color: #FFD700;
+      padding-bottom: 8px; margin-bottom: 8px;
+      border-bottom: 1px solid rgba(255,215,0,0.22); }
+    .sp-row { display: flex; justify-content: space-between; gap: 8px;
+      margin-bottom: 5px; font-size: 11.5px; line-height: 1.4; }
+    .sp-label { color: rgba(255,255,255,0.42); white-space: nowrap; }
+    .sp-value { color: #e8e8e8; font-weight: 500; text-align: right; }
+    .sp-photon { margin-top: 9px; font-size: 10.5px; line-height: 1.6;
+      border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; }
+    .sp-photon-label { color: rgba(255,255,255,0.38); font-size: 10px; margin-bottom: 3px; }
+    .sp-photon-state { font-weight: 600; }
+    .state-trapped { color: #FF9944; }
+    .state-trans   { color: #FFFF88; }
+    .state-free    { color: #88FFCC; }
+    .sp-desc { margin-top: 7px; font-size: 10.5px;
+      color: rgba(255,255,255,0.55); line-height: 1.6; white-space: pre-line; }
+
+    /* ── Shared overlay fade ── */
+    .stage-overlay {
+      position: absolute; z-index: 10;
+      opacity: 1; transition: opacity 0.5s; pointer-events: none;
+    }
+    .stage-overlay.hidden { opacity: 0; }
+
+    /* ── Pause overlay ── */
+    #pauseOverlay {
+      position: absolute; inset: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.38);
+      opacity: 0; transition: opacity 0.25s; pointer-events: none;
+    }
+    #pauseOverlay.active { opacity: 1; }
+    #pauseOverlay span {
+      font-size: 28px; font-weight: 700; color: rgba(255,215,0,0.92);
+      letter-spacing: 2px;
+      text-shadow: 0 0 30px rgba(255,215,0,0.5);
+    }
+
+    /* ── Stage 1 ── */
+    #stage1Legend {
+      top: 14px; right: 14px;
+      background: rgba(6,2,0,0.82);
+      border: 1px solid rgba(255,140,0,0.22);
+      border-radius: 10px; padding: 11px 15px; font-size: 10.5px;
+    }
+    #stage1Count {
+      bottom: 14px; right: 14px;
+      background: rgba(6,2,0,0.78);
+      border: 1px solid rgba(255,140,0,0.15);
+      border-radius: 8px; padding: 8px 13px;
+      font-size: 10px; color: rgba(255,255,255,0.48); line-height: 1.8;
+    }
+
+    /* ── Stage 2 ── */
+    #stage2Legend {
+      top: 14px; right: 14px;
+      background: rgba(4,2,12,0.84);
+      border: 1px solid rgba(150,100,255,0.22);
+      border-radius: 10px; padding: 11px 15px; font-size: 10.5px;
+    }
+    .lg-sep { border-top: 1px solid rgba(255,255,255,0.1); margin: 6px 0; }
+    #stage2Progress {
+      bottom: 14px; left: 14px;
+      background: rgba(4,2,12,0.84);
+      border: 1px solid rgba(150,100,255,0.18);
+      border-radius: 10px; padding: 10px 15px;
+      font-size: 11px; min-width: 180px;
+    }
+    .prog-title { color: rgba(255,255,255,0.38); font-size: 9.5px;
+      margin-bottom: 7px; letter-spacing: 0.5px; }
+    .prog-phase { font-size: 11px; font-weight: 600; color: #AAFFAA;
+      margin-bottom: 8px; min-height: 17px; }
+    .prog-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    .prog-label { color: rgba(255,255,255,0.6); width: 78px; font-size: 10.5px; }
+    .prog-bar-wrap { flex: 1; height: 6px; background: rgba(255,255,255,0.08);
+      border-radius: 3px; overflow: hidden; }
+    .prog-bar { height: 100%; border-radius: 3px; width: 0%; transition: width 0.4s ease; }
+    .prog-proton  { background: linear-gradient(90deg,#FF6644,#FF3322); }
+    .prog-neutron { background: linear-gradient(90deg,#4488FF,#2255CC); }
+    .prog-count { font-size: 10px; color: rgba(255,255,255,0.5); min-width: 30px; }
+
+    /* ── Stage 3 ── */
+    #stage3Legend {
+      top: 14px; right: 14px;
+      background: rgba(5,2,0,0.82);
+      border: 1px solid rgba(255,160,30,0.18);
+      border-radius: 10px; padding: 11px 15px; font-size: 10.5px;
+    }
+    .lg-he {
+      width: 17px; height: 17px; border-radius: 50%; flex-shrink: 0;
+      background: radial-gradient(circle at 40% 40%, #FFE066, #FFCC00, #FF9900);
+      box-shadow: 0 0 8px #FFAA00;
+    }
+    #stage3Counter {
+      top: 14px; left: 50%; transform: translateX(-50%);
+      background: rgba(5,2,0,0.80);
+      border: 1px solid rgba(255,160,30,0.2);
+      border-radius: 8px; padding: 7px 20px;
+      font-size: 11px; color: rgba(255,255,255,0.55);
+      display: flex; gap: 18px; white-space: nowrap;
+    }
+    .fc-item { display: flex; align-items: center; gap: 6px; }
+    .fc-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    #stage3Ratio {
+      bottom: 14px; left: 14px;
+      background: rgba(5,2,0,0.86);
+      border: 1px solid rgba(255,160,30,0.22);
+      border-radius: 12px; padding: 14px 18px; min-width: 230px;
+      backdrop-filter: blur(6px);
+    }
+    .rp-title { font-size: 11px; font-weight: 700; color: #FFAA30; margin-bottom: 10px; }
+    .rp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+    .rp-name { font-size: 11px; font-weight: 700; width: 50px; }
+    .rp-bar-wrap { flex: 1; height: 7px; background: rgba(255,255,255,0.08);
+      border-radius: 4px; overflow: hidden; }
+    .rp-bar { height: 100%; border-radius: 4px; transition: width 1.2s ease; }
+    .rp-h   { background: linear-gradient(90deg, #FF9944, #FFCC66); width: 0%; }
+    .rp-he  { background: linear-gradient(90deg, #FFCC00, #FF9900); width: 0%; }
+    .rp-pct { font-size: 11px; font-weight: 700; min-width: 36px;
+      text-align: right; color: rgba(255,255,255,0.7); }
+    .rp-sep { border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0 6px; }
+    .rp-math { font-size: 10px; color: rgba(255,255,255,0.55);
+      line-height: 1.8; font-family: monospace; }
+    .rp-math strong { color: #FFDD66; font-size: 11px; }
+    .rp-count { display: flex; justify-content: space-between;
+      font-size: 10px; color: rgba(255,255,255,0.45); margin-top: 8px; }
+
+    /* ── Stage 4 ── */
+    #stage4Legend {
+      top: 14px; right: 14px;
+      background: rgba(3,5,16,0.84);
+      border: 1px solid rgba(80,140,255,0.22);
+      border-radius: 10px; padding: 11px 15px; font-size: 10.5px;
+    }
+    #stage4Counter {
+      top: 14px; left: 50%; transform: translateX(-50%);
+      background: rgba(3,5,16,0.80);
+      border: 1px solid rgba(80,140,255,0.20);
+      border-radius: 8px; padding: 7px 20px;
+      font-size: 11px; color: rgba(255,255,255,0.55);
+      display: flex; gap: 18px; white-space: nowrap;
+    }
+    /* atomPanel: uses .visible instead of .stage-overlay .hidden */
+    #atomPanel {
+      position: absolute; z-index: 10; pointer-events: none;
+      bottom: 14px; right: 14px;
+      background: rgba(3,5,16,0.86);
+      border: 1px solid rgba(60,200,140,0.28);
+      border-radius: 10px; padding: 11px 15px;
+      color: #b6efd6; min-width: 160px;
+      opacity: 0; transition: opacity 1.4s ease;
+    }
+    #atomPanel.visible { opacity: 1; }
+    .ap-title { font-size: 12px; font-weight: 700; color: #40eaa0; margin-bottom: 6px; }
+    .ap-note {
+      margin-top: 7px; font-size: 10.5px; color: #88ddb8;
+      border-top: 1px solid rgba(50,180,120,0.22); padding-top: 5px;
+    }
+    /* speedBox: bottom-left (alternates with stage2Progress / stage3Ratio) */
+    #speedBox {
+      bottom: 14px; left: 14px;
+      background: rgba(3,5,16,0.88);
+      border: 1px solid rgba(80,140,255,0.22);
+      border-radius: 8px; padding: 10px 14px; min-width: 175px;
+      font-size: 11px; color: #aac8ff;
+    }
+    .bar-track {
+      width: 100%; height: 6px;
+      background: rgba(80,120,200,0.22);
+      border-radius: 3px; overflow: hidden; margin-top: 4px;
+    }
+    #speedFill {
+      height: 100%;
+      background: linear-gradient(to right, #3366ff, #88ccff);
+      border-radius: 3px; transition: width 0.15s;
+    }
+
+    /* ── Common legend styles ── */
+    .lg-title { color: rgba(255,255,255,0.38); font-size: 10px;
+      margin-bottom: 8px; letter-spacing: 0.5px; }
+    .lg-item { display: flex; align-items: center; gap: 8px;
+      margin-bottom: 5px; color: rgba(255,255,255,0.72); }
+    .lg-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+    .lg-wave { width: 22px; height: 10px; flex-shrink: 0;
+      background: linear-gradient(90deg,transparent,rgba(255,255,200,0.8),transparent);
+      border-radius: 3px; }
+
+    /* ── Controls ── */
+    #controlsPanel {
+      flex-shrink: 0; padding: 12px 28px 14px;
+      background: rgba(0,0,0,0.88);
+      border-top: 1px solid rgba(255,255,255,0.07);
+    }
+    #stageLabels { display: flex; justify-content: space-between; margin-bottom: 7px; }
+    .stage-label { flex: 1; font-size: 10px; color: rgba(255,255,255,0.3);
+      text-align: center; cursor: pointer; line-height: 1.5;
+      padding: 0 2px; transition: color 0.3s; }
+    .stage-label:hover { color: rgba(255,215,0,0.65); }
+    .stage-label.active { color: #FFD700; font-weight: 600; }
+    .stage-label .step-num { display: block; font-size: 13px; margin-bottom: 1px; }
+    #timeSlider {
+      width: 100%; -webkit-appearance: none; appearance: none;
+      height: 6px; border-radius: 3px; outline: none; cursor: pointer;
+      background: linear-gradient(to right,
+        #DCEBFF 0%, #FFD060 20%, #FF9020 40%, #CC2010 65%, #220044 80%, #040408 100%);
+    }
+    #timeSlider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+      background: #fff; border: 3px solid #FFD700;
+      box-shadow: 0 0 10px rgba(255,215,0,0.9); cursor: grab; transition: transform 0.1s;
+    }
+    #timeSlider::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.25); }
+    #timeSlider::-moz-range-thumb {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #fff; border: 3px solid #FFD700; cursor: grab;
+    }
+    #timeAxisLabels { display: flex; justify-content: space-between; margin-top: 5px;
+      font-size: 9px; color: rgba(255,255,255,0.22); }
+  
+  /* ── 1차 개선: 단계 전환 시각화 ── */
+  #transitionCanvas {
+    position: absolute; inset: 0;
+    pointer-events: none; border-radius: 10px; z-index: 4;
+  }
+  #stageBar {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 5px;
+    display: flex; border-radius: 0 0 10px 10px; overflow: hidden;
+    z-index: 15; pointer-events: none;
+  }
+  .sb-seg { height: 100%; flex: 1; opacity: 0.20; transition: opacity 0.6s; }
+  .sb-s1  { background: linear-gradient(to right, #FFBB22, #FF5500); }
+  .sb-s2  { background: linear-gradient(to right, #FF5500, #DD0055); }
+  .sb-s3  { background: linear-gradient(to right, #DD0055, #8833CC); }
+  .sb-s4  { background: linear-gradient(to right, #8833CC, #3311AA); }
+  #transitionBanner {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    top: 58px; z-index: 25; pointer-events: none;
+    background: rgba(4, 6, 22, 0.93); backdrop-filter: blur(16px);
+    border-radius: 14px; padding: 14px 26px; min-width: 275px;
+    border: 1px solid rgba(255,200,100,0.30);
+    text-align: center; opacity: 0; transition: opacity 0.45s;
+  }
+  #transitionBanner.visible { opacity: 1; }
+  .tb-title { font-size: 15px; font-weight: 700; color: #FFD97A; margin-bottom: 6px; }
+  .tb-desc  { font-size: 12px; color: #CCDCF4; line-height: 1.70; white-space: pre-line; }
+  .tb-time  { font-size: 10.5px; color: #8899BB; margin-top: 6px; }
+  /* 현재 단계 레이블 (우측 상단 배지 스타일 강화) */
+  #stageBadge { transition: background 0.8s, color 0.8s; }
+
+  /* ── 3차 개선: 단계 탄생 카드 ── */
+  #birthCard {
+    position: absolute; left: 50%; transform: translateX(-50%) scale(0.88);
+    bottom: 48px; z-index: 30; pointer-events: none;
+    background: rgba(4, 7, 28, 0.94); backdrop-filter: blur(18px);
+    border-radius: 16px; padding: 14px 26px 12px;
+    min-width: 295px; text-align: center;
+    opacity: 0; transition: opacity 0.40s, transform 0.40s;
+  }
+  #birthCard.visible {
+    opacity: 1; transform: translateX(-50%) scale(1.0);
+  }
+  .bc-icon  { font-size: 22px; margin-bottom: 6px; }
+  .bc-title { font-size: 14px; font-weight: 700; color: #FFE580; margin-bottom: 4px; }
+  .bc-body  { font-size: 11.5px; color: #C8DCF8; line-height: 1.65; white-space: pre-line; }
+  .bc-sub   { font-size: 10px; color: #778FAA; margin-top: 5px; }
+
+  /* ── 4차 개선: 교육용 학습 패널 ── */
+  #eduPanel {
+    position: absolute; right: 92px; top: 50%;
+    transform: translateY(-50%);
+    width: 172px; z-index: 20; pointer-events: none;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .edu-card {
+    background: rgba(3, 6, 22, 0.90);
+    backdrop-filter: blur(12px);
+    border-radius: 11px; padding: 9px 12px;
+    border: 1px solid transparent;
+    opacity: 0; transition: opacity 0.55s, border-color 0.55s;
+  }
+  .edu-card.active { opacity: 1; }
+  .edu-card-head {
+    font-size: 11px; font-weight: 700;
+    margin-bottom: 5px; display: flex; align-items: center; gap: 5px;
+  }
+  .edu-card-icon { font-size: 14px; }
+  .edu-card-body {
+    font-size: 10.5px; color: #AABCDC; line-height: 1.65;
+  }
+  .edu-card-arrow {
+    font-size: 10px; color: #667799; margin-top: 5px;
+  }
+  /* 단계별 색상 */
+  .edu-s1 { border-color: rgba(255,200,60,0.35);  }
+  .edu-s1 .edu-card-head { color: #FFD966; }
+  .edu-s2 { border-color: rgba(255,130,30,0.35);  }
+  .edu-s2 .edu-card-head { color: #FF9944; }
+  .edu-s3 { border-color: rgba(255,80,80,0.35);   }
+  .edu-s3 .edu-card-head { color: #FF7066; }
+  .edu-s4 { border-color: rgba(150,100,255,0.35); }
+  .edu-s4 .edu-card-head { color: #BB99FF; }
+  /* 슬라이더 레이블 강화 */
+  .stage-label {
+    font-size: 11.5px !important;
+    transition: color 0.4s, text-shadow 0.4s;
+  }
+  .stage-label.active {
+    text-shadow: 0 0 10px currentColor;
+  }
+
+  /* ── 6차 개선: Progressive Disclosure ── */
+  @keyframes pdPopIn {
+    0%   { opacity: 0; transform: scale(0.85) translateY(8px); }
+    60%  { opacity: 1; transform: scale(1.04) translateY(-2px); }
+    100% { opacity: 1; transform: scale(1.0) translateY(0); }
+  }
+  @keyframes pdFadeSlideIn {
+    0%   { opacity: 0; transform: translateY(12px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pdPulseHint {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,215,0,0); }
+    50%      { box-shadow: 0 0 18px 4px rgba(255,215,0,0.35); }
+  }
+  /* 초기 숨김 상태 */
+  .pd-hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: none !important;
+  }
+  /* 공개 애니메이션 */
+  .pd-pop-in {
+    animation: pdPopIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  .pd-fade-in {
+    animation: pdFadeSlideIn 0.45s ease-out forwards;
+  }
+  /* 온도계 캔버스 숨김용 */
+  .pd-gauge-hidden {
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  .pd-gauge-visible {
+    opacity: 1;
+    transition: opacity 0.6s ease;
+  }
+  /* 슬라이더 힌트 펄스 */
+  #timeSlider.pd-hint-pulse {
+    animation: pdPulseHint 2.0s ease-in-out infinite;
+    border-radius: 3px;
+  }
+  /* 초기 안내 메시지 */
+  #pdGuideMsg {
+    position: absolute;
+    bottom: 95px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    background: rgba(4, 8, 28, 0.92);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 215, 0, 0.35);
+    border-radius: 12px;
+    padding: 10px 22px;
+    color: rgba(255, 225, 140, 0.95);
+    font-size: 13px; font-weight: 600;
+    letter-spacing: 0.3px;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    white-space: nowrap;
+  }
+  #pdGuideMsg.visible { opacity: 1; }
+  #pdGuideMsg .pd-arrow {
+    display: inline-block;
+    animation: pdArrowBounce 1.2s ease-in-out infinite;
+    margin-left: 6px;
+  }
+  @keyframes pdArrowBounce {
+    0%, 100% { transform: translateX(0); }
+    50%      { transform: translateX(6px); }
+  }
+
+  /* ── 7차 개선: 슬로우 모션 & 결정적 순간 강조 ── */
+  @keyframes cmPulseRing {
+    0%   { transform: translate(-50%,-50%) scale(0.7); opacity: 0.9; }
+    100% { transform: translate(-50%,-50%) scale(2.2); opacity: 0; }
+  }
+  @keyframes cmShimmer {
+    0%, 100% { opacity: 0.6; }
+    50%      { opacity: 1.0; }
+  }
+  @keyframes cmBannerSlideIn {
+    0%   { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(0.92); }
+    100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  }
+  @keyframes cmBannerSlideOut {
+    0%   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.95); }
+  }
+  /* 슬로우 모션 인디케이터 배너 */
+  #cmSlowBanner {
+    position: absolute;
+    top: 52px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 28;
+    background: rgba(4, 6, 22, 0.92);
+    backdrop-filter: blur(16px);
+    border-radius: 26px;
+    padding: 6px 20px;
+    display: flex; align-items: center; gap: 8px;
+    pointer-events: none;
+    opacity: 0;
+    border: 1px solid rgba(255,180,60,0.30);
+    transition: none;
+  }
+  #cmSlowBanner.entering {
+    animation: cmBannerSlideIn 0.35s ease-out forwards;
+  }
+  #cmSlowBanner.exiting {
+    animation: cmBannerSlideOut 0.30s ease-in forwards;
+  }
+  .cm-slow-icon {
+    font-size: 14px;
+    animation: cmShimmer 1.0s ease-in-out infinite;
+  }
+  .cm-slow-text {
+    font-size: 11.5px; font-weight: 700;
+    color: rgba(255, 210, 100, 0.95);
+    letter-spacing: 1px;
+  }
+  .cm-slow-sub {
+    font-size: 10px; font-weight: 500;
+    color: rgba(200, 180, 140, 0.72);
+    margin-left: 2px;
+  }
+  /* 비네트(화면 가장자리 어두워지는) 슬로우 모션 효과 */
+  #cmVignette {
+    position: absolute; inset: 0;
+    z-index: 3; pointer-events: none;
+    opacity: 0; transition: opacity 0.5s ease;
+    background: radial-gradient(ellipse at center,
+      transparent 45%,
+      rgba(0,0,0,0.25) 75%,
+      rgba(0,0,0,0.50) 100%);
+  }
+  #cmVignette.active { opacity: 1; }
+  /* 슬라이더 자력 구간 표시 (마그넷 도트) */
+  .cm-magnet-dot {
+    position: absolute; top: 50%;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+  .cm-magnet-dot.active {
+    opacity: 1;
+    animation: cmShimmer 1.4s ease-in-out infinite;
+  }
+
+  /* ── 8차 개선: 피날레 임팩트 연출 ── */
+  @keyframes finaleFlashIn {
+    0%   { opacity: 0; }
+    15%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  @keyframes finaleTextScale {
+    0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.3); letter-spacing: 12px; }
+    30%  { opacity: 1; transform: translate(-50%,-50%) scale(1.12); letter-spacing: 4px; }
+    50%  { transform: translate(-50%,-50%) scale(1.0); letter-spacing: 2px; }
+    100% { opacity: 1; transform: translate(-50%,-50%) scale(1.0); letter-spacing: 2px; }
+  }
+  @keyframes finaleSubFade {
+    0%   { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes finaleGlow {
+    0%   { opacity: 0; transform: scale(0.5); }
+    40%  { opacity: 0.7; transform: scale(1.2); }
+    100% { opacity: 0; transform: scale(2.5); }
+  }
+  @keyframes finaleStar {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50%      { opacity: 1.0; transform: scale(1.3); }
+  }
+  #finaleOverlay {
+    position: absolute; inset: 0; z-index: 40;
+    pointer-events: none; opacity: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  #finaleOverlay.active { opacity: 1; }
+  #finaleFlash {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center,
+      rgba(255,255,240,0.95) 0%,
+      rgba(255,248,200,0.70) 25%,
+      rgba(255,230,140,0.30) 55%,
+      transparent 80%);
+    opacity: 0; pointer-events: none;
+  }
+  #finaleFlash.fire {
+    animation: finaleFlashIn 2.2s ease-out forwards;
+  }
+  #finaleGlowRing {
+    position: absolute; left: 50%; top: 50%;
+    width: 200px; height: 200px;
+    margin-left: -100px; margin-top: -100px;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+      rgba(255,255,200,0.5) 0%,
+      rgba(255,220,100,0.2) 40%,
+      transparent 70%);
+    opacity: 0; pointer-events: none;
+  }
+  #finaleGlowRing.fire {
+    animation: finaleGlow 2.8s ease-out forwards;
+  }
+  #finaleTitle {
+    position: absolute; left: 50%; top: 42%;
+    transform: translate(-50%,-50%) scale(0.3);
+    font-size: 32px; font-weight: 800;
+    color: transparent;
+    background: linear-gradient(135deg, #FFFDE0 0%, #FFD700 40%, #FFA500 70%, #FFD700 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    text-shadow: 0 0 40px rgba(255,215,0,0.6), 0 0 80px rgba(255,200,50,0.3);
+    white-space: nowrap; opacity: 0;
+    letter-spacing: 12px;
+  }
+  #finaleTitle.fire {
+    animation: finaleTextScale 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  #finaleSub {
+    position: absolute; left: 50%; top: 54%;
+    transform: translate(-50%, 0);
+    font-size: 15px; font-weight: 600;
+    color: rgba(255,240,180,0.88);
+    white-space: nowrap; opacity: 0;
+    text-shadow: 0 0 15px rgba(255,200,100,0.4);
+  }
+  #finaleSub.fire {
+    animation: finaleSubFade 0.8s ease-out 0.8s forwards;
+  }
+  #finaleSub2 {
+    position: absolute; left: 50%; top: 60%;
+    transform: translate(-50%, 0);
+    font-size: 12px; font-weight: 500;
+    color: rgba(200,220,255,0.65);
+    white-space: nowrap; opacity: 0;
+  }
+  #finaleSub2.fire {
+    animation: finaleSubFade 0.8s ease-out 1.6s forwards;
+  }
+  .finale-star {
+    position: absolute;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: #FFE87C;
+    box-shadow: 0 0 8px 2px rgba(255,232,120,0.6);
+    opacity: 0; pointer-events: none;
+  }
+  .finale-star.fire {
+    animation: finaleStar 1.5s ease-in-out infinite;
+  }
+
+  /* ── 9차 개선: 빅뱅 시작 인트로 화면 ── */
+  #bbIntro {
+    position: fixed; inset: 0; z-index: 100;
+    background: #000;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    overflow: hidden;
+    transition: opacity 1.2s ease;
+  }
+  #bbIntro.fading { opacity: 0; pointer-events: none; }
+  #bbIntro.gone   { display: none; }
+  /* 배경 미세 입자 */
+  #bbIntroCanvas {
+    position: absolute; inset: 0; z-index: 0;
+  }
+  /* 제목 */
+  .bb-title-wrap {
+    position: relative; z-index: 2;
+    text-align: center; margin-bottom: 36px;
+  }
+  .bb-title-main {
+    font-size: 42px; font-weight: 800;
+    color: transparent;
+    background: linear-gradient(135deg, #FFFDE8 0%, #FFD700 45%, #FF8C00 100%);
+    background-clip: text; -webkit-background-clip: text;
+    letter-spacing: 6px;
+    text-shadow: none;
+    opacity: 0;
+    animation: bbTitleIn 1.8s ease-out 0.3s forwards;
+  }
+  .bb-title-sub {
+    font-size: 15px; font-weight: 500;
+    color: rgba(200, 210, 235, 0.6);
+    margin-top: 10px; letter-spacing: 2px;
+    opacity: 0;
+    animation: bbSubIn 1.2s ease-out 1.0s forwards;
+  }
+  @keyframes bbTitleIn {
+    0%   { opacity: 0; letter-spacing: 20px; transform: scale(0.8); }
+    60%  { opacity: 1; letter-spacing: 8px;  transform: scale(1.03); }
+    100% { opacity: 1; letter-spacing: 6px;  transform: scale(1); }
+  }
+  @keyframes bbSubIn {
+    0%   { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  /* 시작 버튼 */
+  #bbStartBtn {
+    position: relative; z-index: 2;
+    width: 140px; height: 140px;
+    border-radius: 50%; border: none;
+    background: radial-gradient(circle at 40% 38%,
+      #FFF8E0 0%, #FFD700 30%, #FF8C00 65%, #CC4400 100%);
+    color: #fff; font-size: 16px; font-weight: 800;
+    cursor: pointer; outline: none;
+    box-shadow:
+      0 0 40px rgba(255,200,50,0.35),
+      0 0 80px rgba(255,150,30,0.20),
+      inset 0 -4px 12px rgba(0,0,0,0.25);
+    transition: transform 0.2s, box-shadow 0.3s;
+    opacity: 0;
+    animation: bbBtnIn 0.8s ease-out 1.6s forwards;
+    letter-spacing: 2px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    line-height: 1.3;
+  }
+  #bbStartBtn:hover {
+    transform: scale(1.08);
+    box-shadow:
+      0 0 60px rgba(255,200,50,0.55),
+      0 0 120px rgba(255,150,30,0.30),
+      inset 0 -4px 12px rgba(0,0,0,0.25);
+  }
+  #bbStartBtn:active {
+    transform: scale(0.95);
+  }
+  @keyframes bbBtnIn {
+    0%   { opacity: 0; transform: scale(0.5); }
+    70%  { opacity: 1; transform: scale(1.06); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  /* 펄스 링 */
+  .bb-pulse-ring {
+    position: absolute;
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,215,0,0.4);
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%) scale(1);
+    pointer-events: none;
+    animation: bbPulseRing 2.4s ease-out infinite;
+    z-index: 1;
+  }
+  .bb-pulse-ring:nth-child(2) { animation-delay: 0.8s; }
+  .bb-pulse-ring:nth-child(3) { animation-delay: 1.6s; }
+  @keyframes bbPulseRing {
+    0%   { transform: translate(-50%,-50%) scale(1); opacity: 0.6; }
+    100% { transform: translate(-50%,-50%) scale(3.2); opacity: 0; }
+  }
+  /* 폭발 전환 효과 */
+  #bbExplosion {
+    position: absolute; z-index: 3;
+    width: 100%; height: 100%;
+    pointer-events: none; opacity: 0;
+  }
+  #bbExplosion.fire {
+    animation: bbExplosionFlash 1.8s ease-out forwards;
+  }
+  @keyframes bbExplosionFlash {
+    0%   { opacity: 0; }
+    8%   { opacity: 1; }
+    40%  { opacity: 0.8; }
+    100% { opacity: 0; }
+  }
+  /* 하단 안내 */
+  .bb-hint {
+    position: absolute; bottom: 40px;
+    z-index: 2; font-size: 11px;
+    color: rgba(200,210,235,0.30);
+    letter-spacing: 1px;
+    opacity: 0;
+    animation: bbSubIn 1s ease-out 2.2s forwards;
+  }
+
+    /* ══ 사이트 통합용 추가 스타일 (2026-07-28) ══════════════════
+       원본 파일에는 없던 부분입니다. 여기만 지우면 원본으로 돌아갑니다. */
+    #backLink {
+      margin-left: 8px;
+      display: inline-flex; align-items: center;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 8px; color: #FFD700;
+      font-size: 13px; padding: 5px 12px;
+      text-decoration: none; white-space: nowrap;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    #backLink:hover { background: rgba(255,215,0,0.14); border-color: rgba(255,215,0,0.4); }
+
+    /* 터치 기기에서만 버튼을 키웁니다(44px 권장치).
+       데스크톱에서는 헤더가 얇게 유지됩니다. */
+    @media (pointer: coarse) {
+      html #pauseBtn,
+      html #backLink { min-height: 44px; }
+      html #timeSlider { height: 38px; }
+    }
+
+    /* 휴대폰 등 좁은 화면: 긴 제목이 헤더를 밀어내지 않도록 줄입니다. */
+    @media (max-width: 560px) {
+      #header { padding: 6px 10px; gap: 8px; }
+      #header h1 { font-size: 0; }              /* 글자를 숨기고 */
+      #header h1::before { content: "🌌"; font-size: 18px; }  /* 아이콘만 남김 */
+      #backLink { font-size: 0; padding: 5px 10px; }
+      #backLink::before { content: "←"; font-size: 15px; }
+      .stage-badge { font-size: 9px; padding: 2px 7px; }
+    }
+</style>
+</head>
+<body>
+
+<!-- 9차: 빅뱅 시작 인트로 화면 -->
+<div id="bbIntro">
+  <canvas id="bbIntroCanvas"></canvas>
+  <div class="bb-title-wrap">
+    <div class="bb-title-main">BIG BANG</div>
+    <div class="bb-title-sub">우주 팽창과 입자 결합 시뮬레이터</div>
+  </div>
+  <div style="position:relative;display:flex;align-items:center;justify-content:center;z-index:2;">
+    <div class="bb-pulse-ring"></div>
+    <div class="bb-pulse-ring"></div>
+    <div class="bb-pulse-ring"></div>
+    <button id="bbStartBtn">빅뱅<br>시작</button>
+  </div>
+  <canvas id="bbExplosion"></canvas>
+  <div class="bb-hint">통합과학 1 — 빅뱅과 원소의 생성</div>
+</div>
+
+<div id="app">
+
+  <div id="header">
+    <h1>🌌 우주 팽창과 입자 결합 시뮬레이터</h1>
+    <span class="stage-badge" id="stageBadge">① 빅뱅 직후 — 쿼크와 전자</span>
+    <button id="pauseBtn" title="일시정지 (Space)">⏸</button>
+    <!-- 사이트 대문으로 돌아가는 링크.
+         이 시뮬레이션은 전체화면(100vh) 구조라 공통 shared/nav.js 대신
+         자체 헤더에 링크만 넣었습니다. -->
+    <a id="backLink" href="../index.html" title="전체 목록으로">← 전체 목록</a>
+  </div>
+
+  <div id="canvasWrapper">
+    <canvas id="universeCanvas"></canvas>
+
+    <!-- 일시정지 오버레이 -->
+    <div id="pauseOverlay"><span>⏸ 일시정지</span></div>
+    <canvas id="transitionCanvas"></canvas>
+    <div id="transitionBanner">
+      <div class="tb-title" id="tbTitle"></div>
+      <div class="tb-desc"  id="tbDesc"></div>
+      <div class="tb-time"  id="tbTime"></div>
+    </div>
+
+    <div id="birthCard">
+      <div class="bc-icon"  id="bcIcon"></div>
+      <div class="bc-title" id="bcTitle"></div>
+      <div class="bc-body"  id="bcBody"></div>
+      <div class="bc-sub"   id="bcSub"></div>
+    </div>
+
+    <div id="eduPanel">
+      <div class="edu-card edu-s1" id="eduCard0">
+        <div class="edu-card-head"><span class="edu-card-icon">⚛️</span>① 쿼크·렙톤 시대</div>
+        <div class="edu-card-body">빅뱅 직후 최초의 입자<br>쿼크, 전자, 광자 생성<br><br>온도: ~10²⁸ K<br>시간: 0초</div>
+        <div class="edu-card-arrow">▶ 온도 하강 → ②</div>
+      </div>
+      <div class="edu-card edu-s2" id="eduCard1">
+        <div class="edu-card-head"><span class="edu-card-icon">🔴</span>② 핵자 형성</div>
+        <div class="edu-card-body">강력(强力) 작용<br>쿼크 3개 → 양성자·중성자<br><br>온도: ~10¹³ K<br>시간: 0.0001초</div>
+        <div class="edu-card-arrow">▶ 계속 냉각 → ③</div>
+      </div>
+      <div class="edu-card edu-s3" id="eduCard2">
+        <div class="edu-card-head"><span class="edu-card-icon">☢️</span>③ 빅뱅 핵합성</div>
+        <div class="edu-card-body">p²⁺ + n² → He²⁺<br>수소·헬륨 원자핵 형성<br><br>온도: ~10⁹ K<br>시간: 약 3분</div>
+        <div class="edu-card-arrow">▶ 38만 년 후 → ④</div>
+      </div>
+      <div class="edu-card edu-s4" id="eduCard3">
+        <div class="edu-card-head"><span class="edu-card-icon">✨</span>④ 재결합 시기</div>
+        <div class="edu-card-body">원자핵 + 전자 → 원자<br>수소 75% / 헬륨 25%<br><br>온도: ~3,000 K<br>시간: 38만 년</div>
+        <div class="edu-card-arrow">✅ 우주 최초의 원소 완성</div>
+      </div>
+    </div>
+    <div id="stageBar">
+      <div class="sb-seg sb-s1" id="sbS1"></div>
+      <div class="sb-seg sb-s2" id="sbS2"></div>
+      <div class="sb-seg sb-s3" id="sbS3"></div>
+      <div class="sb-seg sb-s4" id="sbS4"></div>
+    </div>
+
+    <!-- 공용 Status Panel -->
+    <div id="statusPanel">
+      <div class="sp-title" id="spStageName">빅뱅 직후</div>
+      <div class="sp-row"><span class="sp-label">경과 시간</span><span class="sp-value" id="spTime">—</span></div>
+      <div class="sp-row"><span class="sp-label">온도</span><span class="sp-value" id="spTemp">—</span></div>
+      <div class="sp-row"><span class="sp-label">주요 입자</span><span class="sp-value" id="spParticles">—</span></div>
+      <div class="sp-photon">
+        <div class="sp-photon-label">광자(빛) 상태</div>
+        <div class="sp-photon-state" id="spPhotonState">—</div>
+      </div>
+      <div class="sp-desc" id="spDesc">—</div>
+    </div>
+
+    <!-- Stage 1 Legend -->
+    <div id="stage1Legend" class="stage-overlay hidden">
+      <div class="lg-title">입자 범례</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#FF5050;box-shadow:0 0 5px #FF0000"></span> 쿼크 (위 · up)</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#50FF50;box-shadow:0 0 5px #00FF00"></span> 쿼크 (아래 · down)</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#5577FF;box-shadow:0 0 5px #0033FF"></span> 쿼크 (기묘 · strange)</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#FFFF00;box-shadow:0 0 6px #FFDD00"></span> 전자 (e⁻)</div>
+      <div class="lg-item"><span class="lg-wave"></span> 광자 (γ, 빛)</div>
+    </div>
+
+    <!-- Stage 1 Count -->
+    <div id="stage1Count" class="stage-overlay hidden">
+      쿼크 (R) : <span id="cntR">0</span>개 &nbsp;|&nbsp;
+      쿼크 (G) : <span id="cntG">0</span>개 &nbsp;|&nbsp;
+      쿼크 (B) : <span id="cntB">0</span>개<br>
+      전자 : <span id="cntE">0</span>개 &nbsp;|&nbsp;
+      광자 : <span id="cntP">0</span>개
+    </div>
+
+    <!-- Stage 2 Legend -->
+    <div id="stage2Legend" class="stage-overlay hidden">
+      <div class="lg-title">입자 범례</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#FF9922;box-shadow:0 0 5px #FF6600"></span> 업 쿼크 (u)</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#9955FF;box-shadow:0 0 5px #6622DD"></span> 다운 쿼크 (d)</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#FFFF44;box-shadow:0 0 5px #FFDD00"></span> 전자 (e⁻)</div>
+      <div class="lg-sep"></div>
+      <div class="lg-item"><span class="lg-dot" style="background:#FF4433;box-shadow:0 0 6px #FF2200;width:14px;height:14px"></span> 양성자 (p) &nbsp;u+u+d</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#3366CC;box-shadow:0 0 6px #1144AA;width:14px;height:14px"></span> 중성자 (n) &nbsp;u+d+d</div>
+    </div>
+
+    <!-- Stage 2 Progress -->
+    <div id="stage2Progress" class="stage-overlay hidden">
+      <div class="prog-title">핵자 형성 현황</div>
+      <div class="prog-phase" id="s2PhaseText">쿼크들이 자유롭게 이동 중…</div>
+      <div class="prog-row">
+        <span class="prog-label" style="color:#FF8866">양성자 (p)</span>
+        <div class="prog-bar-wrap"><div class="prog-bar prog-proton" id="barProton"></div></div>
+        <span class="prog-count" id="cntProton">0 / 5</span>
+      </div>
+      <div class="prog-row">
+        <span class="prog-label" style="color:#6699FF">중성자 (n)</span>
+        <div class="prog-bar-wrap"><div class="prog-bar prog-neutron" id="barNeutron"></div></div>
+        <span class="prog-count" id="cntNeutron">0 / 3</span>
+      </div>
+    </div>
+
+    <!-- Stage 3 Legend -->
+    <div id="stage3Legend" class="stage-overlay hidden">
+      <div class="lg-title">입자 범례</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#FF9944;box-shadow:0 0 5px #FF6600"></span> 양성자 → H⁺ (수소 원자핵)</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#AAAAAA;box-shadow:0 0 4px #888"></span> 중성자 (n)</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#FFFF44;box-shadow:0 0 6px #FFDD00;width:8px;height:8px"></span> 전자 (포획 불가)</div>
+      <div class="lg-sep"></div>
+      <div class="lg-item"><span class="lg-he"></span> He²⁺ (헬륨 원자핵) &nbsp;2p+2n</div>
+    </div>
+
+    <!-- Stage 3 Counter -->
+    <div id="stage3Counter" class="stage-overlay hidden">
+      <div class="fc-item">
+        <span class="fc-dot" style="background:#FF9944;box-shadow:0 0 4px #FF6600"></span>
+        H⁺ : <strong id="cntH">0</strong> / 12
+      </div>
+      <div class="fc-item">
+        <span class="fc-dot" style="background:#FFCC00;box-shadow:0 0 4px #FFAA00;width:13px;height:13px;border-radius:50%"></span>
+        He²⁺ : <strong id="cntHe">0</strong> / 1
+      </div>
+    </div>
+
+    <!-- Stage 3 Ratio Panel -->
+    <div id="stage3Ratio" class="stage-overlay hidden">
+      <div class="rp-title">🔬 우주 원소 질량비 (빅뱅 ~3분 후)</div>
+      <div class="rp-row">
+        <span class="rp-name" style="color:#FF9944">H⁺</span>
+        <div class="rp-bar-wrap"><div class="rp-bar rp-h" id="barH"></div></div>
+        <span class="rp-pct">75%</span>
+      </div>
+      <div class="rp-row">
+        <span class="rp-name" style="color:#FFCC00">He²⁺</span>
+        <div class="rp-bar-wrap"><div class="rp-bar rp-he" id="barHe"></div></div>
+        <span class="rp-pct">25%</span>
+      </div>
+      <div class="rp-sep"></div>
+      <div class="rp-math">
+        H⁺  12개 × 질량 1u = 12u<br>
+        He²⁺  1개 × 질량 4u =  4u<br>
+        ───────────────────────<br>
+        전체 16u → H : He = 12 : 4 = <strong>3 : 1</strong>
+      </div>
+      <div class="rp-count">
+        <span id="rp3CountLabel">H⁺ 12개 : He²⁺ 1개</span>
+        <span style="color:#FFDD66">질량비 75% : 25% ✓</span>
+      </div>
+    </div>
+
+    <!-- Stage 4 Legend -->
+    <div id="stage4Legend" class="stage-overlay hidden">
+      <div class="lg-title">입자 범례</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#ff9944;box-shadow:0 0 5px #ff7700"></span> H⁺ (수소 원자핵)</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#40eeaa;box-shadow:0 0 6px #20cc88;width:14px;height:14px"></span> He²⁺ (헬륨 원자핵)</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#fff;box-shadow:0 0 6px #aaccff;width:9px;height:9px"></span> 전자 (e⁻)</div>
+      <div class="lg-sep"></div>
+      <div class="lg-item"><span class="lg-dot" style="background:#4488dd;box-shadow:0 0 6px #2266bb"></span> H 원자 (중성)</div>
+      <div class="lg-item"><span class="lg-dot" style="background:#2ed4a0;box-shadow:0 0 6px #20b080;width:14px;height:14px"></span> He 원자 (중성)</div>
+    </div>
+
+    <!-- Stage 4 Counter -->
+    <div id="stage4Counter" class="stage-overlay hidden">
+      <div class="fc-item">
+        <span class="fc-dot" style="background:#ff9944;box-shadow:0 0 4px #ff7700"></span>
+        H⁺ : <strong id="hFreeCount">12</strong>
+      </div>
+      <div class="fc-item">
+        <span class="fc-dot" style="background:#40eeaa;box-shadow:0 0 4px #20cc88;width:13px;height:13px;border-radius:50%"></span>
+        He²⁺ : <strong id="heFreeCount">1</strong>
+      </div>
+      <div class="fc-item">
+        <span class="fc-dot" style="background:#aaccff;box-shadow:0 0 4px #6688ff;width:8px;height:8px"></span>
+        e⁻ : <strong id="eFreeCount">14</strong>
+      </div>
+    </div>
+
+    <!-- Stage 4 Atom Panel (bottom-right, uses .visible not .hidden) -->
+    <div id="atomPanel">
+      <div class="ap-title">✨ 원자 형성 완료</div>
+      <div class="lg-item">H 원자 : <strong id="hAtomCount">0</strong>개</div>
+      <div class="lg-item">He 원자 : <strong id="heAtomCount">0</strong>개</div>
+      <div class="ap-note">우주가 투명해졌습니다.<br>광자가 자유롭게 이동!</div>
+    </div>
+
+    <!-- Stage 4 Speed Box (bottom-left, alternates with stage2/3) -->
+    <div id="speedBox" class="stage-overlay hidden">
+      <div style="font-size:10px;color:rgba(255,255,255,0.42);margin-bottom:4px">
+        e⁻ 속도 &nbsp;|&nbsp; <span id="tempDisp" style="color:#aac8ff">—</span>
+      </div>
+      <div style="font-size:11px;font-weight:600;color:#88FFCC;margin-bottom:5px;min-height:17px" id="phaseDisp">자유 이동 중</div>
+      <div class="bar-track"><div id="speedFill" style="width:100%"></div></div>
+      <span id="speedLabel" style="font-size:10px;color:#7aabff;display:block;margin-top:3px">● 높음</span>
+    </div>
+
+    <!-- 5차: 포획 가속 버튼 -->
+    <button id="captureAccelBtn" title="전자 포획 과정 가속 (Stage 4)">⚡ 전자 포획 가속</button>
+
+    <!-- 6차: Progressive Disclosure 가이드 메시지 -->
+    <div id="pdGuideMsg">🌌 슬라이더를 움직여 우주의 탄생을 탐험하세요 <span class="pd-arrow">→</span></div>
+
+    <!-- 8차: 피날레 임팩트 오버레이 -->
+    <div id="finaleOverlay">
+      <div id="finaleFlash"></div>
+      <div id="finaleGlowRing"></div>
+      <div id="finaleTitle">우주가 밝아졌습니다!</div>
+      <div id="finaleSub">✨ 광자가 자유로워지며 빛이 우주를 가득 채웁니다</div>
+      <div id="finaleSub2">수소 75% · 헬륨 25% — 우주 최초의 원소가 완성되었습니다</div>
+    </div>
+
+    <!-- 7차: 슬로우 모션 & 결정적 순간 강조 -->
+    <div id="cmVignette"></div>
+    <div id="cmSlowBanner">
+      <span class="cm-slow-icon">⏳</span>
+      <span class="cm-slow-text" id="cmSlowText">결정적 순간</span>
+      <span class="cm-slow-sub" id="cmSlowSub"></span>
+    </div>
+
+    <!-- 5차: 입자 돋보기 -->
+    <div id="particleMagnifier">
+      <div class="pm-title" id="pmTitle">⚛ 양성자</div>
+      <div class="pm-quarks" id="pmQuarks"></div>
+      <div class="pm-desc" id="pmDesc">업 쿼크 2개 · 다운 쿼크 1개</div>
+      <div class="pm-formula" id="pmFormula">u u d</div>
+    </div>
+
+  </div><!-- /#canvasWrapper -->
+
+  <!-- Controls -->
+  <div id="controlsPanel">
+    <div id="stageLabels">
+      <span class="stage-label" data-stage="0"><span class="step-num">①</span>빅뱅 직후<br>쿼크 · 전자</span>
+      <span class="stage-label" data-stage="1"><span class="step-num">②</span>쿼크 결합<br>양성자 · 중성자</span>
+      <span class="stage-label" data-stage="2"><span class="step-num">③</span>핵합성<br>원자핵</span>
+      <span class="stage-label" data-stage="3"><span class="step-num">④</span>원자 형성<br>수소 · 헬륨</span>
+    </div>
+    <input type="range" id="timeSlider" min="0" max="100" value="0" step="0.2" />
+    <div id="timeAxisLabels">
+      <span>← 빅뱅 (약 138억 년 전)</span>
+      <span>시간 흐름 →</span>
+    </div>
+  </div>
+
+</div><!-- /#app -->
+<script>
+// ════════════════════════════════════════════════════════════════════
+//  1. GLOBAL UTILITIES
+// ════════════════════════════════════════════════════════════════════
+
+const SUP = ['⁰','¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹'];
+function toSup(n) {
+  return String(Math.round(n)).split('').map(c => !isNaN(c) ? SUP[+c] : c).join('');
+}
+function getTempDisplay(sv) {
+  const logT = 28.0 - 27.57 * (sv / 100);
+  if (logT >= 4)  return `10${toSup(Math.round(logT))} K`;
+  if (logT >= 3)  return `${Math.round(Math.pow(10, logT)).toLocaleString()} K`;
+  return `${Math.pow(10, logT).toFixed(1)} K`;
+}
+// Generic math helpers (used by Stage 4)
+const rnd   = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp  = (a, b, t) => a + (b - a) * t;
+const dist4 = (a, b)    => Math.hypot(a.x - b.x, a.y - b.y);
+
+
+// ════════════════════════════════════════════════════════════════════
+//  2. STAGES CONFIG
+// ════════════════════════════════════════════════════════════════════
+
+const STAGES = [
+  { id:0, sliderStart:0,  sliderEnd:25,
+    name:'① 빅뱅 직후', time:'10⁻³⁶ ~ 10⁻⁶ 초', temperature:'10²⁸ ~ 10¹³ K',
+    particles:'쿼크, 전자',
+    photon:{ cls:'state-trapped', text:'🔴 지그재그 산란 (불투명 우주)' },
+    description:'극도로 높은 온도. 쿼크·전자 등\n기본 입자가 생성되며, 광자는\n전자와 충돌해 자유롭게 이동 불가.',
+    expansionScale:0.18 },
+  { id:1, sliderStart:25, sliderEnd:50,
+    name:'② 쿼크 결합', time:'10⁻⁶ 초 ~ 3분', temperature:'10¹³ ~ 10⁹ K',
+    particles:'양성자, 중성자',
+    photon:{ cls:'state-trapped', text:'🔴 지그재그 산란 (불투명 우주)' },
+    description:'쿼크 3개가 결합해 양성자·중성자\n형성. 광자는 여전히 전자에 의해\n산란되어 직진하지 못합니다.',
+    expansionScale:0.42 },
+  { id:2, sliderStart:50, sliderEnd:75,
+    name:'③ 핵합성', time:'3분 ~ 38만 년', temperature:'10⁹ ~ 3,000 K',
+    particles:'수소·헬륨 원자핵',
+    photon:{ cls:'state-trapped', text:'🔴 지그재그 산란 → 전환 중' },
+    description:'원자핵 형성. 자유 전자가 여전히\n광자를 산란. 우주는 불투명한\n플라즈마 안개 상태입니다.',
+    expansionScale:0.75 },
+  { id:3, sliderStart:75, sliderEnd:100,
+    name:'④ 원자 형성', time:'38만 년 이후', temperature:'3,000 K 이하',
+    particles:'수소 원자, 헬륨 원자',
+    photon:{ cls:'state-free', text:'🟢 직선 직진! (투명 우주)' },
+    description:'전자가 원자핵에 포획됨.\n광자를 막던 자유 전자 소멸!\n빛이 처음으로 직진하며 우주가\n투명해집니다 (우주 배경 복사).',
+    expansionScale:1.35 },
+];
+
+const P_DEF = {
+  quark_r:    { r:3.5, color:'#FF5555', glow:'#FF0000', glowB:7,  label:null },
+  quark_g:    { r:3.5, color:'#55FF55', glow:'#00FF00', glowB:7,  label:null },
+  quark_b:    { r:3.5, color:'#5588FF', glow:'#0044FF', glowB:7,  label:null },
+  electron:   { r:2.5, color:'#00FFFF', glow:'#00FFFF', glowB:10, label:null },
+  proton:     { r:7,   color:'#FF7722', glow:'#FF5500', glowB:12, label:'p' },
+  neutron:    { r:7,   color:'#AAAAAA', glow:'#888888', glowB:9,  label:'n' },
+  h_nucleus:  { r:7,   color:'#FF9944', glow:'#FF6600', glowB:12, label:'H⁺' },
+  he_nucleus: { r:11,  color:'#FFCC00', glow:'#FFAA00', glowB:16, label:'He' },
+  h_atom:     { r:8,   color:'#4499FF', glow:'#2266FF', glowB:13, label:'H',  orbit:true, orbitR:20, nElec:1 },
+  he_atom:    { r:11,  color:'#33FFAA', glow:'#00CC88', glowB:15, label:'He', orbit:true, orbitR:24, nElec:2 },
+};
+const STAGE_PARTICLE_DEFS = [
+  [...Array(7).fill('quark_r'),...Array(7).fill('quark_g'),...Array(7).fill('quark_b'),...Array(8).fill('electron')],
+  [...Array(8).fill('proton'), ...Array(4).fill('neutron'),...Array(8).fill('electron')],
+  [...Array(9).fill('h_nucleus'),...Array(3).fill('he_nucleus')],
+  [...Array(9).fill('h_atom'),   ...Array(3).fill('he_atom')],
+];
+
+
+// ════════════════════════════════════════════════════════════════════
+//  3. GENERIC PARTICLE SYSTEM  (fallback)
+// ════════════════════════════════════════════════════════════════════
+
+class SimParticle {
+  constructor(type, bx, by) {
+    this.type=type; this.bx=bx; this.by=by; this.x=0; this.y=0;
+    this.phase=Math.random()*Math.PI*2; this.phaseY=Math.random()*Math.PI*2;
+    this.freq=0.015+Math.random()*0.025; this.amp=2.5+Math.random()*3;
+    this.orb1=Math.random()*Math.PI*2; this.orb2=Math.random()*Math.PI*2;
+    const spd=1.8+Math.random()*1.2;
+    this.orbSpd1=spd*(Math.random()<0.5?1:-1);
+    this.orbSpd2=spd*0.72*(Math.random()<0.5?1:-1);
+  }
+  update(dt,expScale,cw,ch) {
+    const def=P_DEF[this.type]; if(!def) return;
+    const hot=(this.type==='electron'||this.type.startsWith('quark'))?3.2:0.9;
+    this.phase  +=dt*this.freq*hot*60;
+    this.phaseY +=dt*this.freq*hot*60*1.27;
+    const scale=Math.min(cw,ch)*0.42*expScale;
+    this.x=cw/2+this.bx*scale+Math.sin(this.phase)*this.amp*hot;
+    this.y=ch/2+this.by*scale+Math.cos(this.phaseY)*this.amp*hot;
+    if(def.orbit){this.orb1+=dt*this.orbSpd1;this.orb2+=dt*this.orbSpd2;}
+  }
+  draw(ctx,alpha) {
+    const def=P_DEF[this.type]; if(!def||alpha<=0) return;
+    ctx.save(); ctx.globalAlpha=alpha;
+    if(def.orbit) this._drawOrbits(ctx,def);
+    ctx.shadowColor=def.glow; ctx.shadowBlur=def.glowB;
+    ctx.beginPath(); ctx.arc(this.x,this.y,def.r,0,Math.PI*2);
+    ctx.fillStyle=def.color; ctx.fill();
+    if(def.label){
+      ctx.shadowBlur=0; ctx.font=`bold ${Math.max(6,def.r-1)}px monospace`;
+      ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(def.label,this.x,this.y);
+    }
+    ctx.restore();
+  }
+  _drawOrbits(ctx,def) {
+    const r1=def.orbitR, r2=r1*0.78;
+    ctx.shadowBlur=0; ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=0.8;
+    ctx.beginPath(); ctx.arc(this.x,this.y,r1,0,Math.PI*2); ctx.stroke();
+    if(def.nElec>=2){ctx.beginPath();ctx.arc(this.x,this.y,r2,0,Math.PI*2);ctx.stroke();}
+    ctx.shadowColor='#00FFFF'; ctx.shadowBlur=9; ctx.fillStyle='#00FFFF';
+    const e1x=this.x+r1*Math.cos(this.orb1), e1y=this.y+r1*Math.sin(this.orb1);
+    ctx.beginPath(); ctx.arc(e1x,e1y,2.8,0,Math.PI*2); ctx.fill();
+    if(def.nElec>=2){
+      const e2x=this.x+r2*Math.cos(this.orb2), e2y=this.y+r2*Math.sin(this.orb2);
+      ctx.beginPath(); ctx.arc(e2x,e2y,2.8,0,Math.PI*2); ctx.fill();
+    }
+  }
+}
+
+class ParticleSystem {
+  constructor() { this.stageSets=[]; }
+  init() {
+    this.stageSets=STAGE_PARTICLE_DEFS.map(defs=>defs.map(type=>{
+      const angle=Math.random()*Math.PI*2, radius=0.25+Math.random()*0.75;
+      return new SimParticle(type,Math.cos(angle)*radius,Math.sin(angle)*radius);
+    }));
+  }
+  _getStageInfo(sv) {
+    for(let i=0;i<STAGES.length;i++){
+      const s=STAGES[i];
+      if(sv>=s.sliderStart&&sv<=s.sliderEnd) return{idx:i,progress:(sv-s.sliderStart)/(s.sliderEnd-s.sliderStart)};
+    }
+    return{idx:STAGES.length-1,progress:1};
+  }
+  _getExpansionScale(sv) {
+    const t=sv/100*(STAGES.length-1), idx=Math.min(Math.floor(t),STAGES.length-2), f=t-idx;
+    return STAGES[idx].expansionScale+(STAGES[idx+1].expansionScale-STAGES[idx].expansionScale)*f;
+  }
+  update(dt,sv,cw,ch) {
+    const expScale=this._getExpansionScale(sv);
+    const{idx,progress}=this._getStageInfo(sv);
+    const FADE=0.22, needed=new Set([idx]);
+    if(progress<FADE&&idx>0) needed.add(idx-1);
+    if(progress>1-FADE&&idx<STAGES.length-1) needed.add(idx+1);
+    for(const si of needed) for(const p of this.stageSets[si]) p.update(dt,expScale,cw,ch);
+  }
+  draw(ctx,sv) {
+    const{idx,progress}=this._getStageInfo(sv), FADE=0.22;
+    if(progress<FADE&&idx>0){
+      const t=progress/FADE; this._drawSet(ctx,idx-1,1-t); this._drawSet(ctx,idx,t);
+    } else if(progress>1-FADE&&idx<STAGES.length-1){
+      const t=(progress-(1-FADE))/FADE; this._drawSet(ctx,idx,1-t); this._drawSet(ctx,idx+1,t);
+    } else { this._drawSet(ctx,idx,1.0); }
+  }
+  _drawSet(ctx,idx,alpha) {
+    if(idx<0||idx>=this.stageSets.length) return;
+    for(const p of this.stageSets[idx]) p.draw(ctx,alpha);
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+//  4. BACKGROUND RENDERER
+// ════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════
+//  2차 개선: BackgroundRenderer — 극적인 온도 냉각 시각화
+// ════════════════════════════════════════════════════════════════════
+class BackgroundRenderer {
+  constructor() { this.stars=[]; this.time=0; }
+  initStars(count,cw,ch) {
+    this.stars=Array.from({length:count},()=>({
+      x:Math.random()*cw, y:Math.random()*ch,
+      r:Math.random()*1.6+0.3,
+      base:Math.random()*0.65+0.20,
+      twinkle:Math.random()*Math.PI*2,
+      twinkleSpd:0.006+Math.random()*0.022,
+      color:['255,255,255','255,235,210','210,230,255','255,255,210'][Math.floor(Math.random()*4)],
+    }));
+  }
+  update(dt) { this.time+=dt; for(const s of this.stars) s.twinkle+=dt*s.twinkleSpd*60; }
+
+  draw(ctx,sv,cw,ch) {
+    const cx=cw/2, cy=ch/2;
+    // 1. Base background  ─ 온도 색상 팔레트
+    const bg=this._bgColor(sv);
+    ctx.fillStyle=`rgb(${bg[0]},${bg[1]},${bg[2]})`; ctx.fillRect(0,0,cw,ch);
+
+    // 2. 중앙 열복사 글로우 (sv < 65 구간)
+    const heatT = Math.max(0, 1 - sv/65);
+    if(heatT > 0.01){
+      const pulse = 0.58 + Math.sin(this.time*2.1)*0.22 + Math.sin(this.time*3.8)*0.12;
+      const hR = Math.min(cw,ch)*(0.22+pulse*0.20);
+      const hg = ctx.createRadialGradient(cx,cy,0,cx,cy,hR);
+      if(sv < 28){
+        // 극고온 (쿼크·렙톤 시대) — 흰·노란 핵심
+        const a1=(heatT*0.70*pulse).toFixed(3), a2=(heatT*0.45*pulse).toFixed(3), a3=(heatT*0.22).toFixed(3);
+        hg.addColorStop(0,`rgba(255,255,230,${a1})`);
+        hg.addColorStop(0.30,`rgba(255,215,80,${a2})`);
+        hg.addColorStop(0.65,`rgba(255,110,20,${a3})`);
+        hg.addColorStop(1,'rgba(0,0,0,0)');
+      } else {
+        // 중간 온도 (핵합성 시대) — 주황·빨강 핵심
+        const a1=(heatT*0.50*pulse).toFixed(3), a2=(heatT*0.28).toFixed(3);
+        hg.addColorStop(0,`rgba(255,160,40,${a1})`);
+        hg.addColorStop(0.40,`rgba(200,40,10,${a2})`);
+        hg.addColorStop(1,'rgba(0,0,0,0)');
+      }
+      ctx.fillStyle=hg; ctx.fillRect(0,0,cw,ch);
+    }
+
+    // 3. 우주 팽창 테두리 링 (초기 우주 — 바깥쪽 구형 경계 암시)
+    const ringT = Math.max(0, 1 - sv/50);
+    if(ringT > 0.01){
+      const rMax=Math.min(cw,ch)*0.48, pulse2=0.65+Math.sin(this.time*1.4)*0.18;
+      const rg = ctx.createRadialGradient(cx,cy, rMax*pulse2*0.72, cx,cy, rMax*pulse2);
+      rg.addColorStop(0,'rgba(0,0,0,0)');
+      rg.addColorStop(0.7,`rgba(255,130,30,${(ringT*0.12).toFixed(3)})`);
+      rg.addColorStop(1,`rgba(255,80,10,${(ringT*0.22).toFixed(3)})`);
+      ctx.fillStyle=rg; ctx.fillRect(0,0,cw,ch);
+    }
+
+    // 4. 우주 안개 (재결합 이전: 광자가 산란되어 불투명)
+    const fog = Math.max(0,(1-sv/72))*0.10;
+    if(fog>0.004){ ctx.fillStyle=`rgba(255,240,195,${fog.toFixed(3)})`; ctx.fillRect(0,0,cw,ch); }
+
+    // 5. 재결합 순간 섬광 (sv ≈ 75)
+    const flash = Math.max(0,1-Math.abs(sv-75)/4.0)*0.52;
+    if(flash>0.01){
+      const fg=ctx.createRadialGradient(cx,cy,0,cx,cy,Math.min(cw,ch)*0.72);
+      fg.addColorStop(0,`rgba(255,255,255,${flash.toFixed(3)})`);
+      fg.addColorStop(0.40,`rgba(220,235,255,${(flash*0.55).toFixed(3)})`);
+      fg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=fg; ctx.fillRect(0,0,cw,ch);
+    }
+
+    // 6. 냉각 후 은하 배경색 틴트 (sv > 78)
+    const coolT = Math.max(0,(sv-78)/22);
+    if(coolT>0.01){
+      const deepA=(coolT*0.08).toFixed(3);
+      ctx.fillStyle=`rgba(8,4,30,${deepA})`; ctx.fillRect(0,0,cw,ch);
+    }
+
+    // 7. 별 (재결합 후 점진적 등장 + 은은한 반짝임)
+    const starAlpha = Math.min(1, Math.max(0,(sv-63)/20));
+    if(starAlpha>0.01){
+      for(const s of this.stars){
+        const a=(Math.sin(s.twinkle)*0.32+0.68)*s.base*starAlpha;
+        if(a<0.01) continue;
+        ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${s.color},${a.toFixed(3)})`; ctx.fill();
+      }
+    }
+  }
+
+  _bgColor(sv) {
+    // 교과서 색상 순서에 맞춰: 밝은 흰-노랑 → 주황 → 빨강 → 보라 → 검정
+    const pts=[
+      [0,    [255,255,245]],  // sv=0: 극고온 흰빛
+      [0.06, [255,252,180]],  // 밝은 노랑
+      [0.18, [255,220,70]],   // 노랑-주황
+      [0.27, [255,155,22]],   // 주황 (핵자 형성)
+      [0.42, [235,75,10]],    // 주황-빨강
+      [0.53, [175,20,8]],     // 진한 빨강 (핵합성)
+      [0.64, [88,6,22]],      // 암적색
+      [0.73, [38,4,46]],      // 짙은 보라 (재결합 직전)
+      [0.78, [6,3,20]],       // 어두운 보라
+      [1.00, [0,0,8]],        // 거의 검정
+    ];
+    const t=sv/100;
+    for(let i=0;i<pts.length-1;i++){
+      const[t0,c0]=pts[i],[t1,c1]=pts[i+1];
+      if(t>=t0&&t<=t1){const f=(t-t0)/(t1-t0); return c0.map((v,j)=>Math.round(v+(c1[j]-v)*f));}
+    }
+    return[0,0,8];
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+//  5. ZIGZAG PHOTON SYSTEM
+// ════════════════════════════════════════════════════════════════════
+
+class ZigzagPhoton {
+  constructor(cw,ch){ this.cw=cw; this.ch=ch; this._reset(false); }
+  _reset(fromEdge){
+    const{cw,ch}=this;
+    this.angle=Math.random()*Math.PI*2; this.speed=300+Math.random()*200;
+    this.nextBounce=0.04+Math.random()*0.18; this.trail=[]; this.trailMax=14;
+    this.life=0; this.maxLife=2.5+Math.random()*3.5;
+    this.color=['#FFFFFF','#FFFFC8','#D0E8FF','#FFE4A0'][Math.floor(Math.random()*4)];
+    if(fromEdge){
+      const e=Math.floor(Math.random()*4);
+      if(e===0){this.x=-10;this.y=Math.random()*ch;this.angle=Math.random()*Math.PI*0.8-Math.PI*0.1;}
+      else if(e===1){this.x=cw+10;this.y=Math.random()*ch;this.angle=Math.PI+Math.random()*Math.PI*0.8-Math.PI*0.1;}
+      else if(e===2){this.x=Math.random()*cw;this.y=-10;this.angle=Math.random()*Math.PI-Math.PI*0.5;}
+      else{this.x=Math.random()*cw;this.y=ch+10;this.angle=Math.PI*0.5+Math.random()*Math.PI*0.6-Math.PI*0.1;}
+    }else{this.x=30+Math.random()*(cw-60);this.y=30+Math.random()*(ch-60);}
+  }
+  update(dt){
+    this.life+=dt; if(this.life>this.maxLife){this._reset(true);return;}
+    this.trail.push({x:this.x,y:this.y});
+    if(this.trail.length>this.trailMax) this.trail.shift();
+    this.x+=Math.cos(this.angle)*this.speed*dt;
+    this.y+=Math.sin(this.angle)*this.speed*dt;
+    this.nextBounce-=dt;
+    if(this.nextBounce<=0){
+      this.angle+=(0.3+Math.random()*0.7)*Math.PI*(Math.random()<0.5?1:-1);
+      this.nextBounce=0.05+Math.random()*0.20;
+    }
+    if(this.x<8){this.x=8;this.angle=Math.PI-this.angle;}
+    if(this.x>this.cw-8){this.x=this.cw-8;this.angle=Math.PI-this.angle;}
+    if(this.y<8){this.y=8;this.angle=-this.angle;}
+    if(this.y>this.ch-8){this.y=this.ch-8;this.angle=-this.angle;}
+  }
+  draw(ctx,alpha){
+    if(alpha<0.01||this.trail.length<2) return;
+    ctx.save(); ctx.lineCap='round'; ctx.lineJoin='bevel';
+    ctx.shadowColor=this.color; ctx.shadowBlur=3;
+    for(let i=1;i<this.trail.length;i++){
+      const t=i/this.trail.length;
+      ctx.globalAlpha=t*0.55*alpha; ctx.strokeStyle=this.color; ctx.lineWidth=t*1.3;
+      ctx.beginPath(); ctx.moveTo(this.trail[i-1].x,this.trail[i-1].y);
+      ctx.lineTo(this.trail[i].x,this.trail[i].y); ctx.stroke();
+    }
+    ctx.globalAlpha=alpha; ctx.shadowBlur=9; ctx.fillStyle=this.color;
+    ctx.beginPath(); ctx.arc(this.x,this.y,2.8,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+class ZigzagPhotonSystem {
+  constructor(){ this.photons=[]; }
+  init(cw,ch){ this.photons=Array.from({length:20},()=>new ZigzagPhoton(cw,ch)); }
+  update(dt){ for(const p of this.photons) p.update(dt); }
+  draw(ctx,alpha){ if(alpha<0.01) return; for(const p of this.photons) p.draw(ctx,alpha); }
+  resize(cw,ch){ for(const p of this.photons){p.cw=cw;p.ch=ch;} }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+//  6. RAY PHOTON SYSTEM
+// ════════════════════════════════════════════════════════════════════
+
+class PhotonRay {
+  constructor(cw,ch){ this.cw=cw; this.ch=ch; this._reset(); }
+  _reset(){
+    const{cw,ch}=this;
+    this.ox=cw*0.5+(Math.random()-0.5)*cw*0.5;
+    this.oy=ch*0.5+(Math.random()-0.5)*ch*0.5;
+    this.angle=Math.random()*Math.PI*2; this.speed=500+Math.random()*250;
+    this.tailLen=100+Math.random()*140; this.progress=0;
+    this.alpha=0.35+Math.random()*0.45;
+    this.color=['#FFFFFF','#F0F8FF','#FFFFD8','#E8EEFF'][Math.floor(Math.random()*4)];
+    const diag=Math.hypot(cw,ch);
+    this.maxLife=diag/this.speed+this.tailLen/this.speed; this.life=0;
+  }
+  update(dt){ this.progress+=this.speed*dt; this.life+=dt; if(this.life>this.maxLife) this._reset(); }
+  draw(ctx,alpha){
+    if(alpha<0.01) return;
+    const tail=Math.max(0,this.progress-this.tailLen);
+    const tipX=this.ox+Math.cos(this.angle)*this.progress;
+    const tipY=this.oy+Math.sin(this.angle)*this.progress;
+    const tailX=this.ox+Math.cos(this.angle)*tail;
+    const tailY=this.oy+Math.sin(this.angle)*tail;
+    const d=Math.hypot(tipX-this.cw/2,tipY-this.ch/2);
+    const maxD=Math.hypot(this.cw,this.ch)*0.55;
+    const ef=Math.max(0,1-Math.max(0,d-maxD*0.6)/(maxD*0.4));
+    const fa=alpha*this.alpha*ef; if(fa<0.01) return;
+    ctx.save();
+    const grd=ctx.createLinearGradient(tailX,tailY,tipX,tipY);
+    grd.addColorStop(0,'rgba(255,255,255,0)');
+    grd.addColorStop(0.6,`rgba(255,255,240,${(fa*0.7).toFixed(3)})`);
+    grd.addColorStop(1,`rgba(255,255,255,${fa.toFixed(3)})`);
+    ctx.strokeStyle=grd; ctx.lineWidth=1.3;
+    ctx.shadowColor=this.color; ctx.shadowBlur=6;
+    ctx.beginPath(); ctx.moveTo(tailX,tailY); ctx.lineTo(tipX,tipY); ctx.stroke();
+    ctx.restore();
+  }
+}
+class RayPhotonSystem {
+  constructor(){ this.rays=[]; }
+  init(cw,ch){ this.rays=Array.from({length:24},()=>new PhotonRay(cw,ch)); }
+  update(dt){ for(const r of this.rays) r.update(dt); }
+  draw(ctx,alpha){ if(alpha<0.01) return; for(const r of this.rays) r.draw(ctx,alpha); }
+  resize(cw,ch){ for(const r of this.rays){r.cw=cw;r.ch=ch;} }
+}
+function getPhotonAlphas(sv) {
+  const T0=68, T1=80;
+  if(sv<=T0) return{zigzag:1.0,ray:0.0};
+  if(sv>=T1) return{zigzag:0.0,ray:1.0};
+  const t=(sv-T0)/(T1-T0); return{zigzag:1-t,ray:t};
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+//  7. TEMPERATURE GAUGE
+// ════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════
+//  2차 개선: TemperatureGauge — 단계 레이블 + 교육용 마커
+// ════════════════════════════════════════════════════════════════════
+class TemperatureGauge {
+  draw(ctx,cw,ch,sv){
+    const BW=22, BH=Math.min(ch*0.60,360);
+    const BX=cw-80, BY=(ch-BH)/2;
+    const SIDE=52, PAD=8;
+
+    ctx.save();
+    // ─ 배경 패널
+    ctx.globalAlpha=0.88;
+    ctx.fillStyle='rgba(0,0,12,0.92)';
+    this._rRect(ctx,BX-SIDE-PAD,BY-36,BW+SIDE+PAD*2+4,BH+70,10); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1;
+    this._rRect(ctx,BX-SIDE-PAD,BY-36,BW+SIDE+PAD*2+4,BH+70,10); ctx.stroke();
+    ctx.globalAlpha=1;
+
+    // ─ 제목
+    ctx.font='bold 9px sans-serif'; ctx.textAlign='center';
+    ctx.fillStyle='rgba(255,255,255,0.50)';
+    ctx.fillText('우주 온도계',BX+BW/2,BY-22);
+
+    // ─ 게이지 배경
+    ctx.fillStyle='rgba(255,255,255,0.05)';
+    this._rRect(ctx,BX,BY,BW,BH,5); ctx.fill();
+
+    // ─ 채움 (그라디언트)
+    const logT=28.0-27.57*(sv/100), minLog=0.43, maxLog=28.0;
+    const fillFrac=Math.max(0,Math.min(1,(logT-minLog)/(maxLog-minLog)));
+    const fillH=BH*fillFrac, fillY=BY+BH-fillH;
+    if(fillH>2){
+      const grd=ctx.createLinearGradient(0,BY,0,BY+BH);
+      grd.addColorStop(0,  'rgba(255,255,245,1)');
+      grd.addColorStop(0.10,'rgba(255,250,160,1)');
+      grd.addColorStop(0.22,'rgba(255,215,60,1)');
+      grd.addColorStop(0.40,'rgba(255,120,16,1)');
+      grd.addColorStop(0.58,'rgba(210,28,8,1)');
+      grd.addColorStop(0.74,'rgba(120,8,30,1)');
+      grd.addColorStop(0.87,'rgba(45,4,50,1)');
+      grd.addColorStop(1,   'rgba(4,2,10,1)');
+      ctx.fillStyle=grd; this._rRect(ctx,BX,fillY,BW,fillH,5); ctx.fill();
+    }
+
+    // ─ 주요 온도 이정표 (교과서 단계와 연결)
+    const events=[
+      {logT:28.0, label:'10²⁸ K', note:'빅뱅 직후',  color:'rgba(255,255,200,0.90)', bold:false},
+      {logT:13.0, label:'10¹³ K', note:'①쿼크→핵자', color:'rgba(255,185,60,0.92)',  bold:true },
+      {logT:9.0,  label:'10⁹ K',  note:'②핵합성',    color:'rgba(255,90,40,0.92)',   bold:true },
+      {logT:3.477,label:'3,000 K', note:'③재결합',    color:'rgba(160,110,255,0.98)', bold:true },
+      {logT:0.431,label:'2.7 K',   note:'현재',        color:'rgba(140,180,255,0.70)', bold:false},
+    ];
+    for(const ev of events){
+      const frac=(ev.logT-minLog)/(maxLog-minLog);
+      const ty=BY+BH*(1-frac);
+      // 눈금선
+      ctx.strokeStyle=ev.bold?'rgba(255,255,255,0.55)':'rgba(255,255,255,0.18)';
+      ctx.lineWidth=ev.bold?1.4:0.7;
+      ctx.setLineDash(ev.bold?[]:[3,3]);
+      ctx.beginPath(); ctx.moveTo(BX-2,ty); ctx.lineTo(BX+BW+2,ty); ctx.stroke();
+      ctx.setLineDash([]);
+      // 라벨
+      ctx.font=ev.bold?'bold 8px monospace':'7.5px monospace';
+      ctx.fillStyle=ev.color; ctx.textAlign='right';
+      ctx.fillText(ev.label, BX-5, ty+3);
+      // 단계 노트
+      if(ev.bold){
+        ctx.font='bold 8.5px sans-serif'; ctx.fillStyle=ev.color;
+        ctx.fillText(ev.note, BX-5, ty+13);
+      }
+    }
+
+    // ─ 현재 위치 마커
+    const curFrac=Math.max(0,Math.min(1,(logT-minLog)/(maxLog-minLog)));
+    const curY=BY+BH*(1-curFrac);
+    const markerColor=this._markerColor(sv);
+    ctx.shadowColor=markerColor; ctx.shadowBlur=8;
+    ctx.strokeStyle=markerColor; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(BX-5,curY); ctx.lineTo(BX+BW+5,curY); ctx.stroke();
+    // 화살표
+    ctx.fillStyle=markerColor;
+    ctx.beginPath();
+    ctx.moveTo(BX-6,curY); ctx.lineTo(BX-13,curY-4.5); ctx.lineTo(BX-13,curY+4.5);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur=0;
+
+    // ─ 현재 온도 텍스트 + 단계명
+    ctx.font='bold 10px monospace'; ctx.fillStyle=markerColor;
+    ctx.shadowColor=markerColor; ctx.shadowBlur=5; ctx.textAlign='center';
+    ctx.fillText(getTempDisplay(sv), BX+BW/2, BY+BH+18);
+    ctx.shadowBlur=0;
+    const stageName=this._stageName(sv);
+    ctx.font='bold 9px sans-serif'; ctx.fillStyle='rgba(200,210,255,0.75)';
+    ctx.fillText(stageName, BX+BW/2, BY+BH+32);
+
+    ctx.restore();
+  }
+
+  _markerColor(sv){
+    if(sv<26)  return '#FFE066';
+    if(sv<52)  return '#FF8833';
+    if(sv<76)  return '#FF4466';
+    return '#AA88FF';
+  }
+
+  _stageName(sv){
+    if(sv<23)  return '① 쿼크·렙톤 시대';
+    if(sv<48)  return '② 핵자 형성기';
+    if(sv<73)  return '③ 핵합성 시기';
+    return '④ 재결합 시기';
+  }
+
+  _rRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    if(ctx.roundRect){ctx.roundRect(x,y,w,h,r);return;}
+    ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+//  8. UI COMPONENTS
+// ════════════════════════════════════════════════════════════════════
+
+class StatusPanel {
+  constructor(){
+    this.elName  =document.getElementById('spStageName');
+    this.elTime  =document.getElementById('spTime');
+    this.elTemp  =document.getElementById('spTemp');
+    this.elPart  =document.getElementById('spParticles');
+    this.elPhoton=document.getElementById('spPhotonState');
+    this.elDesc  =document.getElementById('spDesc');
+    this.labels  =[...document.querySelectorAll('.stage-label')];
+  }
+  update(sv){
+    let stage=STAGES[STAGES.length-1];
+    for(const s of STAGES){if(sv>=s.sliderStart&&sv<=s.sliderEnd){stage=s;break;}}
+    let photon=stage.photon;
+    if(sv>=68&&sv<80) photon={cls:'state-trans',text:'🟡 전환 중… 우주가 투명해지고 있습니다!'};
+    this.elName.textContent  =stage.name;
+    this.elTime.textContent  =stage.time;
+    this.elTemp.textContent  =stage.temperature;
+    this.elPart.textContent  =stage.particles;
+    this.elPhoton.className  =`sp-photon-state ${photon.cls}`;
+    this.elPhoton.textContent=photon.text;
+    this.elDesc.textContent  =stage.description;
+    this.labels.forEach((el,i)=>el.classList.toggle('active',i===stage.id));
+    const badge=document.getElementById('stageBadge');
+    if(badge){ badge.textContent=stage.name; badge.style.opacity=stage.id<=1?'1':'0.6'; }
+  }
+}
+
+class TimeSliderController {
+  constructor(onChange){
+    this.el=document.getElementById('timeSlider'); this.value=0;
+    this.onChange=onChange;
+    this.criticalMoment=null; // 7차: CriticalMomentSystem 참조 (나중에 설정)
+    this._lastInputTime=performance.now()/1000;
+    this.el.addEventListener('input',()=>{
+      const raw=parseFloat(this.el.value);
+      const now=performance.now()/1000;
+      const dt=Math.max(0.001,now-this._lastInputTime);
+      this._lastInputTime=now;
+      // 7차: 자력 효과 적용
+      let sv=raw;
+      if(this.criticalMoment){
+        sv=this.criticalMoment.applyMagnet(raw,dt);
+        // 보정된 값을 슬라이더에도 반영
+        if(Math.abs(sv-raw)>0.3){
+          this.el.value=sv;
+        }
+      }
+      this.value=sv;
+      onChange(sv);
+    });
+    document.querySelectorAll('.stage-label').forEach(el=>{
+      el.addEventListener('click',()=>{
+        const s=STAGES[parseInt(el.dataset.stage)];
+        const mid=s.sliderStart+(s.sliderEnd-s.sliderStart)*0.5;
+        this.el.value=mid; this.value=mid; onChange(mid);
+      });
+    });
+  }
+}
+// ════════════════════════════════════════════════════════════════════
+//  1차 개선: TransitionFX — 단계 전환 파동 + 배너 + 단계 바
+// ════════════════════════════════════════════════════════════════════
+class TransitionFX {
+  constructor() {
+    this.twCanvas = null; this.twCtx = null;
+    this.cw = 0; this.ch = 0;
+    this.time = 0;
+    this.rings = [];
+    this.prevZone = -1;
+    this._bannerTimer = null;
+
+    this.zones = [
+      {
+        id: 0, sv: 25,
+        title: '⚡ 쿼크 → 핵자 형성',
+        desc: '강력(强力)으로 쿼크 3개가 결합하여\n양성자와 중성자가 탄생합니다!',
+        time: '⏱ 빅뱅 후 약 0.0001초',
+        color: [255, 140, 30], border: 'rgba(255,170,60,0.50)',
+      },
+      {
+        id: 1, sv: 50,
+        title: '☢ 핵합성 시작!',
+        desc: '양성자 2개 + 중성자 2개 →\n헬륨-4 원자핵 형성 (빅뱅 핵합성)',
+        time: '⏱ 빅뱅 후 약 3분',
+        color: [220, 50, 110], border: 'rgba(220,80,140,0.50)',
+      },
+      {
+        id: 2, sv: 75,
+        title: '✨ 재결합 시기',
+        desc: '원자핵이 전자를 포획합니다.\n우주 최초의 원자 탄생! 광자가 자유롭게!',
+        time: '⏱ 빅뱅 후 약 38만 년',
+        color: [140, 70, 230], border: 'rgba(160,100,255,0.50)',
+      },
+    ];
+  }
+
+  init(cw, ch) {
+    this.cw = cw; this.ch = ch;
+    if (!this.twCanvas) {
+      this.twCanvas = document.getElementById('transitionCanvas');
+      if (this.twCanvas) this.twCtx = this.twCanvas.getContext('2d');
+    }
+    if (this.twCanvas) { this.twCanvas.width = cw; this.twCanvas.height = ch; }
+  }
+
+  update(dt, sv) {
+    this.time += dt;
+    const HALF = 3.5;
+    let curZone = -1;
+    for (const z of this.zones) {
+      if (sv >= z.sv - HALF && sv <= z.sv + HALF) {
+        curZone = z.id;
+        if (curZone !== this.prevZone) {
+          this._spawnRings(z);
+          this._showBanner(z);
+        }
+      }
+    }
+    if (curZone === -1) this.prevZone = -1;
+    else                this.prevZone = curZone;
+
+    // Update rings
+    this.rings = this.rings.filter(r => {
+      r.delay -= dt;
+      if (r.delay > 0) return true;
+      r.radius += r.speed * dt;
+      r.alpha  -= dt * r.decay;
+      return r.alpha > 0.005 && r.radius < r.maxR;
+    });
+
+    this._updateBar(sv);
+  }
+
+  draw() {
+    if (!this.twCtx) return;
+    const { twCtx: ctx, cw, ch } = this;
+    ctx.clearRect(0, 0, cw, ch);
+    const cx = cw / 2, cy = ch / 2;
+    for (const r of this.rings) {
+      if (r.delay > 0 || r.radius <= 0) continue;
+      const a = Math.max(0, r.alpha);
+      if (a < 0.005) continue;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r.radius, 0, Math.PI * 2);
+      const [rc, gc, bc] = r.color;
+      ctx.strokeStyle = `rgba(${rc},${gc},${bc},${a.toFixed(3)})`;
+      ctx.lineWidth = r.lineW;
+      ctx.stroke();
+    }
+  }
+
+  _spawnRings(zone) {
+    const maxR = Math.hypot(this.cw, this.ch) * 0.80;
+    for (let i = 0; i < 7; i++) {
+      this.rings.push({
+        radius: 0, maxR,
+        speed: 180 + i * 60,
+        alpha: 0.80 - i * 0.08,
+        decay: 0.38 + i * 0.05,
+        color: zone.color,
+        lineW: Math.max(0.8, 3.0 - i * 0.35),
+        delay: i * 0.11,
+      });
+    }
+  }
+
+  _showBanner(zone) {
+    const banner = document.getElementById('transitionBanner');
+    const title  = document.getElementById('tbTitle');
+    const desc   = document.getElementById('tbDesc');
+    const time   = document.getElementById('tbTime');
+    if (!banner) return;
+    banner.style.borderColor = zone.border;
+    title.textContent = zone.title;
+    desc.textContent  = zone.desc;
+    time.textContent  = zone.time;
+    banner.classList.add('visible');
+    clearTimeout(this._bannerTimer);
+    this._bannerTimer = setTimeout(() => banner.classList.remove('visible'), 3800);
+  }
+
+  _updateBar(sv) {
+    const ids = ['sbS1','sbS2','sbS3','sbS4'];
+    const MIN = 0.15;
+    const alphas = [
+      MIN + (1-MIN) * Math.max(0, Math.min(1, sv <= 25 ? 1 : 1 - (sv - 25) / 30)),
+      MIN + (1-MIN) * Math.max(0, Math.min(1, sv < 10 ? 0 : sv > 65 ? Math.max(0, 1-(sv-65)/20) : (sv-10)/20)),
+      MIN + (1-MIN) * Math.max(0, Math.min(1, sv < 35 ? 0 : sv > 88 ? Math.max(0, 1-(sv-88)/12) : (sv-35)/20)),
+      MIN + (1-MIN) * Math.max(0, Math.min(1, sv < 65 ? 0 : (sv-65)/20)),
+    ];
+    ids.forEach((id, i) => {
+      const el = document.getElementById(id);
+      if (el) el.style.opacity = alphas[i].toFixed(3);
+    });
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+//  3차 개선: BirthEventSystem — 단계 탄생 순간 드라마틱 연출
+// ════════════════════════════════════════════════════════════════════
+class BirthEventSystem {
+  constructor() {
+    this.canvas = null; this.ctx = null;
+    this.cw = 0; this.ch = 0; this.time = 0;
+    this.bursts = [];   // 폭발 파티클
+    this.flashes = [];  // 섬광 레이어
+    this._cardTimer = null;
+    this.prevAlphas = [0, 0, 0, 0];
+
+    // 각 단계 탄생 데이터
+    this.stages = [
+      {
+        icon: '⚛️',
+        title: '① 쿼크·렙톤 시대 시작',
+        body: '빅뱅 직후 — 극도로 높은 온도에서\n쿼크, 렙톤, 광자가 생성됩니다.',
+        sub: '온도: 약 10²⁸ K  |  시간: 0초',
+        color: [255, 245, 150], flashColor: 'rgba(255,255,200,',
+      },
+      {
+        icon: '💥',
+        title: '② 핵자 형성 시작',
+        body: '온도가 낮아지며 강력(强力)이 작용!\n쿼크 3개 → 양성자·중성자 탄생.',
+        sub: '온도: 약 10¹³ K  |  빅뱅 후 0.0001초',
+        color: [255, 150, 40], flashColor: 'rgba(255,160,40,',
+      },
+      {
+        icon: '☢️',
+        title: '③ 빅뱅 핵합성 시작',
+        body: '양성자 2 + 중성자 2가 결합하여\n헬륨-4 원자핵이 탄생합니다.',
+        sub: '온도: 약 10⁹ K  |  빅뱅 후 약 3분',
+        color: [255, 80, 80], flashColor: 'rgba(255,100,60,',
+      },
+      {
+        icon: '✨',
+        title: '④ 재결합 시기 시작',
+        body: '전자가 원자핵에 포획되어\n수소·헬륨 원자가 형성됩니다.',
+        sub: '온도: 약 3,000 K  |  빅뱅 후 38만 년',
+        color: [160, 100, 255], flashColor: 'rgba(180,120,255,',
+      },
+    ];
+  }
+
+  init(cw, ch) {
+    this.cw = cw; this.ch = ch;
+    if (!this.canvas) {
+      this.canvas = document.createElement('canvas');
+      this.canvas.style.cssText = 'position:absolute;inset:0;pointer-events:none;border-radius:10px;z-index:6;';
+      const wrapper = document.getElementById('canvasWrapper');
+      if (wrapper) wrapper.appendChild(this.canvas);
+      this.ctx = this.canvas.getContext('2d');
+    }
+    this.canvas.width = cw; this.canvas.height = ch;
+  }
+
+  update(dt, alphas) {
+    this.time += dt;
+
+    // 탄생 감지: 0→활성 전환
+    for (let i = 0; i < 4; i++) {
+      if (this.prevAlphas[i] === 0 && alphas[i] > 0) {
+        this._triggerBirth(i);
+      }
+    }
+    this.prevAlphas = [...alphas];
+
+    // 파티클 업데이트
+    this.bursts = this.bursts.filter(p => {
+      p.delay -= dt;
+      if (p.delay > 0) return true;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vy += 60 * dt; // 중력
+      p.alpha -= dt * p.decay;
+      p.r = Math.max(0, p.r - dt * 1.2);
+      return p.alpha > 0.01;
+    });
+
+    // 섬광 업데이트
+    this.flashes = this.flashes.filter(f => {
+      f.delay -= dt;
+      if (f.delay > 0) return true;
+      f.alpha -= dt * f.decay;
+      f.radius += dt * f.speed;
+      return f.alpha > 0.005;
+    });
+  }
+
+  draw() {
+    if (!this.ctx) return;
+    const { ctx, cw, ch } = this;
+    ctx.clearRect(0, 0, cw, ch);
+    const cx = cw / 2, cy = ch / 2;
+
+    // 섬광 링
+    for (const f of this.flashes) {
+      if (f.delay > 0) continue;
+      const a = Math.max(0, f.alpha);
+      ctx.beginPath();
+      ctx.arc(cx, cy, f.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = f.color + a.toFixed(3) + ')';
+      ctx.lineWidth = f.lineW;
+      ctx.stroke();
+    }
+
+    // 파티클 스파크
+    for (const p of this.bursts) {
+      if (p.delay > 0) continue;
+      const a = Math.max(0, p.alpha);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      const [r, g, b] = p.color;
+      ctx.fillStyle = `rgba(${r},${g},${b},${a.toFixed(3)})`;
+      ctx.fill();
+    }
+  }
+
+  _triggerBirth(stageIdx) {
+    const s = this.stages[stageIdx];
+    const cx = this.cw / 2, cy = this.ch / 2;
+    const maxR = Math.hypot(this.cw, this.ch) * 0.82;
+
+    // 섬광 링 생성
+    for (let i = 0; i < 8; i++) {
+      this.flashes.push({
+        radius: 0, alpha: 0.85 - i * 0.08,
+        speed: 240 + i * 65, decay: 0.50 + i * 0.06,
+        color: s.flashColor,
+        lineW: Math.max(0.7, 3.5 - i * 0.38),
+        delay: i * 0.08,
+      });
+    }
+
+    // 파티클 폭발
+    const count = 55;
+    for (let i = 0; i < count; i++) {
+      const ang = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+      const spd = 90 + Math.random() * 260;
+      this.bursts.push({
+        x: cx + (Math.random() - 0.5) * 30,
+        y: cy + (Math.random() - 0.5) * 30,
+        vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+        r: 1.8 + Math.random() * 3.5,
+        alpha: 0.70 + Math.random() * 0.28,
+        decay: 0.55 + Math.random() * 0.55,
+        color: s.color,
+        delay: Math.random() * 0.12,
+      });
+    }
+
+    // 탄생 카드 표시
+    this._showCard(s);
+  }
+
+  _showCard(s) {
+    const card  = document.getElementById('birthCard');
+    const icon  = document.getElementById('bcIcon');
+    const title = document.getElementById('bcTitle');
+    const body  = document.getElementById('bcBody');
+    const sub   = document.getElementById('bcSub');
+    if (!card) return;
+    icon.textContent  = s.icon;
+    title.textContent = s.title;
+    body.textContent  = s.body;
+    sub.textContent   = s.sub;
+    const [r, g, b] = s.color;
+    card.style.borderColor = `rgba(${r},${g},${b},0.45)`;
+    card.classList.add('visible');
+    clearTimeout(this._cardTimer);
+    this._cardTimer = setTimeout(() => card.classList.remove('visible'), 4200);
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+//  4차 개선: EduPanelController — 교과서 연동 학습 패널
+// ════════════════════════════════════════════════════════════════════
+class EduPanelController {
+  constructor() {
+    this.prevActiveIdx = -1;
+  }
+
+  update(alphas) {
+    // 현재 가장 강하게 활성화된 스테이지를 주요 단계로 표시
+    let maxA = 0, maxIdx = -1;
+    for (let i = 0; i < 4; i++) {
+      if (alphas[i] > maxA) { maxA = alphas[i]; maxIdx = i; }
+    }
+
+    for (let i = 0; i < 4; i++) {
+      const card = document.getElementById('eduCard' + i);
+      if (!card) continue;
+      // 6차: pd-hidden인 카드는 건너뜀
+      if (card.classList.contains('pd-hidden')) continue;
+      const a = alphas[i];
+      if (a > 0.05) {
+        card.classList.add('active');
+        card.style.opacity = (0.45 + a * 0.55).toFixed(3);
+      } else {
+        card.classList.remove('active');
+        card.style.opacity = '0';
+      }
+    }
+
+    // 슬라이더 stage-label 강조
+    const labels = document.querySelectorAll('.stage-label');
+    labels.forEach((el, i) => {
+      const a = alphas[i] || 0;
+      el.classList.toggle('active', a > 0.4);
+    });
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+//  5차 개선: ParticleMagnifier — 핵자 내부 쿼크 구조 돋보기
+// ════════════════════════════════════════════════════════════════════
+class ParticleMagnifier {
+  constructor() {
+    this.el = null; this.titleEl = null; this.quarksEl = null;
+    this.descEl = null; this.formulaEl = null;
+    this.sim = null; this.canvas = null;
+  }
+  init(canvas, sim) {
+    this.canvas = canvas; this.sim = sim;
+    this.el         = document.getElementById('particleMagnifier');
+    this.titleEl    = document.getElementById('pmTitle');
+    this.quarksEl   = document.getElementById('pmQuarks');
+    this.descEl     = document.getElementById('pmDesc');
+    this.formulaEl  = document.getElementById('pmFormula');
+    if (!this.el) return;
+    canvas.addEventListener('mousemove', e => this._onMove(e));
+    canvas.addEventListener('mouseleave', () => this._hide());
+  }
+  _onMove(e) {
+    if (!this.sim) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const sx = this.canvas.width  / rect.width;
+    const sy = this.canvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * sx;
+    const my = (e.clientY - rect.top)  * sy;
+    const alphas = this.sim._getStageAlphas(this.sim.sliderValue);
+    let hit = null;
+
+    // Stage 2 — NucleonParticle objects inside NucleonGroup
+    if (!hit && alphas[1] > 0.2 && this.sim.stage2 && this.sim.stage2.groups) {
+      for (const g of this.sim.stage2.groups) {
+        const n = g.nucleon;
+        if (!n || n.state !== 'active') continue;
+        const dx = mx - n.x, dy = my - n.y;
+        if (dx*dx + dy*dy < (n.r + 8) * (n.r + 8)) {
+          hit = { type: n.type, cx: e.clientX, cy: e.clientY };
+          break;
+        }
+      }
+    }
+
+    // Stage 3 — NucleonP3 objects: hProtons + heGroup.nucleons
+    if (!hit && alphas[2] > 0.2 && this.sim.stage3) {
+      const s3 = this.sim.stage3;
+      if (s3.hProtons) {
+        for (const n of s3.hProtons) {
+          const dx = mx - n.x, dy = my - n.y;
+          if (dx*dx + dy*dy < (n.r + 8) * (n.r + 8)) {
+            const t = (n.baseType === 'h_plus' || n.baseType === 'proton') ? 'proton' : n.baseType;
+            hit = { type: t, cx: e.clientX, cy: e.clientY };
+            break;
+          }
+        }
+      }
+      if (!hit && s3.heGroup && s3.heGroup.nucleons) {
+        for (const n of s3.heGroup.nucleons) {
+          const dx = mx - n.x, dy = my - n.y;
+          if (dx*dx + dy*dy < (n.r + 8) * (n.r + 8)) {
+            hit = { type: n.baseType, cx: e.clientX, cy: e.clientY };
+            break;
+          }
+        }
+      }
+    }
+
+    if (hit) this._show(hit);
+    else      this._hide();
+  }
+  _show(hit) {
+    if (!this.el) return;
+    const isProton = hit.type === 'proton' || hit.type === 'h_plus';
+    const quarks   = isProton ? ['u','u','d'] : ['u','d','d'];
+    const title    = isProton ? '⚛ 양성자 (Proton)' : '⚛ 중성자 (Neutron)';
+    const desc     = isProton ? '업 쿼크 2개 · 다운 쿼크 1개' : '업 쿼크 1개 · 다운 쿼크 2개';
+    const formula  = isProton ? 'u  u  d' : 'u  d  d';
+    if (this.titleEl)   this.titleEl.textContent   = title;
+    if (this.descEl)    this.descEl.textContent    = desc;
+    if (this.formulaEl) this.formulaEl.textContent = formula;
+    if (this.quarksEl) {
+      this.quarksEl.innerHTML = '';
+      quarks.forEach(q => {
+        const div = document.createElement('div');
+        div.className = 'pm-quark ' + (q === 'u' ? 'up' : 'down');
+        div.textContent = q;
+        this.quarksEl.appendChild(div);
+      });
+    }
+    // Position near cursor, avoid overflow
+    const wrapper = document.getElementById('canvasWrapper');
+    const wr = wrapper ? wrapper.getBoundingClientRect() : {left:0, top:0, width:800, height:600};
+    let lx = hit.cx - wr.left + 16;
+    let ly = hit.cy - wr.top  - 90;
+    const W = 155, H = 100;
+    if (lx + W > wr.width)  lx = hit.cx - wr.left - W - 8;
+    if (ly < 4)              ly = hit.cy - wr.top  + 16;
+    if (ly + H > wr.height)  ly = wr.height - H - 8;
+    this.el.style.left = lx + 'px';
+    this.el.style.top  = ly + 'px';
+    this.el.classList.add('visible');
+  }
+  _hide() {
+    if (this.el) this.el.classList.remove('visible');
+  }
+}
+
+const CFG1 = {
+  quark:    { countPerColor:9, radius:3.5, speedMin:230, speedMax:420, jitter:260, trailLen:8 },
+  electron: { count:22, radius:2.2, speedMin:370, speedMax:580, jitter:320, trailLen:6 },
+  photon:   { count:22, lengthMin:90, lengthMax:170, amplMin:5, amplMax:16,
+              freqMin:0.038, freqMax:0.09, speedMin:180, speedMax:300,
+              phaseSpeedMin:3, phaseSpeedMax:7, lineWidthMin:0.8, lineWidthMax:1.6 },
+};
+const QUARK_COLORS = {
+  r:{fill:'#FF5050',glow:'#FF0000'}, g:{fill:'#50FF50',glow:'#00EE00'}, b:{fill:'#5577FF',glow:'#0022FF'},
+};
+const PHOTON_COLORS_S1=['#FFFFFF','#FFFFC0','#C0FFFF','#FFE0A0','#E0E0FF','#FFFFA0'];
+
+class PhotonWave {
+  constructor(cw,ch,spawnAtEdge=false){ this.cw=cw; this.ch=ch; this._randomize(spawnAtEdge); }
+  _randomize(atEdge){
+    const{photon:C}=CFG1;
+    this.angle=Math.random()*Math.PI*2;
+    this.speed=C.speedMin+Math.random()*(C.speedMax-C.speedMin);
+    this.amplitude=C.amplMin+Math.random()*(C.amplMax-C.amplMin);
+    this.frequency=C.freqMin+Math.random()*(C.freqMax-C.freqMin);
+    this.phase=Math.random()*Math.PI*2;
+    this.phaseSpd=C.phaseSpeedMin+Math.random()*(C.phaseSpeedMax-C.phaseSpeedMin);
+    this.length=C.lengthMin+Math.random()*(C.lengthMax-C.lengthMin);
+    this.lineW=C.lineWidthMin+Math.random()*(C.lineWidthMax-C.lineWidthMin);
+    this.color=PHOTON_COLORS_S1[Math.floor(Math.random()*PHOTON_COLORS_S1.length)];
+    this.life=0; this.maxLife=2.5+Math.random()*3; this.alpha=0.28+Math.random()*0.45;
+    if(atEdge){
+      const e=Math.floor(Math.random()*4);
+      if(e===0){this.x=-60;this.y=Math.random()*this.ch;this.angle=Math.random()*Math.PI-Math.PI/2;}
+      else if(e===1){this.x=this.cw+60;this.y=Math.random()*this.ch;this.angle=Math.PI/2+Math.random()*Math.PI;}
+      else if(e===2){this.x=Math.random()*this.cw;this.y=-60;this.angle=Math.random()*Math.PI;}
+      else{this.x=Math.random()*this.cw;this.y=this.ch+60;this.angle=Math.PI+Math.random()*Math.PI;}
+    }else{this.x=Math.random()*this.cw;this.y=Math.random()*this.ch;}
+  }
+  update(dt){
+    this.x+=Math.cos(this.angle)*this.speed*dt;
+    this.y+=Math.sin(this.angle)*this.speed*dt;
+    this.phase+=this.phaseSpd*dt; this.life+=dt;
+    const margin=this.length+80;
+    if(this.life>this.maxLife||this.x<-margin||this.x>this.cw+margin||this.y<-margin||this.y>this.ch+margin)
+      this._randomize(true);
+  }
+  draw(ctx){
+    const fadeIn=Math.min(1,this.life/0.4), fadeOut=Math.min(1,(this.maxLife-this.life)/0.6);
+    const a=this.alpha*Math.min(fadeIn,fadeOut); if(a<0.01) return;
+    const perpX=-Math.sin(this.angle), perpY=Math.cos(this.angle), steps=32;
+    ctx.save(); ctx.globalAlpha=a; ctx.lineWidth=this.lineW; ctx.lineCap='round';
+    ctx.shadowColor=this.color; ctx.shadowBlur=5; ctx.strokeStyle=this.color;
+    ctx.beginPath();
+    for(let i=0;i<=steps;i++){
+      const t=i/steps, env=Math.sin(t*Math.PI), d=(t-0.5)*this.length;
+      const wave=Math.sin(t*this.frequency*this.length+this.phase)*this.amplitude*env;
+      const px=this.x+Math.cos(this.angle)*d+perpX*wave;
+      const py=this.y+Math.sin(this.angle)*d+perpY*wave;
+      i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+    }
+    ctx.stroke(); ctx.restore();
+  }
+}
+
+class QuarkParticle {
+  constructor(colorKey,cw,ch){
+    this.colorKey=colorKey; this.cw=cw; this.ch=ch; this.r=CFG1.quark.radius; this.trail=[];
+    this.x=Math.random()*cw; this.y=Math.random()*ch;
+    const spd=CFG1.quark.speedMin+Math.random()*(CFG1.quark.speedMax-CFG1.quark.speedMin);
+    const angle=Math.random()*Math.PI*2;
+    this.vx=Math.cos(angle)*spd; this.vy=Math.sin(angle)*spd;
+  }
+  update(dt){
+    this.trail.push({x:this.x,y:this.y});
+    if(this.trail.length>CFG1.quark.trailLen) this.trail.shift();
+    this.x+=this.vx*dt; this.y+=this.vy*dt;
+    const j=CFG1.quark.jitter;
+    this.vx+=(Math.random()-0.5)*j*dt; this.vy+=(Math.random()-0.5)*j*dt;
+    const spd=Math.hypot(this.vx,this.vy), mn=CFG1.quark.speedMin, mx=CFG1.quark.speedMax;
+    if(spd>mx){this.vx*=mx/spd;this.vy*=mx/spd;} if(spd<mn){this.vx*=mn/spd;this.vy*=mn/spd;}
+    const sc=40;
+    if(this.x<this.r){this.x=this.r;this.vx=Math.abs(this.vx)+(Math.random()-0.5)*sc;}
+    if(this.x>this.cw-this.r){this.x=this.cw-this.r;this.vx=-Math.abs(this.vx)+(Math.random()-0.5)*sc;}
+    if(this.y<this.r){this.y=this.r;this.vy=Math.abs(this.vy)+(Math.random()-0.5)*sc;}
+    if(this.y>this.ch-this.r){this.y=this.ch-this.r;this.vy=-Math.abs(this.vy)+(Math.random()-0.5)*sc;}
+  }
+  draw(ctx){
+    const{fill,glow}=QUARK_COLORS[this.colorKey]; ctx.save();
+    for(let i=0;i<this.trail.length;i++){
+      const t=(i+1)/this.trail.length;
+      ctx.globalAlpha=t*0.28; ctx.shadowColor=glow; ctx.shadowBlur=4; ctx.fillStyle=fill;
+      ctx.beginPath(); ctx.arc(this.trail[i].x,this.trail[i].y,this.r*(0.35+t*0.65),0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1.0; ctx.shadowColor=glow; ctx.shadowBlur=12; ctx.fillStyle=fill;
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+class ElectronParticle {
+  constructor(cw,ch){
+    this.cw=cw; this.ch=ch; this.r=CFG1.electron.radius; this.trail=[];
+    this.x=Math.random()*cw; this.y=Math.random()*ch;
+    const spd=CFG1.electron.speedMin+Math.random()*(CFG1.electron.speedMax-CFG1.electron.speedMin);
+    const angle=Math.random()*Math.PI*2;
+    this.vx=Math.cos(angle)*spd; this.vy=Math.sin(angle)*spd;
+  }
+  update(dt){
+    this.trail.push({x:this.x,y:this.y});
+    if(this.trail.length>CFG1.electron.trailLen) this.trail.shift();
+    this.x+=this.vx*dt; this.y+=this.vy*dt;
+    const j=CFG1.electron.jitter;
+    this.vx+=(Math.random()-0.5)*j*dt; this.vy+=(Math.random()-0.5)*j*dt;
+    const spd=Math.hypot(this.vx,this.vy), mn=CFG1.electron.speedMin, mx=CFG1.electron.speedMax;
+    if(spd>mx){this.vx*=mx/spd;this.vy*=mx/spd;} if(spd<mn){this.vx*=mn/spd;this.vy*=mn/spd;}
+    const sc=60;
+    if(this.x<this.r){this.x=this.r;this.vx=Math.abs(this.vx)+(Math.random()-0.5)*sc;}
+    if(this.x>this.cw-this.r){this.x=this.cw-this.r;this.vx=-Math.abs(this.vx)+(Math.random()-0.5)*sc;}
+    if(this.y<this.r){this.y=this.r;this.vy=Math.abs(this.vy)+(Math.random()-0.5)*sc;}
+    if(this.y>this.ch-this.r){this.y=this.ch-this.r;this.vy=-Math.abs(this.vy)+(Math.random()-0.5)*sc;}
+  }
+  draw(ctx){
+    ctx.save();
+    for(let i=0;i<this.trail.length;i++){
+      const t=(i+1)/this.trail.length;
+      ctx.globalAlpha=t*0.22; ctx.shadowColor='#FFD700'; ctx.shadowBlur=5; ctx.fillStyle='#FFFF55';
+      ctx.beginPath(); ctx.arc(this.trail[i].x,this.trail[i].y,this.r*(0.3+t*0.7),0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1.0; ctx.shadowColor='#FFDD00'; ctx.shadowBlur=14; ctx.fillStyle='#FFFF44';
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); ctx.restore();
+  }
+}
+
+class HeatBackground {
+  constructor(){ this.time=0; this.pulseA=0; this.pulseB=0; }
+  update(dt){ this.time+=dt; this.pulseA=Math.sin(this.time*1.8)*0.5+0.5; this.pulseB=Math.sin(this.time*2.7+1.2)*0.5+0.5; }
+  draw(ctx,cw,ch){
+    ctx.fillStyle='#080200'; ctx.fillRect(0,0,cw,ch);
+    const cx=cw*0.5, cy=ch*0.5, pulse=0.55+this.pulseA*0.2+this.pulseB*0.1;
+    const r1=Math.min(cw,ch)*(0.25*pulse), r2=Math.min(cw,ch)*(0.70*pulse);
+    const g1=ctx.createRadialGradient(cx,cy,0,cx,cy,r1);
+    g1.addColorStop(0,`rgba(255,255,160,${(0.22*pulse).toFixed(3)})`);
+    g1.addColorStop(0.5,`rgba(255,120,0,${(0.18*pulse).toFixed(3)})`); g1.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g1; ctx.fillRect(0,0,cw,ch);
+    const g2=ctx.createRadialGradient(cx,cy,r1,cx,cy,r2);
+    g2.addColorStop(0,`rgba(255,60,0,${(0.14*pulse).toFixed(3)})`);
+    g2.addColorStop(0.6,`rgba(180,0,40,${(0.07*pulse).toFixed(3)})`); g2.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g2; ctx.fillRect(0,0,cw,ch);
+    const ox=cx+Math.sin(this.time*3.1)*cw*0.06, oy=cy+Math.cos(this.time*2.4)*ch*0.06;
+    const rf=Math.min(cw,ch)*0.12*(0.7+this.pulseB*0.3);
+    const gf=ctx.createRadialGradient(ox,oy,0,ox,oy,rf);
+    gf.addColorStop(0,'rgba(255,255,80,0.12)'); gf.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=gf; ctx.fillRect(0,0,cw,ch);
+  }
+}
+
+class Stage1Module {
+  constructor(){ this.cw=0;this.ch=0;this.quarks=[];this.electrons=[];this.photons=[];this.bg=new HeatBackground(); }
+  init(cw,ch){ this.cw=cw;this.ch=ch;this._buildParticles(); }
+  resize(cw,ch){
+    this.cw=cw;this.ch=ch;
+    for(const p of [...this.quarks,...this.electrons]){p.cw=cw;p.ch=ch;p.x=Math.min(p.x,cw-p.r);p.y=Math.min(p.y,ch-p.r);}
+    for(const w of this.photons){w.cw=cw;w.ch=ch;}
+  }
+  update(dt){ this.bg.update(dt); for(const q of this.quarks) q.update(dt); for(const e of this.electrons) e.update(dt); for(const w of this.photons) w.update(dt); }
+  render(ctx){ this.bg.draw(ctx,this.cw,this.ch); for(const w of this.photons) w.draw(ctx); for(const q of this.quarks) q.draw(ctx); for(const e of this.electrons) e.draw(ctx); }
+  getCounts(){ return{r:this.quarks.filter(q=>q.colorKey==='r').length,g:this.quarks.filter(q=>q.colorKey==='g').length,b:this.quarks.filter(q=>q.colorKey==='b').length,e:this.electrons.length,p:this.photons.length}; }
+  _buildParticles(){
+    const{cw,ch}=this; this.quarks=[];
+    for(const key of['r','g','b']) for(let i=0;i<CFG1.quark.countPerColor;i++) this.quarks.push(new QuarkParticle(key,cw,ch));
+    this.electrons=Array.from({length:CFG1.electron.count},()=>new ElectronParticle(cw,ch));
+    this.photons=Array.from({length:CFG1.photon.count},()=>new PhotonWave(cw,ch,false));
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+//  10. STAGE 2 CONFIG + CLASSES  (module_03, CFG → CFG2)
+// ════════════════════════════════════════════════════════════════════
+
+const CFG2 = {
+  quark: {
+    radius:4, speedMin:100, speedMax:280, jitter:170, trailLen:7,
+    attractF:3.2, dampFree:0, dampAttr:3.5, spiralSpd:7, spiralIn:45, mergeR:16,
+  },
+  nucleon: { speedMin:60, speedMax:150, jitter:60, radius:10 },
+  electron: { count:12, radius:2.2, speedMin:270, speedMax:440, jitter:220, trailLen:5 },
+  groups: [
+    {type:'proton', delay:1.2},{type:'proton', delay:2.1},{type:'proton', delay:3.0},
+    {type:'proton', delay:3.9},{type:'proton', delay:4.8},
+    {type:'neutron',delay:1.7},{type:'neutron',delay:2.9},{type:'neutron',delay:4.2},
+  ],
+  resetDelay: 3.5,
+};
+
+const QUARK_VIS = {
+  u:{color:'#FF9922',glow:'#FF6600',glowB:11,radius:4},
+  d:{color:'#9955FF',glow:'#6622DD',glowB:11,radius:4},
+};
+const NUCLEON_VIS = {
+  proton :{color:'#FF4433',glow:'#FF2200',glowB:15,radius:10,label:'p',flashR:[255,80,40], flashW:[255,200,180]},
+  neutron:{color:'#3366CC',glow:'#1144AA',glowB:13,radius:10,label:'n',flashR:[60,130,255],flashW:[180,200,255]},
+};
+
+class QuarkParticle2 {
+  constructor(type,x,y){
+    this.type=type; this.x=x; this.y=y; this.r=QUARK_VIS[type].radius;
+    const spd=CFG2.quark.speedMin+Math.random()*(CFG2.quark.speedMax-CFG2.quark.speedMin);
+    const ang=Math.random()*Math.PI*2;
+    this.vx=Math.cos(ang)*spd; this.vy=Math.sin(ang)*spd;
+    this.state='free'; this.group=null;
+    this.trail=[]; this.trailMax=CFG2.quark.trailLen;
+    this.mergeAngle=0; this.mergeRadius=0;
+  }
+  update(dt,cw,ch){
+    if(this.state==='done') return;
+    this.trail.push({x:this.x,y:this.y});
+    if(this.trail.length>this.trailMax) this.trail.shift();
+    if(this.state==='free')      this._free(dt,cw,ch);
+    else if(this.state==='targeting') this._target(dt,cw,ch);
+    else if(this.state==='merging')   this._merge(dt);
+  }
+  _free(dt,cw,ch){
+    const C=CFG2.quark;
+    this.vx+=(Math.random()-0.5)*C.jitter*dt; this.vy+=(Math.random()-0.5)*C.jitter*dt;
+    const spd=Math.hypot(this.vx,this.vy);
+    if(spd>C.speedMax){this.vx*=C.speedMax/spd;this.vy*=C.speedMax/spd;}
+    if(spd<C.speedMin){this.vx*=C.speedMin/spd;this.vy*=C.speedMin/spd;}
+    this.x+=this.vx*dt; this.y+=this.vy*dt;
+    this._bounce(cw,ch,35);
+  }
+  _target(dt,cw,ch){
+    if(!this.group) return;
+    const dx=this.group.cx-this.x, dy=this.group.cy-this.y;
+    const dist=Math.hypot(dx,dy)||1;
+    const F=Math.min(dist*CFG2.quark.attractF,950);
+    const perpX=-dy/dist, perpY=dx/dist, swirlF=30;
+    this.vx+=(dx/dist*F+perpX*swirlF)*dt; this.vy+=(dy/dist*F+perpY*swirlF)*dt;
+    const d=CFG2.quark.dampAttr;
+    this.vx*=(1-d*dt); this.vy*=(1-d*dt);
+    this.x+=this.vx*dt; this.y+=this.vy*dt;
+    this.x=Math.max(5,Math.min(cw-5,this.x)); this.y=Math.max(5,Math.min(ch-5,this.y));
+  }
+  _merge(dt){
+    if(!this.group) return;
+    this.mergeAngle+=dt*CFG2.quark.spiralSpd;
+    this.mergeRadius=Math.max(0,this.mergeRadius-dt*CFG2.quark.spiralIn);
+    this.x=this.group.cx+Math.cos(this.mergeAngle)*this.mergeRadius;
+    this.y=this.group.cy+Math.sin(this.mergeAngle)*this.mergeRadius;
+  }
+  _bounce(cw,ch,sc){
+    if(this.x<this.r){this.x=this.r;this.vx=Math.abs(this.vx)+(Math.random()-0.5)*sc;}
+    if(this.x>cw-this.r){this.x=cw-this.r;this.vx=-Math.abs(this.vx)+(Math.random()-0.5)*sc;}
+    if(this.y<this.r){this.y=this.r;this.vy=Math.abs(this.vy)+(Math.random()-0.5)*sc;}
+    if(this.y>ch-this.r){this.y=ch-this.r;this.vy=-Math.abs(this.vy)+(Math.random()-0.5)*sc;}
+  }
+  draw(ctx,globalAlpha=1.0){
+    if(this.state==='done') return;
+    const def=QUARK_VIS[this.type];
+    const fadeOut=this.state==='merging'?Math.min(1,this.mergeRadius/14):1.0;
+    const a=globalAlpha*fadeOut; if(a<0.01) return;
+    ctx.save();
+    for(let i=0;i<this.trail.length;i++){
+      const t=(i+1)/this.trail.length;
+      ctx.globalAlpha=t*0.25*a; ctx.shadowColor=def.glow; ctx.shadowBlur=4; ctx.fillStyle=def.color;
+      ctx.beginPath(); ctx.arc(this.trail[i].x,this.trail[i].y,def.radius*(0.35+t*0.65),0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=a; ctx.shadowColor=def.glow; ctx.shadowBlur=def.glowB; ctx.fillStyle=def.color;
+    ctx.beginPath(); ctx.arc(this.x,this.y,def.radius,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+class QuarkGroup {
+  constructor(quarks,type){
+    this.quarks=quarks; this.type=type; this.cx=0; this.cy=0;
+    this.state='waiting'; this.mergeTimer=0; this.attractTimer=0; this.flashTimer=0;
+    this.nucleon=null; this.activationDelay=0; this.labelAlpha=0;
+  }
+  activate(cx,cy){
+    this.cx=cx; this.cy=cy; this.state='attracting';
+    for(const q of this.quarks){q.state='targeting';q.group=this;}
+  }
+  update(dt,cw,ch){
+    if(this.state==='done'){if(this.nucleon) this.nucleon.update(dt,cw,ch); return;}
+    if(this.state==='attracting'){
+      this.attractTimer+=dt; this.labelAlpha=Math.min(1,this.attractTimer*2);
+      const allClose=this.quarks.every(q=>Math.hypot(q.x-this.cx,q.y-this.cy)<CFG2.quark.mergeR);
+      if(allClose){
+        this.state='merging';
+        for(const q of this.quarks){
+          q.state='merging';
+          q.mergeRadius=Math.max(2,Math.hypot(q.x-this.cx,q.y-this.cy));
+          q.mergeAngle=Math.atan2(q.y-this.cy,q.x-this.cx);
+        }
+      }
+    }
+    if(this.state==='merging'){
+      this.mergeTimer+=dt; this.labelAlpha=Math.max(0,this.labelAlpha-dt*1.5);
+      if(this.mergeTimer>0.45&&!this.nucleon){
+        const spd=CFG2.nucleon.speedMin+Math.random()*(CFG2.nucleon.speedMax-CFG2.nucleon.speedMin);
+        const ang=Math.random()*Math.PI*2;
+        this.nucleon=new NucleonParticle(this.type,this.cx,this.cy,Math.cos(ang)*spd,Math.sin(ang)*spd);
+        this.flashTimer=0.65;
+      }
+      if(this.mergeTimer>0.85){for(const q of this.quarks) q.state='done';this.state='done';}
+    }
+    if(this.flashTimer>0) this.flashTimer-=dt;
+    if(this.nucleon) this.nucleon.update(dt,cw,ch);
+  }
+  drawConnections(ctx,globalTime){
+    if(this.state!=='attracting') return;
+    const alive=this.quarks.filter(q=>q.state!=='done'); if(alive.length<2) return;
+    const pulse=0.5+Math.sin(globalTime*6)*0.35;
+    ctx.save(); ctx.lineWidth=0.9; ctx.lineCap='round';
+    for(let i=0;i<alive.length;i++) for(let j=i+1;j<alive.length;j++){
+      const q1=alive[i], q2=alive[j];
+      const grd=ctx.createLinearGradient(q1.x,q1.y,q2.x,q2.y);
+      grd.addColorStop(0,QUARK_VIS[q1.type].color); grd.addColorStop(1,QUARK_VIS[q2.type].color);
+      ctx.strokeStyle=grd; ctx.shadowColor='#FFFFFF'; ctx.shadowBlur=3;
+      ctx.globalAlpha=(0.2+pulse*0.3)*this.labelAlpha;
+      ctx.beginPath(); ctx.moveTo(q1.x,q1.y); ctx.lineTo(q2.x,q2.y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  drawLabel(ctx){
+    if(this.labelAlpha<0.01) return;
+    const isProt=this.type==='proton', col=isProt?'#FF8866':'#6699FF';
+    const dots=isProt?[QUARK_VIS.u.color,QUARK_VIS.u.color,QUARK_VIS.d.color]:[QUARK_VIS.u.color,QUARK_VIS.d.color,QUARK_VIS.d.color];
+    const name=isProt?'→ 양성자 (p)':'→ 중성자 (n)';
+    ctx.save(); ctx.globalAlpha=this.labelAlpha*0.85;
+    const dotR=5, gap=14, startX=this.cx-(dots.length-1)*gap*0.5, labelY=this.cy-30;
+    for(let i=0;i<dots.length;i++){
+      ctx.shadowColor=dots[i]; ctx.shadowBlur=6; ctx.fillStyle=dots[i];
+      ctx.beginPath(); ctx.arc(startX+i*gap,labelY,dotR,0,Math.PI*2); ctx.fill();
+    }
+    ctx.shadowBlur=0; ctx.font='bold 11px sans-serif'; ctx.fillStyle=col;
+    ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillText(name,this.cx,labelY+13);
+    ctx.restore();
+  }
+  drawFlash(ctx){
+    if(this.flashTimer<=0||!this.nucleon) return;
+    const t=this.flashTimer/0.65, r=(1-t)*55+6, def=NUCLEON_VIS[this.type];
+    const[wr,wg,wb]=def.flashW, [fr,fg,fb]=def.flashR;
+    const grd=ctx.createRadialGradient(this.cx,this.cy,0,this.cx,this.cy,r);
+    grd.addColorStop(0,`rgba(${wr},${wg},${wb},${(t*0.9).toFixed(2)})`);
+    grd.addColorStop(0.35,`rgba(${fr},${fg},${fb},${(t*0.55).toFixed(2)})`);
+    grd.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.save(); ctx.fillStyle=grd;
+    ctx.fillRect(this.cx-r,this.cy-r,r*2,r*2); ctx.restore();
+  }
+}
+
+class NucleonParticle {
+  constructor(type,x,y,vx,vy){
+    this.type=type; this.x=x;this.y=y; this.vx=vx;this.vy=vy;
+    this.r=CFG2.nucleon.radius; this.state='forming'; this.formP=0;
+    this.trail=[]; this.pulseT=Math.random()*Math.PI*2;
+  }
+  update(dt,cw,ch){
+    this.pulseT+=dt*2.5;
+    if(this.state==='forming'){
+      this.formP+=dt*2.8; if(this.formP>=1){this.formP=1;this.state='active';} return;
+    }
+    this.trail.push({x:this.x,y:this.y}); if(this.trail.length>5) this.trail.shift();
+    this.vx+=(Math.random()-0.5)*CFG2.nucleon.jitter*dt; this.vy+=(Math.random()-0.5)*CFG2.nucleon.jitter*dt;
+    const spd=Math.hypot(this.vx,this.vy), mx=CFG2.nucleon.speedMax, mn=CFG2.nucleon.speedMin;
+    if(spd>mx){this.vx*=mx/spd;this.vy*=mx/spd;} if(spd<mn){this.vx*=mn/spd;this.vy*=mn/spd;}
+    this.x+=this.vx*dt; this.y+=this.vy*dt;
+    const R=this.r;
+    if(this.x<R){this.x=R;this.vx=Math.abs(this.vx);}
+    if(this.x>cw-R){this.x=cw-R;this.vx=-Math.abs(this.vx);}
+    if(this.y<R){this.y=R;this.vy=Math.abs(this.vy);}
+    if(this.y>ch-R){this.y=ch-R;this.vy=-Math.abs(this.vy);}
+  }
+  draw(ctx){
+    if(this.formP<=0.02) return;
+    const def=NUCLEON_VIS[this.type], a=this.formP, R=this.r*(0.4+0.6*a);
+    const pulse=0.85+0.15*Math.sin(this.pulseT);
+    ctx.save();
+    for(let i=0;i<this.trail.length;i++){
+      const t=(i+1)/this.trail.length;
+      ctx.globalAlpha=t*0.2*a; ctx.fillStyle=def.color;
+      ctx.beginPath(); ctx.arc(this.trail[i].x,this.trail[i].y,R*(0.5+t*0.5),0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=a; ctx.shadowColor=def.glow; ctx.shadowBlur=def.glowB*pulse; ctx.fillStyle=def.color;
+    ctx.beginPath(); ctx.arc(this.x,this.y,R,0,Math.PI*2); ctx.fill();
+    if(a>0.65){
+      ctx.shadowBlur=0; ctx.globalAlpha=(a-0.65)/0.35;
+      ctx.font=`bold ${R-1}px monospace`; ctx.fillStyle='#fff';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(def.label,this.x,this.y);
+    }
+    ctx.restore();
+  }
+}
+
+class FreeElectron2 {
+  constructor(cw,ch){
+    this.x=Math.random()*cw; this.y=Math.random()*ch; this.cw=cw; this.ch=ch;
+    const spd=CFG2.electron.speedMin+Math.random()*(CFG2.electron.speedMax-CFG2.electron.speedMin);
+    const ang=Math.random()*Math.PI*2;
+    this.vx=Math.cos(ang)*spd; this.vy=Math.sin(ang)*spd; this.trail=[];
+  }
+  update(dt,cw,ch){
+    this.trail.push({x:this.x,y:this.y});
+    if(this.trail.length>CFG2.electron.trailLen) this.trail.shift();
+    this.vx+=(Math.random()-0.5)*CFG2.electron.jitter*dt; this.vy+=(Math.random()-0.5)*CFG2.electron.jitter*dt;
+    const spd=Math.hypot(this.vx,this.vy), mx=CFG2.electron.speedMax, mn=CFG2.electron.speedMin;
+    if(spd>mx){this.vx*=mx/spd;this.vy*=mx/spd;} if(spd<mn){this.vx*=mn/spd;this.vy*=mn/spd;}
+    this.x+=this.vx*dt; this.y+=this.vy*dt;
+    const s=40;
+    if(this.x<3){this.x=3;this.vx=Math.abs(this.vx)+(Math.random()-.5)*s;}
+    if(this.x>cw-3){this.x=cw-3;this.vx=-Math.abs(this.vx)+(Math.random()-.5)*s;}
+    if(this.y<3){this.y=3;this.vy=Math.abs(this.vy)+(Math.random()-.5)*s;}
+    if(this.y>ch-3){this.y=ch-3;this.vy=-Math.abs(this.vy)+(Math.random()-.5)*s;}
+  }
+  draw(ctx){
+    ctx.save();
+    for(let i=0;i<this.trail.length;i++){
+      const t=(i+1)/this.trail.length;
+      ctx.globalAlpha=t*0.18; ctx.fillStyle='#FFFF55';
+      ctx.beginPath(); ctx.arc(this.trail[i].x,this.trail[i].y,CFG2.electron.radius*(0.4+t*0.6),0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1; ctx.shadowColor='#FFDD00'; ctx.shadowBlur=12; ctx.fillStyle='#FFFF44';
+    ctx.beginPath(); ctx.arc(this.x,this.y,CFG2.electron.radius,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+class HeatBackground2 {
+  constructor(){ this.t=0; }
+  update(dt){ this.t+=dt; }
+  draw(ctx,cw,ch){
+    ctx.fillStyle='#050108'; ctx.fillRect(0,0,cw,ch);
+    const cx=cw/2, cy=ch/2;
+    const pulse=0.55+Math.sin(this.t*1.5)*0.15+Math.sin(this.t*2.8+0.9)*0.08;
+    const r1=Math.min(cw,ch)*0.30*pulse;
+    const g1=ctx.createRadialGradient(cx,cy,0,cx,cy,r1);
+    g1.addColorStop(0,`rgba(160,60,200,${(0.13*pulse).toFixed(3)})`);
+    g1.addColorStop(0.4,`rgba(120,30,160,${(0.09*pulse).toFixed(3)})`); g1.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g1; ctx.fillRect(0,0,cw,ch);
+    const r2=Math.min(cw,ch)*0.55*pulse;
+    const g2=ctx.createRadialGradient(cx,cy,r1*0.5,cx,cy,r2);
+    g2.addColorStop(0,`rgba(80,20,120,${(0.07*pulse).toFixed(3)})`); g2.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g2; ctx.fillRect(0,0,cw,ch);
+  }
+}
+
+class Stage2Module {
+  constructor(){
+    this.cw=0;this.ch=0;this.quarks=[];this.groups=[];this.electrons=[];
+    this.bg=new HeatBackground2();this.globalTime=0;this.resetPending=false;this.resetTimer=0;
+  }
+  init(cw,ch){ this.cw=cw;this.ch=ch;this._build(); }
+  resize(cw,ch){
+    this.cw=cw;this.ch=ch;
+    for(const q of this.quarks){q.x=Math.min(q.x,cw-5);q.y=Math.min(q.y,ch-5);}
+    for(const e of this.electrons){e.cw=cw;e.ch=ch;}
+  }
+  update(dt){
+    this.bg.update(dt); this.globalTime+=dt;
+    const{cw,ch}=this;
+    for(const g of this.groups){
+      if(g.state==='waiting'&&this.globalTime>=g.activationDelay){
+        const rawCx=g.quarks.reduce((s,q)=>s+q.x,0)/3;
+        const rawCy=g.quarks.reduce((s,q)=>s+q.y,0)/3;
+        const cx=Math.max(70,Math.min(cw-70,rawCx)), cy=Math.max(70,Math.min(ch-70,rawCy));
+        g.activate(cx,cy);
+      }
+      g.update(dt,cw,ch);
+    }
+    for(const q of this.quarks) q.update(dt,cw,ch);
+    for(const e of this.electrons) e.update(dt,cw,ch);
+    const allDone=this.groups.every(g=>g.state==='done');
+    if(allDone&&!this.resetPending){this.resetPending=true;this.resetTimer=CFG2.resetDelay;}
+    if(this.resetPending){
+      this.resetTimer-=dt;
+      if(this.resetTimer<=0){this.globalTime=0;this.resetPending=false;this._build();}
+    }
+  }
+  render(ctx){
+    this.bg.draw(ctx,this.cw,this.ch);
+    for(const g of this.groups) g.drawConnections(ctx,this.globalTime);
+    for(const e of this.electrons) e.draw(ctx);
+    for(const q of this.quarks) q.draw(ctx);
+    for(const g of this.groups) if(g.nucleon) g.nucleon.draw(ctx);
+    for(const g of this.groups) g.drawLabel(ctx);
+    for(const g of this.groups) g.drawFlash(ctx);
+  }
+  getProgress(){
+    const done=(type)=>this.groups.filter(g=>g.type===type&&g.state==='done').length;
+    const total=(type)=>this.groups.filter(g=>g.type===type).length;
+    return{proton:done('proton'),protonTotal:total('proton'),neutron:done('neutron'),neutronTotal:total('neutron')};
+  }
+  getPhase(){
+    if(this.resetPending) return 'done';
+    if(this.groups.every(g=>g.state==='waiting')) return 'free';
+    if(this.groups.some(g=>g.state==='attracting'||g.state==='merging')) return 'forming';
+    return 'done';
+  }
+  _build(){
+    const{cw,ch}=this; this.quarks=[]; this.groups=[];
+    for(let gi=0;gi<CFG2.groups.length;gi++){
+      const gDef=CFG2.groups[gi];
+      const types=gDef.type==='proton'?['u','u','d']:['u','d','d'];
+      const quarks=types.map(t=>{
+        const q=new QuarkParticle2(t,50+Math.random()*(cw-100),50+Math.random()*(ch-100));
+        this.quarks.push(q); return q;
+      });
+      const g=new QuarkGroup(quarks,gDef.type); g.activationDelay=gDef.delay; this.groups.push(g);
+    }
+    this.electrons=Array.from({length:CFG2.electron.count},()=>new FreeElectron2(cw,ch));
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+//  11. STAGE 3 CONFIG + CLASSES  (module_04, CFG → CFG3)
+// ════════════════════════════════════════════════════════════════════
+
+const CFG3 = {
+  h_proton:  { count: 12,  radius: 7,  speedMin: 35, speedMax: 80, jitter: 45,  trailLen: 4 },
+  he_proton: { count: 2,   radius: 7,  speedMin: 40, speedMax: 85, jitter: 45,  trailLen: 4 },
+  he_neutron:{ count: 2,   radius: 7,  speedMin: 40, speedMax: 85, jitter: 40,  trailLen: 4 },
+  electron:  { count: 16,  radius: 2.5,speedMin: 420,speedMax: 640,jitter: 290, trailLen: 6 },
+  he_group: {
+    activationDelay: 1.6,
+    mergeR: 18, attractF: 3.5, dampAttr: 3.2,
+    spiralSpd: 6, spiralIn: 40,
+  },
+  he_nucleus:{ radius: 13, speedMin: 20, speedMax: 70, jitter: 28 },
+  resetDelay: 4.5,
+};
+
+const NVIS = {
+  proton:  { color: '#FF7722', glow: '#FF5500', glowB: 12, radius: 7,  label: 'p' },
+  h_plus:  { color: '#FF9944', glow: '#FF6800', glowB: 14, radius: 7,  label: 'H⁺' },
+  neutron: { color: '#AAAAAA', glow: '#888888', glowB: 9,  radius: 7,  label: 'n' },
+};
+
+const S3_PHASES = {
+  free:       { color:'#FFAA55', text:'핵자들이 천천히 이동 중…' },
+  attracting: { color:'#FF7733', text:'⚡ 강력(强力) 작용! He²⁺ 형성 시작' },
+  merging:    { color:'#FFDD00', text:'💥 핵합성 진행 중…' },
+  done:       { color:'#88FF88', text:'✅ 수소·헬륨 원자핵 형성 완료!' },
+};
+
+
+class NucleonP3 {
+  constructor(type, x, y, speedMin, speedMax) {
+    this.baseType = type;
+    this.state    = 'free';
+    this.x = x; this.y = y;
+    const spd = speedMin + Math.random() * (speedMax - speedMin);
+    const ang = Math.random() * Math.PI * 2;
+    this.vx = Math.cos(ang) * spd;
+    this.vy = Math.sin(ang) * spd;
+    this.r      = NVIS[type].radius;
+    this.trail  = [];
+    this.trailMax = CFG3.h_proton.trailLen;
+    this.group  = null;
+    this.mergeAngle  = 0;
+    this.mergeRadius = 0;
+    this.pulseTimer = 0;
+    this.pulseMax   = 0;
+  }
+
+  triggerHPlus() {
+    this.state      = 'h_plus';
+    this.pulseTimer = 0.55;
+    this.pulseMax   = 0.55;
+  }
+
+  update(dt, cw, ch) {
+    if (this.state === 'done') return;
+    this.trail.push({ x: this.x, y: this.y });
+    if (this.trail.length > this.trailMax) this.trail.shift();
+    if (this.pulseTimer > 0) this.pulseTimer -= dt;
+    if (this.state === 'free' || this.state === 'h_plus') this._free(dt, cw, ch);
+    else if (this.state === 'targeting') this._target(dt, cw, ch);
+    else if (this.state === 'merging')   this._merge(dt);
+  }
+
+  _free(dt, cw, ch) {
+    const C = this.baseType === 'proton' ? CFG3.h_proton : CFG3.he_neutron;
+    this.vx += (Math.random() - 0.5) * C.jitter * dt;
+    this.vy += (Math.random() - 0.5) * C.jitter * dt;
+    const spd = Math.hypot(this.vx, this.vy);
+    if (spd > C.speedMax) { this.vx *= C.speedMax / spd; this.vy *= C.speedMax / spd; }
+    if (spd < C.speedMin) { this.vx *= C.speedMin / spd; this.vy *= C.speedMin / spd; }
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    const s = 30;
+    if (this.x < this.r) { this.x = this.r; this.vx = Math.abs(this.vx)+(Math.random()-.5)*s; }
+    if (this.x > cw-this.r) { this.x = cw-this.r; this.vx = -Math.abs(this.vx)+(Math.random()-.5)*s; }
+    if (this.y < this.r) { this.y = this.r; this.vy = Math.abs(this.vy)+(Math.random()-.5)*s; }
+    if (this.y > ch-this.r) { this.y = ch-this.r; this.vy = -Math.abs(this.vy)+(Math.random()-.5)*s; }
+  }
+
+  _target(dt, cw, ch) {
+    if (!this.group) return;
+    const dx = this.group.cx - this.x, dy = this.group.cy - this.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const F = Math.min(dist * CFG3.he_group.attractF, 900);
+    const perpX = -dy / dist, perpY = dx / dist;
+    this.vx += (dx / dist * F + perpX * 20) * dt;
+    this.vy += (dy / dist * F + perpY * 20) * dt;
+    const d = CFG3.he_group.dampAttr;
+    this.vx *= (1 - d * dt); this.vy *= (1 - d * dt);
+    this.x += this.vx * dt; this.y += this.vy * dt;
+    this.x = Math.max(5, Math.min(cw - 5, this.x));
+    this.y = Math.max(5, Math.min(ch - 5, this.y));
+  }
+
+  _merge(dt) {
+    if (!this.group) return;
+    this.mergeAngle  += dt * CFG3.he_group.spiralSpd;
+    this.mergeRadius  = Math.max(0, this.mergeRadius - dt * CFG3.he_group.spiralIn);
+    this.x = this.group.cx + Math.cos(this.mergeAngle) * this.mergeRadius;
+    this.y = this.group.cy + Math.sin(this.mergeAngle) * this.mergeRadius;
+  }
+
+  get visKey() {
+    if (this.state === 'h_plus') return 'h_plus';
+    if (this.baseType === 'neutron') return 'neutron';
+    return 'proton';
+  }
+
+  draw(ctx, alpha = 1.0) {
+    if (this.state === 'done') return;
+    const def = NVIS[this.visKey];
+    const fadeOut = this.state === 'merging' ? Math.min(1, this.mergeRadius / 12) : 1;
+    const a = alpha * fadeOut;
+    if (a < 0.01) return;
+    ctx.save();
+    for (let i = 0; i < this.trail.length; i++) {
+      const t = (i + 1) / this.trail.length;
+      ctx.globalAlpha = t * 0.22 * a;
+      ctx.shadowColor = def.glow; ctx.shadowBlur = 3;
+      ctx.fillStyle = def.color;
+      ctx.beginPath(); ctx.arc(this.trail[i].x, this.trail[i].y, def.radius*(0.35+t*0.65), 0, Math.PI*2); ctx.fill();
+    }
+    if (this.pulseTimer > 0 && this.state === 'h_plus') {
+      const pt = 1 - this.pulseTimer / this.pulseMax;
+      ctx.globalAlpha = (1 - pt) * 0.7 * a;
+      ctx.strokeStyle = '#FFDD88'; ctx.lineWidth = 1.8;
+      ctx.shadowColor = '#FFCC00'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(this.x, this.y, def.radius + pt * 22, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.globalAlpha = a;
+    ctx.shadowColor = def.glow; ctx.shadowBlur = def.glowB;
+    ctx.fillStyle = def.color;
+    ctx.beginPath(); ctx.arc(this.x, this.y, def.radius, 0, Math.PI * 2); ctx.fill();
+    if (def.label) {
+      ctx.shadowBlur = 0;
+      ctx.font = `bold ${Math.max(5, def.radius - 2)}px monospace`;
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(def.label, this.x, this.y);
+    }
+    ctx.restore();
+  }
+}
+
+
+class HeFormationGroup {
+  constructor(nucleons) {
+    this.nucleons   = nucleons;
+    this.cx = 0; this.cy = 0;
+    this.state      = 'waiting';
+    this.mergeTimer = 0;
+    this.attrTimer  = 0;
+    this.flashTimer = 0;
+    this.nucleus    = null;
+    this.burstRays  = [];
+  }
+
+  activate(cx, cy) {
+    this.cx = cx; this.cy = cy;
+    this.state = 'attracting';
+    for (const n of this.nucleons) { n.state = 'targeting'; n.group = this; }
+  }
+
+  update(dt, cw, ch) {
+    if (this.state === 'done') { if (this.nucleus) this.nucleus.update(dt, cw, ch); return; }
+    if (this.state === 'attracting') {
+      this.attrTimer += dt;
+      const allClose = this.nucleons.every(n =>
+        Math.hypot(n.x - this.cx, n.y - this.cy) < CFG3.he_group.mergeR);
+      if (allClose) {
+        this.state = 'merging';
+        for (const n of this.nucleons) {
+          n.state = 'merging';
+          n.mergeRadius = Math.max(2, Math.hypot(n.x - this.cx, n.y - this.cy));
+          n.mergeAngle  = Math.atan2(n.y - this.cy, n.x - this.cx);
+        }
+      }
+    }
+    if (this.state === 'merging') {
+      this.mergeTimer += dt;
+      if (this.mergeTimer > 0.38 && !this.nucleus) {
+        const spd = CFG3.he_nucleus.speedMin + Math.random() * (CFG3.he_nucleus.speedMax - CFG3.he_nucleus.speedMin);
+        const ang = Math.random() * Math.PI * 2;
+        this.nucleus    = new HeliumNucleus(this.cx, this.cy, Math.cos(ang)*spd, Math.sin(ang)*spd);
+        this.flashTimer = 0.75;
+        this._spawnBurst();
+      }
+      if (this.mergeTimer > 0.80) {
+        for (const n of this.nucleons) n.state = 'done';
+        this.state = 'done';
+      }
+    }
+    if (this.flashTimer > 0) this.flashTimer -= dt;
+    if (this.nucleus) this.nucleus.update(dt, cw, ch);
+    for (const r of this.burstRays) {
+      r.progress += r.speed * dt;
+      r.alpha = Math.max(0, r.alpha - dt * 1.2);
+    }
+  }
+
+  _spawnBurst() {
+    const count = 12;
+    for (let i = 0; i < count; i++) {
+      const ang = (i / count) * Math.PI * 2;
+      this.burstRays.push({
+        ox: this.cx, oy: this.cy,
+        angle: ang + (Math.random() - 0.5) * 0.3,
+        speed: 300 + Math.random() * 200,
+        length: 60 + Math.random() * 80,
+        progress: 0,
+        alpha: 0.7 + Math.random() * 0.3,
+        color: ['#FFFFFF', '#FFFF88', '#FFDD44'][Math.floor(Math.random() * 3)],
+      });
+    }
+  }
+
+  drawConnections(ctx, globalTime) {
+    if (this.state !== 'attracting') return;
+    const alive = this.nucleons.filter(n => n.state !== 'done');
+    if (alive.length < 2) return;
+    const pulse = 0.5 + Math.sin(globalTime * 7) * 0.4;
+    ctx.save();
+    ctx.lineCap = 'round'; ctx.lineWidth = 1.4;
+    ctx.shadowBlur = 8; ctx.shadowColor = '#FF5500';
+    for (let i = 0; i < alive.length; i++) {
+      for (let j = i + 1; j < alive.length; j++) {
+        const a = alive[i], b = alive[j];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        const proximity = Math.max(0, 1 - dist / 180);
+        ctx.globalAlpha = (0.2 + pulse * 0.35) * (0.3 + proximity * 0.7);
+        const grd = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+        grd.addColorStop(0, NVIS[a.visKey].color);
+        grd.addColorStop(1, NVIS[b.visKey].color);
+        ctx.strokeStyle = grd;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  drawLabel(ctx) {
+    if (this.state !== 'attracting' || this.attrTimer < 0.1) return;
+    const la = Math.min(1, this.attrTimer * 2.5) * 0.85;
+    if (la < 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = la;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = '#FF9944';
+    ctx.textAlign = 'center';
+    ctx.fillText('2p + 2n → He²⁺', this.cx, this.cy - 28);
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#FF6622';
+    ctx.fillText('강력(Strong Force) 작용 중', this.cx, this.cy - 16);
+    ctx.restore();
+  }
+
+  drawFlash(ctx) {
+    if (this.flashTimer <= 0 || !this.nucleus) return;
+    const t = this.flashTimer / 0.75;
+    const r = (1 - t) * 80 + 8;
+    const grd = ctx.createRadialGradient(this.cx, this.cy, 0, this.cx, this.cy, r);
+    grd.addColorStop(0,    `rgba(255,255,255,${(t * 0.95).toFixed(2)})`);
+    grd.addColorStop(0.28, `rgba(255,230,80,${(t * 0.6).toFixed(2)})`);
+    grd.addColorStop(0.6,  `rgba(255,120,0,${(t * 0.3).toFixed(2)})`);
+    grd.addColorStop(1,    'rgba(0,0,0,0)');
+    ctx.save(); ctx.fillStyle = grd;
+    ctx.fillRect(this.cx - r, this.cy - r, r * 2, r * 2);
+    ctx.restore();
+  }
+
+  drawBurst(ctx) {
+    for (const r of this.burstRays) {
+      if (r.alpha <= 0) continue;
+      const tailProg = Math.max(0, r.progress - r.length);
+      const tipX  = r.ox + Math.cos(r.angle) * r.progress;
+      const tipY  = r.oy + Math.sin(r.angle) * r.progress;
+      const tailX = r.ox + Math.cos(r.angle) * tailProg;
+      const tailY = r.oy + Math.sin(r.angle) * tailProg;
+      ctx.save();
+      const grd = ctx.createLinearGradient(tailX, tailY, tipX, tipY);
+      grd.addColorStop(0, 'rgba(255,255,255,0)');
+      grd.addColorStop(1, `rgba(255,255,200,${r.alpha.toFixed(3)})`);
+      ctx.strokeStyle = grd; ctx.lineWidth = 1.0;
+      ctx.shadowColor = r.color; ctx.shadowBlur = 5;
+      ctx.beginPath(); ctx.moveTo(tailX, tailY); ctx.lineTo(tipX, tipY); ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+
+class HeliumNucleus {
+  constructor(x, y, vx, vy) {
+    this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+    this.r      = CFG3.he_nucleus.radius;
+    this.state  = 'forming';
+    this.formP  = 0;
+    this.rotAng = 0;
+    this.pulseT = Math.random() * Math.PI * 2;
+    this.trail  = [];
+  }
+
+  update(dt, cw, ch) {
+    this.pulseT  += dt * 1.8;
+    this.rotAng  += dt * 1.0;
+    if (this.state === 'forming') {
+      this.formP += dt * 2.5;
+      if (this.formP >= 1) { this.formP = 1; this.state = 'active'; }
+      return;
+    }
+    this.trail.push({ x: this.x, y: this.y });
+    if (this.trail.length > 4) this.trail.shift();
+    this.vx += (Math.random() - 0.5) * CFG3.he_nucleus.jitter * dt;
+    this.vy += (Math.random() - 0.5) * CFG3.he_nucleus.jitter * dt;
+    const spd = Math.hypot(this.vx, this.vy);
+    const mx = CFG3.he_nucleus.speedMax, mn = CFG3.he_nucleus.speedMin;
+    if (spd > mx) { this.vx *= mx/spd; this.vy *= mx/spd; }
+    if (spd < mn) { this.vx *= mn/spd; this.vy *= mn/spd; }
+    this.x += this.vx * dt; this.y += this.vy * dt;
+    const R = this.r;
+    if (this.x < R) { this.x = R; this.vx = Math.abs(this.vx); }
+    if (this.x > cw-R) { this.x = cw-R; this.vx = -Math.abs(this.vx); }
+    if (this.y < R) { this.y = R; this.vy = Math.abs(this.vy); }
+    if (this.y > ch-R) { this.y = ch-R; this.vy = -Math.abs(this.vy); }
+  }
+
+  draw(ctx) {
+    if (this.formP <= 0.02) return;
+    const a = this.formP;
+    const R = this.r * (0.4 + 0.6 * a);
+    const pulse = 0.88 + 0.12 * Math.sin(this.pulseT);
+    ctx.save();
+    ctx.globalAlpha = a;
+    for (let i = 0; i < this.trail.length; i++) {
+      const t = (i + 1) / this.trail.length;
+      ctx.globalAlpha = t * 0.15 * a;
+      ctx.fillStyle = '#FFCC00';
+      ctx.beginPath(); ctx.arc(this.trail[i].x, this.trail[i].y, R * (0.5 + t * 0.5), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = a;
+    ctx.shadowColor = '#FFAA00'; ctx.shadowBlur = 20 * pulse;
+    const bg = ctx.createRadialGradient(this.x - R*0.3, this.y - R*0.3, 0, this.x, this.y, R);
+    bg.addColorStop(0,   '#FFE888');
+    bg.addColorStop(0.5, '#FFCC00');
+    bg.addColorStop(1,   '#FF9900');
+    ctx.fillStyle = bg;
+    ctx.beginPath(); ctx.arc(this.x, this.y, R, 0, Math.PI * 2); ctx.fill();
+    if (a > 0.45) {
+      const ia = Math.min(1, (a - 0.45) / 0.55);
+      const iR = R * 0.46, dR = R * 0.2;
+      ctx.shadowBlur = 5;
+      const inner = [
+        { angle: this.rotAng,               color: '#FF5522', glow: '#FF3300' },
+        { angle: this.rotAng + Math.PI,     color: '#FF5522', glow: '#FF3300' },
+        { angle: this.rotAng + Math.PI/2,   color: '#CCCCCC', glow: '#999999' },
+        { angle: this.rotAng + Math.PI*1.5, color: '#CCCCCC', glow: '#999999' },
+      ];
+      for (const inn of inner) {
+        ctx.globalAlpha = a * ia;
+        ctx.shadowColor = inn.glow; ctx.fillStyle = inn.color;
+        ctx.beginPath();
+        ctx.arc(this.x + Math.cos(inn.angle)*iR, this.y + Math.sin(inn.angle)*iR, dR, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+    if (a > 0.65) {
+      ctx.globalAlpha = Math.min(1, (a - 0.65) / 0.35);
+      ctx.shadowBlur = 0;
+      ctx.font = `bold ${Math.max(7, R - 3)}px monospace`;
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('He²⁺', this.x, this.y);
+    }
+    ctx.restore();
+  }
+}
+
+
+class FreeElectron3 {
+  constructor(cw, ch) {
+    this.x = Math.random() * cw;
+    this.y = Math.random() * ch;
+    const spd = CFG3.electron.speedMin + Math.random() * (CFG3.electron.speedMax - CFG3.electron.speedMin);
+    const ang = Math.random() * Math.PI * 2;
+    this.vx = Math.cos(ang) * spd; this.vy = Math.sin(ang) * spd;
+    this.trail = []; this.cw = cw; this.ch = ch;
+  }
+
+  update(dt, cw, ch, nuclei) {
+    this.trail.push({ x: this.x, y: this.y });
+    if (this.trail.length > CFG3.electron.trailLen) this.trail.shift();
+    for (const nuc of nuclei) {
+      const dx = nuc.x - this.x, dy = nuc.y - this.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 55 && dist > 5) {
+        const F = 55;
+        this.vx += (dx / dist) * F * dt;
+        this.vy += (dy / dist) * F * dt;
+      }
+    }
+    this.vx += (Math.random() - 0.5) * CFG3.electron.jitter * dt;
+    this.vy += (Math.random() - 0.5) * CFG3.electron.jitter * dt;
+    const spd = Math.hypot(this.vx, this.vy);
+    const mx = CFG3.electron.speedMax, mn = CFG3.electron.speedMin;
+    if (spd > mx) { this.vx *= mx/spd; this.vy *= mx/spd; }
+    if (spd < mn) { this.vx *= mn/spd; this.vy *= mn/spd; }
+    this.x += this.vx * dt; this.y += this.vy * dt;
+    const s = 45;
+    if (this.x < 3) { this.x = 3; this.vx = Math.abs(this.vx)+(Math.random()-.5)*s; }
+    if (this.x > cw-3) { this.x = cw-3; this.vx = -Math.abs(this.vx)+(Math.random()-.5)*s; }
+    if (this.y < 3) { this.y = 3; this.vy = Math.abs(this.vy)+(Math.random()-.5)*s; }
+    if (this.y > ch-3) { this.y = ch-3; this.vy = -Math.abs(this.vy)+(Math.random()-.5)*s; }
+  }
+
+  draw(ctx) {
+    ctx.save();
+    for (let i = 0; i < this.trail.length; i++) {
+      const t = (i + 1) / this.trail.length;
+      ctx.globalAlpha = t * 0.18;
+      ctx.fillStyle = '#FFFF55';
+      ctx.beginPath(); ctx.arc(this.trail[i].x, this.trail[i].y, CFG3.electron.radius*(0.3+t*0.7), 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowColor = '#FFDD00'; ctx.shadowBlur = 11;
+    ctx.fillStyle = '#FFFF44';
+    ctx.beginPath(); ctx.arc(this.x, this.y, CFG3.electron.radius, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+
+class Stage3Background {
+  constructor() { this.t = 0; }
+  update(dt) { this.t += dt; }
+  draw(ctx, cw, ch) {
+    ctx.fillStyle = '#060100';
+    ctx.fillRect(0, 0, cw, ch);
+    const cx = cw / 2, cy = ch / 2;
+    const pulse = 0.55 + Math.sin(this.t * 1.1) * 0.12;
+    const r = Math.min(cw, ch) * 0.30 * pulse;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0,   `rgba(180,50,0,${(0.09 * pulse).toFixed(3)})`);
+    g.addColorStop(0.5, `rgba(120,20,0,${(0.05 * pulse).toFixed(3)})`);
+    g.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch);
+  }
+}
+
+
+class Stage3Module {
+  constructor() {
+    this.cw = 0; this.ch = 0;
+    this.hProtons   = [];
+    this.heGroup    = null;
+    this.electrons  = [];
+    this.bg         = new Stage3Background();
+    this.globalTime = 0;
+    this.activated  = false;
+    this.allDone    = false;
+    this.resetTimer = 0;
+    this.resetPending = false;
+  }
+
+  init(cw, ch)   { this.cw = cw; this.ch = ch; this._build(); }
+  resize(cw, ch) { this.cw = cw; this.ch = ch; }
+
+  update(dt) {
+    this.bg.update(dt);
+    this.globalTime += dt;
+    const { cw, ch } = this;
+    if (!this.activated && this.globalTime >= CFG3.he_group.activationDelay) {
+      this.activated = true;
+      const ns = this.heGroup.nucleons;
+      const rawCx = ns.reduce((s, n) => s + n.x, 0) / ns.length;
+      const rawCy = ns.reduce((s, n) => s + n.y, 0) / ns.length;
+      this.heGroup.activate(
+        Math.max(80, Math.min(cw - 80, rawCx)),
+        Math.max(80, Math.min(ch - 80, rawCy))
+      );
+      for (const p of this.hProtons) p.triggerHPlus();
+    }
+    this.heGroup.update(dt, cw, ch);
+    for (const p of this.hProtons)        p.update(dt, cw, ch);
+    for (const n of this.heGroup.nucleons) n.update(dt, cw, ch);
+    const nuclei = this._collectNuclei();
+    for (const e of this.electrons) e.update(dt, cw, ch, nuclei);
+    if (!this.resetPending && this.heGroup.state === 'done') {
+      this.resetPending = true;
+      this.resetTimer   = CFG3.resetDelay;
+    }
+    if (this.resetPending) {
+      this.resetTimer -= dt;
+      if (this.resetTimer <= 0) {
+        this.globalTime   = 0;
+        this.activated    = false;
+        this.resetPending = false;
+        this._build();
+      }
+    }
+  }
+
+  render(ctx) {
+    this.bg.draw(ctx, this.cw, this.ch);
+    this.heGroup.drawConnections(ctx, this.globalTime);
+    for (const e of this.electrons) e.draw(ctx);
+    for (const p of this.hProtons) p.draw(ctx);
+    for (const n of this.heGroup.nucleons) n.draw(ctx);
+    if (this.heGroup.nucleus) this.heGroup.nucleus.draw(ctx);
+    this.heGroup.drawLabel(ctx);
+    this.heGroup.drawBurst(ctx);
+    this.heGroup.drawFlash(ctx);
+  }
+
+  getStatus() {
+    const hDone  = this.activated ? 12 : 0;
+    const heDone = this.heGroup.state === 'done' ? 1 : 0;
+    return { hDone, heDone, phase: this._phase(), showRatio: this.heGroup.state === 'done' };
+  }
+
+  _phase() {
+    if (!this.activated) return 'free';
+    if (this.heGroup.state === 'attracting') return 'attracting';
+    if (this.heGroup.state === 'merging')    return 'merging';
+    if (this.heGroup.state === 'done')       return 'done';
+    return 'free';
+  }
+
+  _collectNuclei() {
+    const list = [];
+    for (const p of this.hProtons)
+      if (p.state === 'h_plus') list.push({ x: p.x, y: p.y });
+    if (this.heGroup.nucleus && this.heGroup.nucleus.state === 'active')
+      list.push({ x: this.heGroup.nucleus.x, y: this.heGroup.nucleus.y });
+    return list;
+  }
+
+  _build() {
+    const { cw, ch } = this;
+    this.hProtons = [];
+    for (let i = 0; i < 12; i++) {
+      this.hProtons.push(new NucleonP3('proton',
+        60 + Math.random() * (cw - 120),
+        60 + Math.random() * (ch - 120),
+        CFG3.h_proton.speedMin, CFG3.h_proton.speedMax
+      ));
+    }
+    const heNucleons = [
+      new NucleonP3('proton',  55 + Math.random()*(cw-110), 55 + Math.random()*(ch-110), CFG3.he_proton.speedMin,  CFG3.he_proton.speedMax),
+      new NucleonP3('proton',  55 + Math.random()*(cw-110), 55 + Math.random()*(ch-110), CFG3.he_proton.speedMin,  CFG3.he_proton.speedMax),
+      new NucleonP3('neutron', 55 + Math.random()*(cw-110), 55 + Math.random()*(ch-110), CFG3.he_neutron.speedMin, CFG3.he_neutron.speedMax),
+      new NucleonP3('neutron', 55 + Math.random()*(cw-110), 55 + Math.random()*(ch-110), CFG3.he_neutron.speedMin, CFG3.he_neutron.speedMax),
+    ];
+    this.heGroup   = new HeFormationGroup(heNucleons);
+    this.electrons = Array.from({ length: CFG3.electron.count }, () => new FreeElectron3(cw, ch));
+  }
+}
+
+
+
+// ════════════════════════════════════════════════════════════════════
+//  12. STAGE 4 CONFIG + CLASSES  (module_05, CFG → CFG4, ZigzagPhoton → ZigzagPhotonS4)
+// ════════════════════════════════════════════════════════════════════
+
+const CFG4 = {
+  nHProtons   : 12,
+  nElectrons  : 14,
+  nPhotons    : 20,
+  captureDelay: 2.8,
+  orbitR_H    : 20,
+  orbitR_He0  : 22,
+  orbitR_He1  : 33,
+  TEMP_START  : 4200,
+  TEMP_END    : 2700,
+  TEMP_TIME   : 4.5,
+  ELEC_SPD_HI : [160, 235],
+  resetDelay  : 6.5,
+};
+
+class Stage4Background {
+  constructor() { this.time = 0; this.stars = []; this.cw = 800; this.ch = 520; }
+  init(cw, ch) {
+    this.cw = cw; this.ch = ch;
+    this.stars = Array.from({ length: 95 }, () => ({
+      x: rnd(0, cw), y: rnd(0, ch),
+      r: rnd(0.3, 1.6),
+      base: rnd(0.10, 0.54),
+      twinkle: rnd(0, Math.PI * 2),
+      speed: rnd(0.3, 1.8),
+    }));
+  }
+  update(dt) { this.time += dt; }
+  render(ctx) {
+    ctx.fillStyle = '#00000e';
+    ctx.fillRect(0, 0, this.cw, this.ch);
+    this.stars.forEach(s => {
+      const a = s.base * (0.55 + 0.45 * Math.sin(this.time * s.speed + s.twinkle));
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(215,228,255,${a})`;
+      ctx.fill();
+    });
+  }
+  resize(cw, ch) { this.init(cw, ch); }
+}
+
+class ZigzagPhotonS4 {
+  constructor(x, y, cw, ch) {
+    this.cw = cw; this.ch = ch;
+    this.x = x; this.y = y;
+    this.speed = rnd(165, 270);
+    const ang  = rnd(0, Math.PI * 2);
+    this.vx = Math.cos(ang) * this.speed;
+    this.vy = Math.sin(ang) * this.speed;
+    this.state   = 'trapped';
+    this.done    = false;
+    this.path     = [{ x, y }];
+    this.maxPath  = 18;
+    this.changeCd = rnd(0.04, 0.17);
+    this.rayAngle = 0;
+    this.escAlpha = 1.0;
+  }
+  triggerEscape(cx, cy) {
+    this.state    = 'escaping';
+    const dx = this.x - cx, dy = this.y - cy;
+    this.rayAngle = (Math.hypot(dx, dy) > 20)
+      ? Math.atan2(dy, dx)
+      : rnd(0, Math.PI * 2);
+    const spd = rnd(430, 580);
+    this.vx = Math.cos(this.rayAngle) * spd;
+    this.vy = Math.sin(this.rayAngle) * spd;
+    this.escAlpha = 1.0;
+    this.path = [];
+  }
+  update(dt) {
+    if (this.state === 'trapped') {
+      this.changeCd -= dt;
+      if (this.changeCd <= 0) {
+        this.changeCd = rnd(0.04, 0.17);
+        const ang = rnd(0, Math.PI * 2);
+        this.vx = Math.cos(ang) * this.speed;
+        this.vy = Math.sin(ang) * this.speed;
+      }
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      if (this.x < 4)         { this.x = 4;         this.vx =  Math.abs(this.vx); }
+      if (this.x > this.cw-4) { this.x = this.cw-4; this.vx = -Math.abs(this.vx); }
+      if (this.y < 4)         { this.y = 4;         this.vy =  Math.abs(this.vy); }
+      if (this.y > this.ch-4) { this.y = this.ch-4; this.vy = -Math.abs(this.vy); }
+      this.path.unshift({ x: this.x, y: this.y });
+      if (this.path.length > this.maxPath) this.path.pop();
+    } else if (this.state === 'escaping') {
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      this.escAlpha -= dt * 0.80;
+      if (this.escAlpha <= 0 ||
+          this.x < -180 || this.x > this.cw + 180 ||
+          this.y < -180 || this.y > this.ch + 180) {
+        this.done = true;
+      }
+    }
+  }
+  render(ctx) {
+    if (this.state === 'trapped') {
+      if (this.path.length < 2) return;
+      for (let i = 1; i < this.path.length; i++) {
+        const a  = (1 - i / this.path.length) * 0.55;
+        const p0 = this.path[i - 1], p1 = this.path[i];
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
+        ctx.strokeStyle = `rgba(255,244,170,${a})`;
+        ctx.lineWidth = 1.5; ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,205,0.90)';
+      ctx.fill();
+    } else if (this.state === 'escaping') {
+      const a = Math.max(0, this.escAlpha);
+      if (a <= 0) return;
+      const streakLen = 100;
+      const tx = this.x - Math.cos(this.rayAngle) * streakLen;
+      const ty = this.y - Math.sin(this.rayAngle) * streakLen;
+      const gr = ctx.createLinearGradient(tx, ty, this.x, this.y);
+      gr.addColorStop(0,   'rgba(255,244,160,0)');
+      gr.addColorStop(0.5, `rgba(255,250,195,${a * 0.52})`);
+      gr.addColorStop(1,   `rgba(255,255,225,${a})`);
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(this.x, this.y);
+      ctx.strokeStyle = gr; ctx.lineWidth = 2.2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(this.x, this.y, 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,230,${a})`; ctx.fill();
+    }
+  }
+}
+
+class PhotonFlash {
+  constructor(x, y, isHe) {
+    this.x = x; this.y = y; this.isHe = isHe;
+    this.age = 0; this.maxAge = 0.70; this.done = false;
+  }
+  update(dt) { this.age += dt; if (this.age >= this.maxAge) this.done = true; }
+  render(ctx) {
+    const t  = this.age / this.maxAge;
+    const c1 = this.isHe ? '85,255,175' : '120,185,255';
+    const fa = Math.max(0, 1 - t * 2.7);
+    if (fa > 0) {
+      const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, 16);
+      g.addColorStop(0, `rgba(255,255,255,${fa})`);
+      g.addColorStop(0.5, `rgba(${c1},${fa * 0.6})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.beginPath(); ctx.arc(this.x, this.y, 20, 0, Math.PI * 2);
+      ctx.fillStyle = g; ctx.fill();
+    }
+    const rA = Math.max(0, 0.58 - t * 0.78);
+    if (rA > 0) {
+      ctx.beginPath(); ctx.arc(this.x, this.y, t * 44, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(${c1},${rA})`; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+  }
+}
+
+class NucleusP4 {
+  constructor(x, y, type) {
+    this.x = x; this.y = y; this.type = type;
+    const spd = rnd(6, 14), ang = rnd(0, Math.PI * 2);
+    this.vx = Math.cos(ang) * spd;
+    this.vy = Math.sin(ang) * spd;
+    this.rotAng    = rnd(0, Math.PI * 2);
+    this.glowPhase = rnd(0, Math.PI * 2);
+    this.time      = 0;
+    this.formFlash = 0;
+    this.maxSlots      = type === 'H' ? 1 : 2;
+    this.capturedSlots = 0;
+    this.state         = 'free';
+  }
+  get r()            { return this.type === 'H' ? 7 : 14; }
+  get isNeutral()    { return this.capturedSlots >= this.maxSlots; }
+  get needsElectron(){ return this.capturedSlots < this.maxSlots; }
+  update(dt, cw, ch) {
+    this.time      += dt;
+    this.rotAng    += dt * (this.type === 'He' ? 1.55 : 0);
+    this.glowPhase += dt * 2.1;
+    if (this.formFlash > 0) this.formFlash -= dt;
+    const drag = this.isNeutral ? 0.991 : 0.997;
+    this.vx *= drag; this.vy *= drag;
+    this.x += this.vx * dt; this.y += this.vy * dt;
+    if (this.x < 24)      { this.x = 24;      this.vx =  Math.abs(this.vx); }
+    if (this.x > cw - 24) { this.x = cw - 24; this.vx = -Math.abs(this.vx); }
+    if (this.y < 24)      { this.y = 24;      this.vy =  Math.abs(this.vy); }
+    if (this.y > ch - 24) { this.y = ch - 24; this.vy = -Math.abs(this.vy); }
+    if      (this.capturedSlots === 0)           this.state = 'free';
+    else if (this.capturedSlots < this.maxSlots) this.state = 'partial';
+    else                                         this.state = 'atom';
+  }
+  render(ctx) {
+    if (this.type === 'H') this._drawH(ctx);
+    else                    this._drawHe(ctx);
+    this._drawLabel(ctx);
+  }
+  _drawH(ctx) {
+    const r = this.r;
+    if (this.isNeutral) {
+      const ga = 0.10 + 0.06 * Math.sin(this.glowPhase);
+      const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, 44);
+      g.addColorStop(0, `rgba(100,170,255,${ga * 2.1})`);
+      g.addColorStop(0.55, `rgba(60,108,255,${ga})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.beginPath(); ctx.arc(this.x, this.y, 44, 0, Math.PI * 2);
+      ctx.fillStyle = g; ctx.fill();
+    }
+    if (this.formFlash > 0) {
+      const fa = clamp(this.formFlash * 2, 0, 1);
+      const g2 = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, 24);
+      g2.addColorStop(0, `rgba(200,220,255,${fa})`); g2.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.beginPath(); ctx.arc(this.x, this.y, 24, 0, Math.PI * 2);
+      ctx.fillStyle = g2; ctx.fill();
+    }
+    const gc = ctx.createRadialGradient(this.x - r*.3, this.y - r*.3, 0, this.x, this.y, r * 1.2);
+    if (this.isNeutral) {
+      gc.addColorStop(0, '#bcd6ff'); gc.addColorStop(0.6, '#4488dd'); gc.addColorStop(1, '#112266');
+    } else {
+      gc.addColorStop(0, '#ffe49a'); gc.addColorStop(0.6, '#cc8800'); gc.addColorStop(1, '#882200');
+    }
+    ctx.beginPath(); ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = gc; ctx.fill();
+  }
+  _drawHe(ctx) {
+    const r = this.r;
+    if (this.state !== 'free') {
+      const ga = (0.08 + 0.05 * Math.sin(this.glowPhase)) * (this.isNeutral ? 1 : 0.55);
+      const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, 62);
+      g.addColorStop(0, `rgba(60,250,168,${ga * 2.3})`);
+      g.addColorStop(0.5, `rgba(40,188,128,${ga})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.beginPath(); ctx.arc(this.x, this.y, 62, 0, Math.PI * 2);
+      ctx.fillStyle = g; ctx.fill();
+    }
+    if (this.formFlash > 0) {
+      const fa = clamp(this.formFlash * 2, 0, 1);
+      const g2 = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, 30);
+      g2.addColorStop(0, `rgba(160,255,208,${fa})`); g2.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.beginPath(); ctx.arc(this.x, this.y, 30, 0, Math.PI * 2);
+      ctx.fillStyle = g2; ctx.fill();
+    }
+    const gc = ctx.createRadialGradient(this.x - r*.3, this.y - r*.3, 0, this.x, this.y, r * 1.35);
+    gc.addColorStop(0, '#cdfff0'); gc.addColorStop(0.5, this.isNeutral ? '#2ed4a0' : '#44eebb');
+    gc.addColorStop(1, '#104a38');
+    ctx.beginPath(); ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = gc; ctx.fill();
+    const dotR = 8;
+    [[this.rotAng,'#ff9944'],[this.rotAng+Math.PI,'#ff7733'],
+     [this.rotAng+Math.PI/2,'#aaaabb'],[this.rotAng+3*Math.PI/2,'#888899']
+    ].forEach(([ang, col]) => {
+      ctx.beginPath();
+      ctx.arc(this.x + Math.cos(ang)*dotR, this.y + Math.sin(ang)*dotR, 2.8, 0, Math.PI*2);
+      ctx.fillStyle = col; ctx.fill();
+    });
+  }
+  _drawLabel(ctx) {
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    let label, color;
+    if (this.type === 'H') {
+      [label, color] = this.isNeutral ? ['H','#88ccff'] : ['H⁺','#ffcc88'];
+    } else {
+      if (this.isNeutral)                [label, color] = ['He',   '#55ffcc'];
+      else if (this.state === 'partial') [label, color] = ['He⁺',  '#99ffdd'];
+      else                               [label, color] = ['He²⁺', '#ccffee'];
+    }
+    ctx.fillStyle = color;
+    ctx.fillText(label, this.x, this.y - this.r - 3);
+  }
+}
+
+class ElectronP4 {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    const spd = rnd(CFG4.ELEC_SPD_HI[0], CFG4.ELEC_SPD_HI[1]);
+    const ang  = rnd(0, Math.PI * 2);
+    this.vx = Math.cos(ang) * spd;
+    this.vy = Math.sin(ang) * spd;
+    this.trail    = [];
+    this.maxTrail = 12;
+    this.state    = 'free';
+    this.settled  = false;
+    this._emitted = false;
+    this.targetNucleus = null;
+    this.slotIndex     = 0;
+    this.orbitAngle    = 0;
+    this.orbitR        = 0;
+    this.targetOrbitR  = 0;
+    this.orbitSpeed    = 0;
+  }
+  get speed() { return Math.hypot(this.vx, this.vy); }
+  assignTo(nucleus, slotIndex) {
+    this.targetNucleus = nucleus;
+    this.slotIndex     = slotIndex;
+    this.state         = 'approaching';
+    const ph           = slotIndex * Math.PI;
+    this.orbitAngle    = Math.atan2(this.y - nucleus.y, this.x - nucleus.x) - ph;
+    this.orbitR        = dist4(this, nucleus);
+    if (nucleus.type === 'H') {
+      this.targetOrbitR = CFG4.orbitR_H;
+      this.orbitSpeed   = rnd(3.8, 5.2);
+    } else {
+      this.targetOrbitR = slotIndex === 0 ? CFG4.orbitR_He0 : CFG4.orbitR_He1;
+      this.orbitSpeed   = slotIndex === 0 ? rnd(4.2, 5.8) : rnd(2.7, 4.0);
+    }
+  }
+  update(dt, cw, ch, tempFactor) {
+    if (this.state === 'free') {
+      const drag = 0.10 + 0.62 * (1.0 - tempFactor);
+      this.vx *= (1 - drag * dt);
+      this.vy *= (1 - drag * dt);
+      this.x += this.vx * dt; this.y += this.vy * dt;
+      if (this.x < 6)      { this.x = 6;      this.vx =  Math.abs(this.vx); }
+      if (this.x > cw - 6) { this.x = cw - 6; this.vx = -Math.abs(this.vx); }
+      if (this.y < 6)      { this.y = 6;      this.vy =  Math.abs(this.vy); }
+      if (this.y > ch - 6) { this.y = ch - 6; this.vy = -Math.abs(this.vy); }
+    } else if (this.state === 'approaching') {
+      const n   = this.targetNucleus;
+      const apr = 2.5 + (this.orbitR - this.targetOrbitR) * 0.008;
+      this.orbitR -= apr * dt;
+      if (this.orbitR < this.targetOrbitR) this.orbitR = this.targetOrbitR;
+      this.orbitAngle += this.orbitSpeed * dt;
+      const ph = this.slotIndex * Math.PI;
+      this.x = n.x + Math.cos(this.orbitAngle + ph) * this.orbitR;
+      this.y = n.y + Math.sin(this.orbitAngle + ph) * this.orbitR;
+      if (this.orbitR <= this.targetOrbitR + 0.5 && !this.settled) {
+        this.orbitR = this.targetOrbitR;
+        this.state  = 'settled';
+        this.settled = true;
+      }
+    } else if (this.state === 'settled') {
+      const n  = this.targetNucleus;
+      this.orbitAngle += this.orbitSpeed * dt;
+      const ph = this.slotIndex * Math.PI;
+      this.x = n.x + Math.cos(this.orbitAngle + ph) * this.targetOrbitR;
+      this.y = n.y + Math.sin(this.orbitAngle + ph) * this.targetOrbitR;
+    }
+    this.trail.unshift({ x: this.x, y: this.y });
+    if (this.trail.length > this.maxTrail) this.trail.pop();
+  }
+  render(ctx) {
+    const speedNorm = clamp(this.speed / 200, 0, 1);
+    const tLen = Math.max(2, Math.floor(this.maxTrail * (0.2 + 0.8 * speedNorm)));
+    for (let i = 1; i < Math.min(tLen, this.trail.length); i++) {
+      const a  = (1 - i / tLen) * 0.50 * speedNorm;
+      const t0 = this.trail[i-1], t1 = this.trail[i];
+      ctx.beginPath(); ctx.moveTo(t0.x, t0.y); ctx.lineTo(t1.x, t1.y);
+      ctx.strokeStyle = `rgba(145,205,255,${a})`; ctx.lineWidth = 1.4; ctx.stroke();
+    }
+    const gr = 4.2 + speedNorm * 1.6;
+    const g  = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, gr * 2);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.32, `rgba(170,215,255,${0.70 + speedNorm * 0.30})`);
+    g.addColorStop(1, 'rgba(50,110,255,0)');
+    ctx.beginPath(); ctx.arc(this.x, this.y, gr, 0, Math.PI * 2);
+    ctx.fillStyle = g; ctx.fill();
+  }
+}
+
+class Stage4Module {
+  constructor() {
+    this.bg        = new Stage4Background();
+    this.nuclei    = [];
+    this.electrons = [];
+    this.photons   = [];
+    this.flashes   = [];
+    this.time          = 0;
+    this.capturePhase  = false;
+    this.formationDone = false;
+    this.photonsEscaped = false;
+    this.resetTimer    = 0;
+    this.escFlashAlpha = 0;
+    this._pending = [];
+    this.cw = 800; this.ch = 520;
+  }
+  init(cw, ch) {
+    this.cw = cw; this.ch = ch;
+    this.bg.init(cw, ch);
+    this._spawn();
+  }
+  get tempFactor() { return clamp(1 - this.time / CFG4.TEMP_TIME, 0, 1); }
+  get currentTemp() {
+    return Math.round(lerp(CFG4.TEMP_START, CFG4.TEMP_END, clamp(this.time / CFG4.TEMP_TIME, 0, 1)));
+  }
+  update(dt) {
+    this.time += dt;
+    this.bg.update(dt);
+    const tf = this.tempFactor;
+    if (!this.capturePhase && this.time >= CFG4.captureDelay) this._startCapture();
+    if (this.capturePhase) {
+      this._pending = this._pending.filter(a => {
+        a.delay -= dt;
+        if (a.delay <= 0) { a.e.assignTo(a.nucleus, a.slot); return false; }
+        return true;
+      });
+    }
+    // 8차: 터보 모드에서 접근 속도 가속 (dt 배율 적용)
+    const eDtMult = this._turboMode ? 3.5 : 1.0;
+    this.nuclei.forEach(n => n.update(dt, this.cw, this.ch));
+    this.electrons.forEach(e => {
+      e.update(dt * eDtMult, this.cw, this.ch, tf);
+      if (e.settled && !e._emitted) {
+        e._emitted = true;
+        const n = e.targetNucleus;
+        n.capturedSlots++;
+        n.formFlash = 0.55;
+        this.flashes.push(new PhotonFlash(n.x, n.y, n.type === 'He'));
+      }
+    });
+    this.photons.forEach(p => p.update(dt));
+    this.photons = this.photons.filter(p => !p.done);
+    this.flashes = this.flashes.filter(f => !f.done);
+    this.flashes.forEach(f => f.update(dt));
+    if (this.escFlashAlpha > 0) this.escFlashAlpha -= dt * 1.6;
+    if (!this.formationDone && this.capturePhase && this._pending.length === 0) {
+      if (this.electrons.every(e => e.state === 'settled')) {
+        this.formationDone = true;
+        this._turboMode = false;
+        const ap = document.getElementById('atomPanel');
+        if (ap) ap.classList.add('visible');
+        this._triggerEscape();
+        // 8차: 피날레 임팩트 연출 발동
+        this._triggerFinale();
+      }
+    }
+    // 8차: 피날레 타이머
+    if (this._finaleActive) {
+      this._finaleTimer += dt;
+      // 10초 후 피날레 오버레이 페이드아웃
+      if (this._finaleTimer > 8.0) {
+        this._fadeOutFinale();
+      }
+    }
+    if (this.formationDone) {
+      this.resetTimer += dt;
+      if (this.resetTimer >= CFG4.resetDelay + 4) this._spawn(); // 8차: 리셋 지연 +4초 (피날레 감상)
+    }
+    this._syncDOM();
+  }
+  render(ctx) {
+    this.bg.render(ctx);
+    this.photons.filter(p => p.state === 'trapped').forEach(p => p.render(ctx));
+    this.electrons.forEach(e => {
+      if (e.state !== 'free') return;
+      const spd = e.speed;
+      if (spd > 110) return;
+      const strength = 1 - spd / 110;
+      let nearN = null, nearD = Infinity;
+      this.nuclei.forEach(n => {
+        if (!n.needsElectron) return;
+        const d = dist4(e, n);
+        if (d < nearD) { nearD = d; nearN = n; }
+      });
+      if (!nearN || nearD > 190) return;
+      const lineA = strength * (1 - nearD / 190) * 0.55;
+      if (lineA < 0.03) return;
+      ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(nearN.x, nearN.y);
+      ctx.strokeStyle = `rgba(140,200,255,${lineA})`;
+      ctx.lineWidth = 0.9;
+      ctx.setLineDash([3, 6]); ctx.stroke(); ctx.setLineDash([]);
+      const ang = Math.atan2(nearN.y - e.y, nearN.x - e.x);
+      const mx  = (e.x + nearN.x) / 2, my = (e.y + nearN.y) / 2;
+      ctx.beginPath();
+      ctx.moveTo(mx + Math.cos(ang)*6,     my + Math.sin(ang)*6);
+      ctx.lineTo(mx + Math.cos(ang+2.4)*4, my + Math.sin(ang+2.4)*4);
+      ctx.lineTo(mx + Math.cos(ang-2.4)*4, my + Math.sin(ang-2.4)*4);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(140,200,255,${lineA * 1.4})`; ctx.fill();
+    });
+    this.electrons.forEach(e => {
+      if (e.state !== 'approaching' || !e.targetNucleus) return;
+      const n = e.targetNucleus;
+      const a = 0.07 + 0.05 * Math.sin(this.time * 4.5);
+      ctx.beginPath(); ctx.arc(n.x, n.y, e.targetOrbitR, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(125,192,255,${a + 0.08})`; ctx.lineWidth = 0.8;
+      ctx.setLineDash([3, 5]); ctx.stroke(); ctx.setLineDash([]);
+    });
+    this.nuclei.forEach(n => {
+      if (n.state === 'free') return;
+      const rings = n.type === 'H' ? [CFG4.orbitR_H] : [CFG4.orbitR_He0, CFG4.orbitR_He1];
+      rings.slice(0, n.capturedSlots).forEach(r => {
+        ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.strokeStyle = n.type === 'H' ? 'rgba(88,158,255,0.22)' : 'rgba(62,218,152,0.20)';
+        ctx.lineWidth = 0.9; ctx.stroke();
+      });
+    });
+    this.flashes.forEach(f => f.render(ctx));
+    this.nuclei.forEach(n => n.render(ctx));
+    this.electrons.forEach(e => e.render(ctx));
+    this.photons.filter(p => p.state === 'escaping').forEach(p => p.render(ctx));
+    if (this.escFlashAlpha > 0) {
+      ctx.fillStyle = `rgba(255,248,190,${Math.max(0, this.escFlashAlpha) * 0.50})`;
+      ctx.fillRect(0, 0, this.cw, this.ch);
+    }
+    // 8차: 기존 캔버스 텍스트 제거 → 피날레는 DOM 오버레이(#finaleOverlay)로 처리
+  }
+  resize(cw, ch) { this.cw = cw; this.ch = ch; this.bg.resize(cw, ch); }
+  getStatus() {
+    return {
+      hAtoms       : this.nuclei.filter(n => n.type === 'H'  && n.isNeutral).length,
+      heAtoms      : this.nuclei.filter(n => n.type === 'He' && n.isNeutral).length,
+      freeElectrons: this.electrons.filter(e => e.state === 'free').length,
+      formationDone: this.formationDone,
+    };
+  }
+  speedUpCapture() {
+    if (this.formationDone) return;
+    // If capture phase not yet started, force-start it
+    if (!this.capturePhase) {
+      this.time = Math.max(this.time, CFG4.captureDelay);
+      this._startCapture();
+    }
+    // 8차 개선: 터보 모드 활성화 — 10초 이내 전체 포획 보장
+    this._turboMode = true;
+    // 모든 대기 중인 포획을 즉시 실행 (지연 0으로)
+    this._pending.forEach(a => { a.delay = 0; });
+    // 아직 할당되지 않은 자유 전자가 있으면 즉시 할당
+    this._forceAssignFreeElectrons();
+  }
+
+  /** 8차: 미할당 자유 전자를 가장 가까운 핵에 즉시 할당 */
+  _forceAssignFreeElectrons() {
+    const free = this.electrons.filter(e => e.state === 'free');
+    for (const e of free) {
+      let nearN = null, nearD = Infinity;
+      this.nuclei.forEach(n => {
+        if (!n.needsElectron) return;
+        // 이미 pending에 있는 전자 수를 감안
+        const pendingForN = this._pending.filter(a => a.nucleus === n).length;
+        if (n.capturedSlots + pendingForN >= n.maxSlots) return;
+        const d = dist4(e, n);
+        if (d < nearD) { nearD = d; nearN = n; }
+      });
+      if (nearN) {
+        const slot = nearN.capturedSlots +
+          this._pending.filter(a => a.nucleus === nearN).length;
+        this._pending.push({ e, nucleus: nearN, slot, delay: 0 });
+      }
+    }
+  }
+  _spawn() {
+    const cw = this.cw, ch = this.ch;
+    this.nuclei = []; this.electrons = []; this.photons = []; this.flashes = [];
+    this.time = 0; this.capturePhase = false; this.formationDone = false;
+    this.photonsEscaped = false; this.resetTimer = 0; this.escFlashAlpha = 0;
+    this._pending = [];
+    // 8차: 터보 & 피날레 리셋
+    this._turboMode = false;
+    this._finaleActive = false;
+    this._finaleTimer = 0;
+    this._finaleHiding = false;
+    for (let i = 0; i < 12; i++)
+      this.nuclei.push(new NucleusP4(rnd(55, cw-55), rnd(55, ch-55), 'H'));
+    this.nuclei.push(new NucleusP4(rnd(85, cw-85), rnd(85, ch-85), 'He'));
+    for (let i = 0; i < CFG4.nElectrons; i++)
+      this.electrons.push(new ElectronP4(rnd(15, cw-15), rnd(15, ch-15)));
+    for (let i = 0; i < CFG4.nPhotons; i++)
+      this.photons.push(new ZigzagPhotonS4(rnd(20, cw-20), rnd(20, ch-20), cw, ch));
+    const ap = document.getElementById('atomPanel');
+    if (ap) ap.classList.remove('visible');
+    this._syncDOM();
+  }
+  _startCapture() {
+    this.capturePhase = true;
+    const pool = [...this.electrons];
+    const heN  = this.nuclei.find(n => n.type === 'He');
+    const hNs  = this.nuclei.filter(n => n.type === 'H');
+    if (heN) {
+      pool.sort((a, b) => dist4(a, heN) - dist4(b, heN));
+      const e0 = pool.shift(), e1 = pool.shift();
+      if (e0) this._pending.push({ e: e0, nucleus: heN, slot: 0, delay: rnd(0.08, 0.30) });
+      if (e1) this._pending.push({ e: e1, nucleus: heN, slot: 1, delay: rnd(0.48, 0.92) });
+    }
+    hNs.forEach((h, i) => {
+      pool.sort((a, b) => dist4(a, h) - dist4(b, h));
+      const e = pool.shift();
+      if (e) this._pending.push({ e, nucleus: h, slot: 0, delay: rnd(0.04, 0.16) + i * 0.12 });
+    });
+  }
+  _triggerEscape() {
+    const cx = this.cw / 2, cy = this.ch / 2;
+    this.photons.forEach(p => p.triggerEscape(cx, cy));
+    this.escFlashAlpha  = 1.0;
+    this.photonsEscaped = true;
+  }
+
+  /** 8차: 피날레 임팩트 연출 */
+  _triggerFinale() {
+    this._finaleActive = true;
+    this._finaleTimer = 0;
+
+    const overlay = document.getElementById('finaleOverlay');
+    const flash   = document.getElementById('finaleFlash');
+    const glow    = document.getElementById('finaleGlowRing');
+    const title   = document.getElementById('finaleTitle');
+    const sub     = document.getElementById('finaleSub');
+    const sub2    = document.getElementById('finaleSub2');
+
+    if (overlay) overlay.classList.add('active');
+
+    // 약간 지연 후 순차적으로 실행
+    setTimeout(() => {
+      if (flash) flash.classList.add('fire');
+      if (glow)  glow.classList.add('fire');
+    }, 200);
+
+    setTimeout(() => {
+      if (title) title.classList.add('fire');
+    }, 500);
+
+    setTimeout(() => {
+      if (sub) sub.classList.add('fire');
+    }, 800);
+
+    setTimeout(() => {
+      if (sub2) sub2.classList.add('fire');
+    }, 1600);
+
+    // 반짝이는 별 파티클 생성
+    this._spawnFinaleStars();
+  }
+
+  /** 8차: 화면에 반짝이는 별 추가 */
+  _spawnFinaleStars() {
+    const overlay = document.getElementById('finaleOverlay');
+    if (!overlay) return;
+    for (let i = 0; i < 20; i++) {
+      const star = document.createElement('div');
+      star.className = 'finale-star';
+      star.style.left = (10 + Math.random() * 80) + '%';
+      star.style.top  = (10 + Math.random() * 80) + '%';
+      star.style.animationDelay = (Math.random() * 1.5) + 's';
+      star.style.animationDuration = (1.0 + Math.random() * 1.5) + 's';
+      star.style.width = star.style.height = (2 + Math.random() * 4) + 'px';
+      overlay.appendChild(star);
+      setTimeout(() => star.classList.add('fire'), 800 + Math.random() * 1200);
+    }
+  }
+
+  /** 8차: 피날레 페이드아웃 */
+  _fadeOutFinale() {
+    if (this._finaleHiding) return;
+    this._finaleHiding = true;
+    const overlay = document.getElementById('finaleOverlay');
+    if (overlay) {
+      overlay.style.transition = 'opacity 2s ease';
+      overlay.style.opacity = '0';
+      setTimeout(() => {
+        overlay.classList.remove('active');
+        overlay.style.transition = '';
+        overlay.style.opacity = '';
+        // 초기화
+        ['finaleFlash','finaleGlowRing','finaleTitle','finaleSub','finaleSub2'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.remove('fire');
+        });
+        // 별 파티클 제거
+        overlay.querySelectorAll('.finale-star').forEach(s => s.remove());
+        this._finaleActive = false;
+        this._finaleHiding = false;
+      }, 2200);
+    }
+  }
+  _syncDOM() {
+    const freeH  = this.nuclei.filter(n => n.type === 'H'  && n.state === 'free').length;
+    const freeHe = this.nuclei.filter(n => n.type === 'He' && n.state === 'free').length;
+    const freeE  = this.electrons.filter(e => e.state === 'free').length;
+    const hAtoms = this.nuclei.filter(n => n.type === 'H'  && n.isNeutral).length;
+    const heAtoms= this.nuclei.filter(n => n.type === 'He' && n.isNeutral).length;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('hFreeCount',  freeH);   set('heFreeCount', freeHe);
+    set('eFreeCount',  freeE);   set('hAtomCount',  hAtoms);
+    set('heAtomCount', heAtoms);
+    set('tempDisp', `~${this.currentTemp.toLocaleString()} K`);
+    const avgSpd = this.electrons.length
+      ? this.electrons.reduce((s, e) => s + e.speed, 0) / this.electrons.length
+      : 0;
+    const pct  = clamp(avgSpd / 210 * 100, 0, 100);
+    const fill = document.getElementById('speedFill');
+    const lbl  = document.getElementById('speedLabel');
+    if (fill) fill.style.width = pct + '%';
+    if (lbl)  lbl.textContent = avgSpd < 25 ? '● 낮음' : avgSpd < 100 ? '● 중간' : '● 높음';
+    let phase = '자유 이동 중';
+    if (this.capturePhase && !this.formationDone) phase = '⚡ 전자 포획 중';
+    if (this.formationDone) phase = '✅ 원자 형성 완료';
+    set('phaseDisp', phase);
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+//  13. COMBINED UNIVERSE SIMULATOR  (Stage1 + Stage2 + Stage3 + Stage4 + Pause)
+// ════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════
+//  7차 개선: CriticalMomentSystem — 결정적 순간 슬로우 모션 & 강조
+// ════════════════════════════════════════════════════════════════════
+class CriticalMomentSystem {
+  constructor() {
+    // 결정적 구간 정의: sv 중심점, 반폭, 설명, 색상
+    this.zones = [
+      {
+        center: 25, halfW: 4,
+        label: '쿼크 → 양성자·중성자',
+        sub: '강력(强力) 작용으로 핵자 형성',
+        color: [255, 150, 40],
+        borderColor: 'rgba(255,170,60,0.50)',
+      },
+      {
+        center: 50, halfW: 4,
+        label: '핵합성: He 원자핵 탄생',
+        sub: '2p + 2n → 헬륨-4 원자핵',
+        color: [255, 80, 80],
+        borderColor: 'rgba(255,100,80,0.50)',
+      },
+      {
+        center: 75, halfW: 4,
+        label: '전자 포획 → 원자 형성',
+        sub: '우주 최초의 중성 원자 탄생!',
+        color: [160, 100, 255],
+        borderColor: 'rgba(180,120,255,0.50)',
+      },
+    ];
+
+    // 상태
+    this.activeZone = null;      // 현재 활성 결정적 구간
+    this.slowFactor = 1.0;       // dt 곱하기 인자 (1.0 = 정상, 0.15 = 최대 슬로우)
+    this.targetSlow = 1.0;       // 목표 슬로우 팩터
+    this.bannerState = 'hidden'; // 'hidden' | 'entering' | 'visible' | 'exiting'
+    this.bannerTimer = 0;
+
+    // 자력(magnetic) 슬라이더 상태
+    this.magnetActive = false;
+    this.magnetZone = null;
+    this.magnetTimer = 0;          // 구간 내 체류 시간
+    this.magnetHoldDuration = 1.2; // 자력 유지 시간 (초)
+    this.magnetReleased = new Set(); // 이미 통과한(해제된) 구간 center
+    this.prevSv = 0;
+    this.sliderSpeed = 0;          // 슬라이더 이동 속도 추적
+
+    // 하이라이트 파티클 (새 입자 주변 반짝임)
+    this.highlights = [];
+    this.highlightCanvas = null;
+    this.hlCtx = null;
+  }
+
+  init(cw, ch) {
+    this.cw = cw; this.ch = ch;
+    // 하이라이트 전용 오프스크린 캔버스
+    if (!this.highlightCanvas) {
+      this.highlightCanvas = document.createElement('canvas');
+      this.highlightCanvas.style.cssText =
+        'position:absolute;inset:0;pointer-events:none;z-index:7;border-radius:10px;';
+      const wrapper = document.getElementById('canvasWrapper');
+      if (wrapper) wrapper.appendChild(this.highlightCanvas);
+      this.hlCtx = this.highlightCanvas.getContext('2d');
+    }
+    this.highlightCanvas.width = cw;
+    this.highlightCanvas.height = ch;
+  }
+
+  /**
+   * 슬라이더 값에 자력(magnetic) 효과 적용
+   * @param {number} rawSv - 원래 슬라이더 값
+   * @param {number} dt - 프레임 간 시간 (초)
+   * @returns {number} 보정된 슬라이더 값
+   */
+  applyMagnet(rawSv, dt) {
+    // 슬라이더 이동 속도 계산
+    this.sliderSpeed = Math.abs(rawSv - this.prevSv) / Math.max(dt, 0.001);
+
+    // 빠르게 드래그 중인지 판별 (속도 > 30/초 → 빠름)
+    const isFast = this.sliderSpeed > 30;
+
+    let result = rawSv;
+
+    for (const zone of this.zones) {
+      const dist = Math.abs(rawSv - zone.center);
+      const inRange = dist < zone.halfW;
+
+      // 이미 해제된 구간이면 건너뜀
+      if (this.magnetReleased.has(zone.center)) {
+        // 구간 밖으로 나가면 다음에 다시 잡힐 수 있게 해제 목록에서 제거
+        if (!inRange) this.magnetReleased.delete(zone.center);
+        continue;
+      }
+
+      if (inRange && isFast) {
+        // 빠르게 진입 → 자력 활성화
+        if (!this.magnetActive || this.magnetZone !== zone) {
+          this.magnetActive = true;
+          this.magnetZone = zone;
+          this.magnetTimer = 0;
+          this._enterSlowMotion(zone);
+        }
+
+        this.magnetTimer += dt;
+
+        // 자력 효과: 중심으로 끌어당김 (스냅)
+        const snapStrength = Math.max(0, 1 - this.magnetTimer / this.magnetHoldDuration);
+        const pull = (zone.center - rawSv) * snapStrength * 0.6;
+        result = rawSv + pull;
+
+        // 체류 시간 초과 → 자력 해제
+        if (this.magnetTimer >= this.magnetHoldDuration) {
+          this.magnetReleased.add(zone.center);
+          this.magnetActive = false;
+          this.magnetZone = null;
+          this._exitSlowMotion();
+        }
+        break;
+      }
+    }
+
+    // 활성 구간 밖으로 나가면 해제
+    if (this.magnetActive && this.magnetZone) {
+      const dist = Math.abs(rawSv - this.magnetZone.center);
+      if (dist >= this.magnetZone.halfW + 2) {
+        this.magnetReleased.add(this.magnetZone.center);
+        this.magnetActive = false;
+        this.magnetZone = null;
+        this._exitSlowMotion();
+      }
+    }
+
+    this.prevSv = rawSv;
+    return result;
+  }
+
+  /**
+   * 슬로우 모션 진입
+   */
+  _enterSlowMotion(zone) {
+    this.activeZone = zone;
+    this.targetSlow = 0.15; // 85% 감속
+
+    // 비네트 활성화
+    const vignette = document.getElementById('cmVignette');
+    if (vignette) vignette.classList.add('active');
+
+    // 배너 표시
+    const banner = document.getElementById('cmSlowBanner');
+    const textEl = document.getElementById('cmSlowText');
+    const subEl = document.getElementById('cmSlowSub');
+    if (banner) {
+      banner.style.borderColor = zone.borderColor;
+      banner.classList.remove('exiting');
+      banner.classList.add('entering');
+      this.bannerState = 'entering';
+    }
+    if (textEl) textEl.textContent = zone.label;
+    if (subEl) subEl.textContent = zone.sub;
+  }
+
+  /**
+   * 슬로우 모션 해제
+   */
+  _exitSlowMotion() {
+    this.targetSlow = 1.0;
+    this.activeZone = null;
+
+    // 비네트 비활성화
+    const vignette = document.getElementById('cmVignette');
+    if (vignette) vignette.classList.remove('active');
+
+    // 배너 숨김
+    const banner = document.getElementById('cmSlowBanner');
+    if (banner) {
+      banner.classList.remove('entering');
+      banner.classList.add('exiting');
+      this.bannerState = 'exiting';
+    }
+  }
+
+  /**
+   * 매 프레임 업데이트
+   */
+  update(dt) {
+    // 슬로우 팩터 부드럽게 변화
+    const lerpSpeed = this.targetSlow < this.slowFactor ? 8 : 4;
+    this.slowFactor += (this.targetSlow - this.slowFactor) * Math.min(1, lerpSpeed * dt);
+    if (Math.abs(this.slowFactor - this.targetSlow) < 0.01) this.slowFactor = this.targetSlow;
+
+    // 하이라이트 파티클 업데이트
+    this.highlights = this.highlights.filter(h => {
+      h.age += dt;
+      h.x += h.vx * dt;
+      h.y += h.vy * dt;
+      h.alpha = Math.max(0, h.startAlpha * (1 - h.age / h.life));
+      h.r = h.startR * (0.5 + 0.5 * Math.sin(h.age * 8));
+      return h.age < h.life;
+    });
+  }
+
+  /**
+   * dt에 슬로우 팩터를 적용한 실효 dt 반환
+   */
+  getEffectiveDt(dt) {
+    return dt * this.slowFactor;
+  }
+
+  /**
+   * 특정 위치에 하이라이트 반짝임 생성 (새 입자 탄생 시 호출)
+   * @param {number} x, y - 화면 좌표
+   * @param {number[]} color - [r, g, b]
+   * @param {number} intensity - 강도 (파티클 수 조절)
+   */
+  spawnHighlight(x, y, color, intensity = 1.0) {
+    const count = Math.floor(16 * intensity);
+    for (let i = 0; i < count; i++) {
+      const ang = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+      const spd = 30 + Math.random() * 80;
+      this.highlights.push({
+        x, y,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        r: 1.5 + Math.random() * 3,
+        startR: 1.5 + Math.random() * 3,
+        alpha: 1, startAlpha: 0.7 + Math.random() * 0.3,
+        life: 0.8 + Math.random() * 0.8,
+        age: 0,
+        color,
+      });
+    }
+    // 큰 글로우 링 추가
+    for (let i = 0; i < 3; i++) {
+      this.highlights.push({
+        x, y, vx: 0, vy: 0,
+        r: 6 + i * 12,
+        startR: 6 + i * 12,
+        alpha: 1, startAlpha: 0.5 - i * 0.12,
+        life: 0.6 + i * 0.2,
+        age: 0,
+        color,
+        isRing: true,
+      });
+    }
+  }
+
+  /**
+   * 하이라이트 파티클 렌더링
+   */
+  draw() {
+    if (!this.hlCtx) return;
+    const ctx = this.hlCtx;
+    ctx.clearRect(0, 0, this.cw, this.ch);
+    if (this.highlights.length === 0) return;
+
+    ctx.save();
+    for (const h of this.highlights) {
+      if (h.alpha < 0.01) continue;
+      const [r, g, b] = h.color;
+
+      if (h.isRing) {
+        // 글로우 링
+        const grd = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, h.r * (1 + h.age * 3));
+        grd.addColorStop(0, `rgba(${r},${g},${b},${(h.alpha * 0.6).toFixed(3)})`);
+        grd.addColorStop(0.5, `rgba(${r},${g},${b},${(h.alpha * 0.2).toFixed(3)})`);
+        grd.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        ctx.fillStyle = grd;
+        const size = h.r * (1 + h.age * 3);
+        ctx.fillRect(h.x - size, h.y - size, size * 2, size * 2);
+      } else {
+        // 스파클 입자
+        ctx.globalAlpha = h.alpha;
+        ctx.shadowColor = `rgb(${r},${g},${b})`;
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = `rgba(${r},${g},${b},${h.alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, Math.max(0.5, h.r), 0, Math.PI * 2);
+        ctx.fill();
+
+        // 밝은 중심 점
+        ctx.globalAlpha = h.alpha * 0.8;
+        ctx.fillStyle = `rgba(255,255,255,${(h.alpha * 0.7).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, Math.max(0.3, h.r * 0.4), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+}
+
+
+const S2_PHASE_TEXT = {
+  free   : '쿼크들이 자유롭게 이동 중…',
+  forming: '⚡ 쿼크들이 서로 끌어당기고 있습니다!',
+  done   : '✅ 양성자와 중성자가 형성되었습니다!',
+};
+
+
+// ════════════════════════════════════════════════════════════════════
+//  6차 개선: ProgressiveDisclosure — 정보의 순차적 공개
+// ════════════════════════════════════════════════════════════════════
+class ProgressiveDisclosure {
+  constructor() {
+    // 방문(공개)된 단계를 추적
+    this.revealedStages = new Set();
+    // 슬라이더 첫 조작 여부
+    this.hasInteracted = false;
+    // 가이드 메시지 표시 여부
+    this.guideShown = false;
+    this.guideHideTimer = null;
+    // 상태 패널/온도계 공개 여부
+    this.statusRevealed = false;
+    this.gaugeRevealed = false;
+
+    // 각 단계의 UI 요소 그룹
+    this.stageElements = {
+      0: ['stage1Legend', 'stage1Count'],
+      1: ['stage2Legend', 'stage2Progress'],
+      2: ['stage3Legend', 'stage3Counter', 'stage3Ratio'],
+      3: ['stage4Legend', 'stage4Counter', 'speedBox'],
+    };
+
+    // 교육 카드 ID
+    this.eduCardIds = ['eduCard0', 'eduCard1', 'eduCard2', 'eduCard3'];
+  }
+
+  /**
+   * 초기화: 모든 UI를 숨기고, 슬라이더에 힌트 효과 적용
+   */
+  init() {
+    // 상태 패널 숨김
+    const statusPanel = document.getElementById('statusPanel');
+    if (statusPanel) statusPanel.classList.add('pd-hidden');
+
+    // 교육 패널 전체 숨김
+    const eduPanel = document.getElementById('eduPanel');
+    if (eduPanel) eduPanel.classList.add('pd-hidden');
+
+    // 각 단계별 오버레이 요소 숨김
+    for (const ids of Object.values(this.stageElements)) {
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('pd-hidden');
+      }
+    }
+
+    // 개별 교육 카드도 숨김
+    for (const cardId of this.eduCardIds) {
+      const card = document.getElementById(cardId);
+      if (card) card.classList.add('pd-hidden');
+    }
+
+    // 포획 가속 버튼 숨김
+    const captureBtn = document.getElementById('captureAccelBtn');
+    if (captureBtn) captureBtn.classList.add('pd-hidden');
+
+    // 슬라이더에 힌트 펄스 효과
+    const slider = document.getElementById('timeSlider');
+    if (slider) slider.classList.add('pd-hint-pulse');
+
+    // 가이드 메시지 표시 (약간 지연)
+    setTimeout(() => {
+      const guide = document.getElementById('pdGuideMsg');
+      if (guide) {
+        guide.classList.add('visible');
+        this.guideShown = true;
+      }
+    }, 800);
+  }
+
+  /**
+   * 슬라이더 값 변경 시 호출
+   * @param {number} sv - 슬라이더 값 (0~100)
+   * @param {number[]} alphas - 각 단계의 활성도 [0~1, 0~1, 0~1, 0~1]
+   */
+  onSliderChange(sv, alphas) {
+    // 첫 조작 감지
+    if (!this.hasInteracted && sv > 0.5) {
+      this.hasInteracted = true;
+      this._onFirstInteraction();
+    }
+
+    // 단계 공개 체크
+    for (let i = 0; i < 4; i++) {
+      if (alphas[i] > 0.3 && !this.revealedStages.has(i)) {
+        this._revealStage(i);
+      }
+    }
+  }
+
+  /**
+   * 첫 슬라이더 조작 시
+   */
+  _onFirstInteraction() {
+    // 가이드 메시지 숨기기
+    const guide = document.getElementById('pdGuideMsg');
+    if (guide) guide.classList.remove('visible');
+
+    // 슬라이더 힌트 효과 제거
+    const slider = document.getElementById('timeSlider');
+    if (slider) slider.classList.remove('pd-hint-pulse');
+
+    // 상태 패널 공개 (약간의 지연 후)
+    setTimeout(() => {
+      this._revealStatusPanel();
+    }, 400);
+
+    // 온도계 공개 표시 플래그
+    setTimeout(() => {
+      this.gaugeRevealed = true;
+    }, 900);
+
+    // 1단계는 시작부터 있으므로 바로 공개
+    if (!this.revealedStages.has(0)) {
+      setTimeout(() => this._revealStage(0), 600);
+    }
+  }
+
+  /**
+   * 상태 패널 공개
+   */
+  _revealStatusPanel() {
+    if (this.statusRevealed) return;
+    this.statusRevealed = true;
+    const panel = document.getElementById('statusPanel');
+    if (panel) {
+      panel.classList.remove('pd-hidden');
+      panel.classList.add('pd-pop-in');
+    }
+  }
+
+  /**
+   * 특정 단계 UI 공개
+   * @param {number} stageIdx - 단계 인덱스 (0~3)
+   */
+  _revealStage(stageIdx) {
+    if (this.revealedStages.has(stageIdx)) return;
+    this.revealedStages.add(stageIdx);
+
+    // 해당 단계 오버레이 요소 공개
+    const ids = this.stageElements[stageIdx] || [];
+    ids.forEach((id, i) => {
+      const el = document.getElementById(id);
+      if (el) {
+        setTimeout(() => {
+          el.classList.remove('pd-hidden');
+          el.classList.add('pd-pop-in');
+        }, i * 120);  // 순차적으로 나타남
+      }
+    });
+
+    // 교육 패널: 첫 번째 단계 공개 시 패널 자체를 보이게 하고, 해당 카드 공개
+    const eduPanel = document.getElementById('eduPanel');
+    if (eduPanel && eduPanel.classList.contains('pd-hidden')) {
+      eduPanel.classList.remove('pd-hidden');
+      eduPanel.classList.add('pd-fade-in');
+    }
+
+    // 해당 단계의 교육 카드를 활성 가능하게 표시
+    const cardId = this.eduCardIds[stageIdx];
+    const card = document.getElementById(cardId);
+    if (card) {
+      card.classList.remove('pd-hidden');
+      // 기존 edu-card의 active/opacity는 EduPanelController가 관리하므로
+      // pd-hidden만 제거하면 됨
+    }
+
+    // Stage 4 전용: 포획 가속 버튼 공개 가능하게
+    if (stageIdx === 3) {
+      const captureBtn = document.getElementById('captureAccelBtn');
+      if (captureBtn) captureBtn.classList.remove('pd-hidden');
+    }
+  }
+
+  /**
+   * 특정 단계가 공개되었는지 확인
+   * @param {number} stageIdx
+   * @returns {boolean}
+   */
+  isRevealed(stageIdx) {
+    return this.revealedStages.has(stageIdx);
+  }
+
+  /**
+   * 온도계가 보여야 하는지 여부
+   */
+  isGaugeRevealed() {
+    return this.gaugeRevealed;
+  }
+}
+
+class UniverseSimulator {
+  constructor(){
+    this.canvas     = document.getElementById('universeCanvas');
+    this.ctx        = this.canvas.getContext('2d');
+    this.cw = 0; this.ch = 0; this.sliderValue = 0; this.lastTs = null;
+
+    // Offscreen canvases for each stage module
+    this.offscreen1 = document.createElement('canvas');
+    this.offCtx1    = this.offscreen1.getContext('2d');
+    this.offscreen2 = document.createElement('canvas');
+    this.offCtx2    = this.offscreen2.getContext('2d');
+    this.offscreen3 = document.createElement('canvas');
+    this.offCtx3    = this.offscreen3.getContext('2d');
+    this.offscreen4 = document.createElement('canvas');
+    this.offCtx4    = this.offscreen4.getContext('2d');
+
+    // Stage modules
+    this.stage1    = new Stage1Module();
+    this.stage2    = new Stage2Module();
+    this.stage3    = new Stage3Module();
+    this.stage4    = new Stage4Module();
+    this.particles = new ParticleSystem();
+
+    // Common systems
+    this.bgRenderer   = new BackgroundRenderer();
+    this.zigzagPhotons= new ZigzagPhotonSystem();
+    this.rayPhotons   = new RayPhotonSystem();
+    this.tempGauge    = new TemperatureGauge();
+
+    this.statusPanel = null; this.sliderCtrl = null;
+    this.prevAlphas  = [0, 0, 0, 0];
+    this.uiTick      = 0;
+
+    // Pause state
+    this.isPaused = false;
+    // Transition FX
+    this.transitionFX = new TransitionFX();
+    // Birth Event System
+    this.birthEvents = new BirthEventSystem();
+    // Edu Panel
+    this.eduPanel = new EduPanelController();
+    // 5차
+    this.particleMagnifier = new ParticleMagnifier();
+    // 6차: Progressive Disclosure
+    this.disclosure = new ProgressiveDisclosure();
+    // 7차: Critical Moment System
+    this.criticalMoment = new CriticalMomentSystem();
+  }
+
+  togglePause() {
+    this.isPaused = !this.isPaused;
+    const btn = document.getElementById('pauseBtn');
+    const overlay = document.getElementById('pauseOverlay');
+    if (btn) {
+      btn.textContent = this.isPaused ? '▶' : '⏸';
+      btn.classList.toggle('paused', this.isPaused);
+      btn.title = this.isPaused ? '계속하기 (Space)' : '일시정지 (Space)';
+    }
+    if (overlay) overlay.classList.toggle('active', this.isPaused);
+  }
+
+  init(){
+    this._resize();
+    window.addEventListener('resize', () => this._resize());
+
+    this.statusPanel = new StatusPanel();
+    this.sliderCtrl  = new TimeSliderController(v => {
+      this.sliderValue = v;
+      this.statusPanel.update(v);
+      // 6차: Progressive Disclosure 알림
+      const alphas = this._getStageAlphas(v);
+      this.disclosure.onSliderChange(v, alphas);
+    });
+    this.statusPanel.update(0);
+
+    // 6차: Progressive Disclosure 초기화
+    this.disclosure.init();
+
+    // 7차: Critical Moment 초기화 & 슬라이더 연결
+    this.criticalMoment.init(this.cw, this.ch);
+    this.sliderCtrl.criticalMoment = this.criticalMoment;
+
+    // Spacebar pause toggle (skip if focus is on slider)
+    document.addEventListener('keydown', e => {
+      if (e.target.id === 'timeSlider') return;
+      if (e.code === 'Space') { e.preventDefault(); this.togglePause(); }
+    });
+
+    // Pause button click
+    const pauseBtn = document.getElementById('pauseBtn');
+    if (pauseBtn) pauseBtn.addEventListener('click', () => this.togglePause());
+
+    // 5차: 포획 가속 버튼
+    const captureBtn = document.getElementById('captureAccelBtn');
+    if (captureBtn) captureBtn.addEventListener('click', () => this.stage4.speedUpCapture());
+
+    // 5차: 입자 돋보기 초기화
+    this.particleMagnifier.init(this.canvas, this);
+
+    requestAnimationFrame(ts => this._loop(ts));
+  }
+
+  _resize(){
+    const wrap = document.getElementById('canvasWrapper');
+    this.cw = wrap.clientWidth; this.ch = wrap.clientHeight;
+    this.canvas.width  = this.cw; this.canvas.height = this.ch;
+    this.offscreen1.width = this.cw; this.offscreen1.height = this.ch;
+    this.offscreen2.width = this.cw; this.offscreen2.height = this.ch;
+    this.offscreen3.width = this.cw; this.offscreen3.height = this.ch;
+    this.offscreen4.width = this.cw; this.offscreen4.height = this.ch;
+    this.bgRenderer.initStars(150, this.cw, this.ch);
+    this.particles.init();
+    this.zigzagPhotons.init(this.cw, this.ch);
+    this.rayPhotons.init(this.cw, this.ch);
+    this.stage1.init(this.cw, this.ch);
+    this.stage2.init(this.cw, this.ch);
+    this.stage3.init(this.cw, this.ch);
+    this.stage4.init(this.cw, this.ch);
+    this.transitionFX.init(this.cw, this.ch);
+    this.birthEvents.init(this.cw, this.ch);
+    this.criticalMoment.init(this.cw, this.ch);
+    this.prevAlphas = [0, 0, 0, 0];
+  }
+
+  _getStageAlphas(sv){
+    const HALF = 3.5;
+    const fadeAt = (sv, bound, side) => {
+      if (side === 1) {
+        if (sv <= bound - HALF) return 0;
+        if (sv >= bound + HALF) return 1;
+        return (sv - (bound - HALF)) / (2 * HALF);
+      } else {
+        if (sv <= bound - HALF) return 1;
+        if (sv >= bound + HALF) return 0;
+        return 1 - (sv - (bound - HALF)) / (2 * HALF);
+      }
+    };
+    return [
+      fadeAt(sv, 25, -1),
+      Math.min(fadeAt(sv, 25, +1), fadeAt(sv, 50, -1)),
+      Math.min(fadeAt(sv, 50, +1), fadeAt(sv, 75, -1)),
+      fadeAt(sv, 75, +1),
+    ].map(v => Math.max(0, Math.min(1, v)));
+  }
+
+  _loop(ts){
+    const dt = this.lastTs ? Math.min((ts - this.lastTs) / 1000, 0.05) : 0.016;
+    this.lastTs = ts;
+    if (!this.isPaused) this._update(dt);
+    this._render();
+    requestAnimationFrame(ts2 => this._loop(ts2));
+  }
+
+  _update(dt){
+    const sv     = this.sliderValue;
+    const alphas = this._getStageAlphas(sv);
+
+    // 7차: 슬로우 모션 시스템 업데이트 & dt 보정
+    this.criticalMoment.update(dt);
+    const eDt = this.criticalMoment.getEffectiveDt(dt);
+
+    // Re-init stage modules when they become active from inactive
+    if (this.prevAlphas[0] === 0 && alphas[0] > 0) this.stage1.init(this.cw, this.ch);
+    if (this.prevAlphas[1] === 0 && alphas[1] > 0) this.stage2.init(this.cw, this.ch);
+    if (this.prevAlphas[2] === 0 && alphas[2] > 0) this.stage3.init(this.cw, this.ch);
+    if (this.prevAlphas[3] === 0 && alphas[3] > 0) this.stage4.init(this.cw, this.ch);
+
+    // 7차: 새 입자 탄생 감지 → 하이라이트 스폰
+    this._detectNewParticles(alphas);
+
+    this.birthEvents.update(eDt, alphas);
+    this.prevAlphas = [...alphas];
+
+    this.bgRenderer.update(eDt);
+    this.zigzagPhotons.update(eDt);
+    this.rayPhotons.update(eDt);
+    if (alphas[0] > 0.01) this.stage1.update(eDt);
+    if (alphas[1] > 0.01) this.stage2.update(eDt);
+    if (alphas[2] > 0.01) this.stage3.update(eDt);
+    if (alphas[3] > 0.01) this.stage4.update(eDt);
+    this.particles.update(eDt, sv, this.cw, this.ch);
+
+    // UI update ~5 fps
+    this.uiTick += dt; // UI 틱은 원래 dt 사용 (반응성 유지)
+    if (this.uiTick > 0.2) { this.uiTick = 0; this._updateOverlays(alphas); this.eduPanel.update(alphas); }
+    this.transitionFX.update(eDt, sv);
+  }
+
+  /** 7차: 새 입자 탄생 감지 → 하이라이트 이펙트 */
+  _detectNewParticles(alphas) {
+    const cm = this.criticalMoment;
+
+    // Stage 2: 핵자(양성자/중성자) 형성 감지
+    if (alphas[1] > 0.2 && this.stage2 && this.stage2.groups) {
+      if (!this._s2NucleonCount) this._s2NucleonCount = 0;
+      let count = 0;
+      for (const g of this.stage2.groups) {
+        if (g.nucleon && g.state === 'done') count++;
+      }
+      if (count > this._s2NucleonCount) {
+        // 새 핵자 탄생!
+        for (const g of this.stage2.groups) {
+          if (g.nucleon && g.state === 'done' && g.nucleon._highlighted !== true) {
+            g.nucleon._highlighted = true;
+            const color = g.type === 'proton' ? [255, 100, 50] : [80, 130, 255];
+            cm.spawnHighlight(g.nucleon.x, g.nucleon.y, color, 0.8);
+          }
+        }
+      }
+      this._s2NucleonCount = count;
+    } else {
+      this._s2NucleonCount = 0;
+    }
+
+    // Stage 3: 헬륨 원자핵 형성 감지
+    if (alphas[2] > 0.2 && this.stage3) {
+      if (!this._s3HeCount) this._s3HeCount = 0;
+      const st = this.stage3.getStatus ? this.stage3.getStatus() : null;
+      if (st && st.heDone > this._s3HeCount) {
+        // 헬륨 원자핵 탄생! — 핵의 위치에 큰 하이라이트
+        let hx = this.cw * 0.5, hy = this.ch * 0.5;
+        if (this.stage3.heGroup && this.stage3.heGroup.nucleus) {
+          hx = this.stage3.heGroup.nucleus.x;
+          hy = this.stage3.heGroup.nucleus.y;
+        }
+        cm.spawnHighlight(hx, hy, [255, 200, 50], 1.5);
+      }
+      this._s3HeCount = st ? st.heDone : 0;
+    } else {
+      this._s3HeCount = 0;
+    }
+
+    // Stage 4: 원자 형성 감지 (nuclei의 isNeutral 상태)
+    if (alphas[3] > 0.2 && this.stage4 && this.stage4.nuclei) {
+      if (!this._s4AtomCount) this._s4AtomCount = 0;
+      const nuclei = this.stage4.nuclei;
+      const formed = nuclei.filter(n => n.isNeutral).length;
+      if (formed > this._s4AtomCount) {
+        // 새 원자 형성!
+        for (const n of nuclei) {
+          if (n.isNeutral && n._highlighted !== true) {
+            n._highlighted = true;
+            const color = n.type === 'H' ? [70, 140, 220] : [50, 220, 160];
+            cm.spawnHighlight(n.x, n.y, color, 0.7);
+          }
+        }
+      }
+      this._s4AtomCount = formed;
+    } else {
+      this._s4AtomCount = 0;
+    }
+  }
+
+  _updateOverlays(alphas){
+    const el   = id => document.getElementById(id);
+    // 6차: Progressive Disclosure — 공개되지 않은 단계는 표시하지 않음
+    const disc = this.disclosure;
+    const show = (id, visible, stageIdx) => {
+      const e = el(id);
+      if (!e) return;
+      // pd-hidden이 있으면 아직 공개되지 않은 상태 → 건드리지 않음
+      if (e.classList.contains('pd-hidden')) return;
+      e.classList.toggle('hidden', !visible);
+    };
+
+    // Stage 1 overlays
+    if (disc.isRevealed(0)) {
+      show('stage1Legend', alphas[0] > 0.05, 0);
+      show('stage1Count',  alphas[0] > 0.05, 0);
+    }
+    if (alphas[0] > 0.01) {
+      const c = this.stage1.getCounts();
+      if (el('cntR')) el('cntR').textContent = c.r;
+      if (el('cntG')) el('cntG').textContent = c.g;
+      if (el('cntB')) el('cntB').textContent = c.b;
+      if (el('cntE')) el('cntE').textContent = c.e;
+      if (el('cntP')) el('cntP').textContent = c.p;
+    }
+
+    // Stage 2 overlays
+    if (disc.isRevealed(1)) {
+      show('stage2Legend',   alphas[1] > 0.05, 1);
+      show('stage2Progress', alphas[1] > 0.05, 1);
+    }
+    if (alphas[1] > 0.01) {
+      const prog  = this.stage2.getProgress();
+      const phase = this.stage2.getPhase();
+      const phaseEl = el('s2PhaseText');
+      if (phaseEl) {
+        phaseEl.textContent = S2_PHASE_TEXT[phase] || '';
+        phaseEl.style.color = phase === 'forming' ? '#FFDD88' : phase === 'done' ? '#88FFAA' : '#AAFFAA';
+      }
+      const pPct = (prog.proton  / prog.protonTotal)  * 100;
+      const nPct = (prog.neutron / prog.neutronTotal) * 100;
+      if (el('barProton'))  el('barProton').style.width  = pPct + '%';
+      if (el('barNeutron')) el('barNeutron').style.width = nPct + '%';
+      if (el('cntProton'))  el('cntProton').textContent  = `${prog.proton} / ${prog.protonTotal}`;
+      if (el('cntNeutron')) el('cntNeutron').textContent = `${prog.neutron} / ${prog.neutronTotal}`;
+    }
+
+    // Stage 3 overlays
+    if (disc.isRevealed(2)) {
+      show('stage3Legend',  alphas[2] > 0.05, 2);
+      show('stage3Counter', alphas[2] > 0.05, 2);
+      show('stage3Ratio',   alphas[2] > 0.05, 2);
+    }
+    if (alphas[2] > 0.01) {
+      const st = this.stage3.getStatus();
+      const ph = S3_PHASES[st.phase] || S3_PHASES.free;
+      const descEl = el('spDesc');
+      if (descEl && alphas[2] > 0.5) {
+        descEl.textContent = ph.text;
+        descEl.style.color = ph.color;
+      }
+      if (el('cntH'))  el('cntH').textContent  = st.hDone;
+      if (el('cntHe')) el('cntHe').textContent = st.heDone;
+      if (st.showRatio) {
+        if (el('barH'))  el('barH').style.width  = '75%';
+        if (el('barHe')) el('barHe').style.width = '25%';
+      } else {
+        if (el('barH'))  el('barH').style.width  = '0%';
+        if (el('barHe')) el('barHe').style.width = '0%';
+      }
+    }
+
+    // Stage 4 overlays — atomPanel handled by Stage4Module._syncDOM()
+    if (disc.isRevealed(3)) {
+      show('stage4Legend',  alphas[3] > 0.05, 3);
+      show('stage4Counter', alphas[3] > 0.05, 3);
+      show('speedBox',      alphas[3] > 0.05, 3);
+    }
+    // 5차: 포획 가속 버튼 표시/상태
+    const caBtn = el('captureAccelBtn');
+    if (caBtn && !caBtn.classList.contains('pd-hidden')) {
+      caBtn.classList.toggle('visible', alphas[3] > 0.5);
+      const done = this.stage4.formationDone;
+      if (done) { caBtn.classList.add('done'); caBtn.textContent = '✅ 포획 완료'; }
+      else      { caBtn.classList.remove('done'); caBtn.textContent = '⚡ 전자 포획 가속'; }
+    }
+    // Hide atomPanel when Stage4 is not active
+    if (alphas[3] < 0.05) {
+      const ap = el('atomPanel');
+      if (ap) ap.classList.remove('visible');
+    }
+  }
+
+  _render(){
+    const ctx    = this.ctx, sv = this.sliderValue;
+    const alphas = this._getStageAlphas(sv);
+    ctx.clearRect(0, 0, this.cw, this.ch);
+
+    // 1. Base background (temperature-driven)
+    this.bgRenderer.draw(ctx, sv, this.cw, this.ch);
+
+    // 2. Fallback particles
+    const covered      = Math.min(1, alphas[0] + alphas[1] + alphas[2] + alphas[3]);
+    const fallbackAlpha = Math.max(0, 1 - covered);
+    if (fallbackAlpha > 0.01) {
+      const off = this._getOffFallback();
+      const o   = off.getContext('2d'); o.clearRect(0, 0, this.cw, this.ch);
+      this.particles.draw(o, sv);
+      ctx.save(); ctx.globalAlpha = fallbackAlpha; ctx.drawImage(off, 0, 0); ctx.restore();
+    }
+
+    // 3. Stage 1 composited
+    if (alphas[0] > 0.01) {
+      this.offCtx1.clearRect(0, 0, this.cw, this.ch);
+      this.stage1.render(this.offCtx1);
+      ctx.save(); ctx.globalAlpha = alphas[0]; ctx.drawImage(this.offscreen1, 0, 0); ctx.restore();
+    }
+
+    // 4. Stage 2 composited
+    if (alphas[1] > 0.01) {
+      this.offCtx2.clearRect(0, 0, this.cw, this.ch);
+      this.stage2.render(this.offCtx2);
+      ctx.save(); ctx.globalAlpha = alphas[1]; ctx.drawImage(this.offscreen2, 0, 0); ctx.restore();
+    }
+
+    // 5. Stage 3 composited
+    if (alphas[2] > 0.01) {
+      this.offCtx3.clearRect(0, 0, this.cw, this.ch);
+      this.stage3.render(this.offCtx3);
+      ctx.save(); ctx.globalAlpha = alphas[2]; ctx.drawImage(this.offscreen3, 0, 0); ctx.restore();
+    }
+
+    // 6. Stage 4 composited
+    if (alphas[3] > 0.01) {
+      this.offCtx4.clearRect(0, 0, this.cw, this.ch);
+      this.stage4.render(this.offCtx4);
+      ctx.save(); ctx.globalAlpha = alphas[3]; ctx.drawImage(this.offscreen4, 0, 0); ctx.restore();
+    }
+
+    // 7. Photon overlay
+    const { zigzag, ray } = getPhotonAlphas(sv);
+    this.zigzagPhotons.draw(ctx, zigzag);
+    this.rayPhotons.draw(ctx, ray);
+
+    // 8. Temperature gauge HUD (6차: Progressive Disclosure 적용)
+    if (this.disclosure.isGaugeRevealed()) {
+      // 부드러운 페이드인
+      if (this._gaugeAlpha === undefined) this._gaugeAlpha = 0;
+      this._gaugeAlpha = Math.min(1, this._gaugeAlpha + 0.02);
+      ctx.save(); ctx.globalAlpha = this._gaugeAlpha;
+      this.tempGauge.draw(ctx, this.cw, this.ch, sv);
+      ctx.restore();
+    }
+    // 9. Transition wave FX overlay
+    this.transitionFX.draw();
+    // 10. Birth event particles
+    this.birthEvents.draw();
+    // 11. 7차: 결정적 순간 하이라이트 파티클
+    this.criticalMoment.draw();
+  }
+
+  _getOffFallback(){
+    if (!this._offFallback) {
+      this._offFallback = document.createElement('canvas');
+      this._offFallback.width = this.cw; this._offFallback.height = this.ch;
+    }
+    if (this._offFallback.width !== this.cw || this._offFallback.height !== this.ch) {
+      this._offFallback.width = this.cw; this._offFallback.height = this.ch;
+    }
+    return this._offFallback;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  9차 개선: BigBangIntro — 시작 화면 + 폭발 전환 연출
+// ════════════════════════════════════════════════════════════════════
+class BigBangIntro {
+  constructor() {
+    this.el          = document.getElementById('bbIntro');
+    this.bgCanvas    = document.getElementById('bbIntroCanvas');
+    this.expCanvas   = document.getElementById('bbExplosion');
+    this.startBtn    = document.getElementById('bbStartBtn');
+    this.bgCtx       = this.bgCanvas ? this.bgCanvas.getContext('2d') : null;
+    this.expCtx      = this.expCanvas ? this.expCanvas.getContext('2d') : null;
+    this.particles   = [];
+    this.animId      = null;
+    this.started     = false;
+    this.onComplete  = null; // 콜백: 인트로 끝나면 시뮬레이터 시작
+  }
+
+  init(onComplete) {
+    this.onComplete = onComplete;
+    if (!this.el) { onComplete(); return; }
+
+    // 캔버스 크기 설정
+    const w = window.innerWidth, h = window.innerHeight;
+    if (this.bgCanvas) { this.bgCanvas.width = w; this.bgCanvas.height = h; }
+    if (this.expCanvas) { this.expCanvas.width = w; this.expCanvas.height = h; }
+
+    // 배경 미세 입자 생성
+    this._createBgParticles(w, h);
+
+    // 버튼 클릭 이벤트
+    if (this.startBtn) {
+      this.startBtn.addEventListener('click', () => this._onStart());
+    }
+
+    // 배경 애니메이션 시작
+    this._animateBg();
+
+    // 리사이즈 대응
+    window.addEventListener('resize', () => {
+      const nw = window.innerWidth, nh = window.innerHeight;
+      if (this.bgCanvas) { this.bgCanvas.width = nw; this.bgCanvas.height = nh; }
+      if (this.expCanvas) { this.expCanvas.width = nw; this.expCanvas.height = nh; }
+      this._createBgParticles(nw, nh);
+    });
+  }
+
+  _createBgParticles(w, h) {
+    this.particles = [];
+    for (let i = 0; i < 120; i++) {
+      this.particles.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        r: 0.4 + Math.random() * 1.5,
+        alpha: 0.1 + Math.random() * 0.4,
+        drift: (Math.random() - 0.5) * 12,
+        driftY: (Math.random() - 0.5) * 8,
+        twinkle: Math.random() * Math.PI * 2,
+        twinkleSpd: 0.5 + Math.random() * 2,
+      });
+    }
+  }
+
+  _animateBg() {
+    const ctx = this.bgCtx;
+    if (!ctx) return;
+    let time = 0;
+    const loop = () => {
+      time += 0.016;
+      const w = this.bgCanvas.width, h = this.bgCanvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      // 중앙의 은은한 글로우
+      const cx = w / 2, cy = h / 2;
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(w, h) * 0.35);
+      glow.addColorStop(0, 'rgba(255,200,60,0.04)');
+      glow.addColorStop(0.5, 'rgba(255,120,20,0.02)');
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
+
+      // 입자
+      for (const p of this.particles) {
+        p.x += p.drift * 0.016;
+        p.y += p.driftY * 0.016;
+        if (p.x < -5) p.x = w + 5;
+        if (p.x > w + 5) p.x = -5;
+        if (p.y < -5) p.y = h + 5;
+        if (p.y > h + 5) p.y = -5;
+        const a = p.alpha * (0.5 + 0.5 * Math.sin(time * p.twinkleSpd + p.twinkle));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(220,210,255,${a.toFixed(3)})`;
+        ctx.fill();
+      }
+
+      this.animId = requestAnimationFrame(loop);
+    };
+    this.animId = requestAnimationFrame(loop);
+  }
+
+  _onStart() {
+    if (this.started) return;
+    this.started = true;
+
+    // 버튼 비활성화
+    if (this.startBtn) {
+      this.startBtn.style.pointerEvents = 'none';
+      this.startBtn.style.transform = 'scale(0)';
+      this.startBtn.style.transition = 'transform 0.3s ease-in';
+    }
+
+    // 펄스 링 숨기기
+    this.el.querySelectorAll('.bb-pulse-ring').forEach(r => {
+      r.style.opacity = '0';
+      r.style.transition = 'opacity 0.2s';
+    });
+
+    // 폭발 캔버스 애니메이션
+    this._playExplosion(() => {
+      // 폭발 끝 → 인트로 화면 페이드아웃
+      this.el.classList.add('fading');
+      setTimeout(() => {
+        this.el.classList.add('gone');
+        if (this.animId) cancelAnimationFrame(this.animId);
+        if (this.onComplete) this.onComplete();
+      }, 1300);
+    });
+  }
+
+  _playExplosion(onDone) {
+    const ctx = this.expCtx;
+    if (!ctx) { onDone(); return; }
+    const w = this.expCanvas.width, h = this.expCanvas.height;
+    const cx = w / 2, cy = h / 2;
+
+    // 폭발 파티클
+    const sparks = [];
+    const rays = [];
+    for (let i = 0; i < 200; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const spd = 200 + Math.random() * 800;
+      sparks.push({
+        x: cx, y: cy,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd,
+        r: 1 + Math.random() * 4,
+        life: 0.8 + Math.random() * 1.2,
+        age: 0,
+        color: [
+          [255, 255, 220],
+          [255, 220, 100],
+          [255, 180, 50],
+          [255, 140, 30],
+        ][Math.floor(Math.random() * 4)],
+      });
+    }
+    // 방사 광선
+    for (let i = 0; i < 24; i++) {
+      const ang = (i / 24) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
+      rays.push({
+        angle: ang,
+        length: 0,
+        maxLen: Math.max(w, h) * 0.8 + Math.random() * 200,
+        speed: 1200 + Math.random() * 600,
+        width: 1 + Math.random() * 3,
+        alpha: 0.5 + Math.random() * 0.5,
+      });
+    }
+
+    let flashAlpha = 1.0;
+    let time = 0;
+
+    const loop = () => {
+      time += 0.016;
+      ctx.clearRect(0, 0, w, h);
+
+      // 중앙 섬광
+      if (flashAlpha > 0.01) {
+        const r = Math.min(w, h) * (0.3 + time * 1.5);
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0, `rgba(255,255,240,${(flashAlpha * 0.9).toFixed(3)})`);
+        g.addColorStop(0.3, `rgba(255,220,100,${(flashAlpha * 0.5).toFixed(3)})`);
+        g.addColorStop(0.6, `rgba(255,140,30,${(flashAlpha * 0.2).toFixed(3)})`);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+        flashAlpha -= 0.016 * 1.2;
+      }
+
+      // 광선
+      ctx.save();
+      for (const ray of rays) {
+        ray.length = Math.min(ray.maxLen, ray.length + ray.speed * 0.016);
+        const a = ray.alpha * Math.max(0, 1 - time * 0.7);
+        if (a < 0.01) continue;
+        const ex = cx + Math.cos(ray.angle) * ray.length;
+        const ey = cy + Math.sin(ray.angle) * ray.length;
+        const grd = ctx.createLinearGradient(cx, cy, ex, ey);
+        grd.addColorStop(0, `rgba(255,255,200,${a.toFixed(3)})`);
+        grd.addColorStop(0.4, `rgba(255,200,80,${(a * 0.6).toFixed(3)})`);
+        grd.addColorStop(1, 'rgba(255,200,80,0)');
+        ctx.strokeStyle = grd;
+        ctx.lineWidth = ray.width;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+      }
+      ctx.restore();
+
+      // 파티클
+      for (const s of sparks) {
+        s.age += 0.016;
+        s.x += s.vx * 0.016;
+        s.y += s.vy * 0.016;
+        s.vx *= 0.98;
+        s.vy *= 0.98;
+        const t = 1 - s.age / s.life;
+        if (t <= 0) continue;
+        const [r, g, b] = s.color;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r * t, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${r},${g},${b},${(t * 0.8).toFixed(3)})`;
+        ctx.fill();
+      }
+
+      if (time < 2.0) {
+        requestAnimationFrame(loop);
+      } else {
+        onDone();
+      }
+    };
+    requestAnimationFrame(loop);
+  }
+}
+
+
+// ── Bootstrap ──
+const intro = new BigBangIntro();
+const simulator = new UniverseSimulator();
+
+intro.init(() => {
+  // 인트로 끝난 후 시뮬레이터 시작
+  simulator.init();
+});
+</script>
+</body>
+</html>

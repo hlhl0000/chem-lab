@@ -22,6 +22,16 @@ const SIMS = [
     tags:  ["보일 법칙","샤를 법칙","그레이엄 법칙","맥스웰–볼츠만"]
   },
   {
+    id:    "universe",
+    title: "우주 초기 원소의 생성",
+    cat:   "통합과학",
+    path:  "universe/",
+    icon:  "universe",
+    ready: true,
+    desc:  "빅뱅 직후 쿼크에서 시작해 핵자 → 헬륨 원자핵 → 중성 원자가 만들어지기까지를 단계별로 따라갑니다.",
+    tags:  ["빅뱅","쿼크","핵융합","원자의 형성","물질과 규칙성"]
+  },
+  {
     id:    "titration",
     title: "산-염기 적정",
     cat:   "산과 염기",
@@ -117,6 +127,13 @@ const ICONS = {
   dipole:`<circle cx="20" cy="32" r="11"/><circle cx="46" cy="32" r="7"/>
           <path d="M20 52h26M40 47l6 5-6 5" fill="none" stroke="currentColor"
           stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+  universe:`<circle cx="32" cy="32" r="6"/><circle cx="32" cy="32" r="13" fill="none"
+             stroke="currentColor" stroke-width="2.5" opacity=".55"/>
+             <circle cx="32" cy="32" r="22" fill="none" stroke="currentColor"
+             stroke-width="2.5" opacity=".3"/>
+             <circle cx="32" cy="10" r="3"/><circle cx="54" cy="32" r="2.5"/>
+             <circle cx="32" cy="54" r="3"/><circle cx="10" cy="32" r="2.5"/>
+             <circle cx="47" cy="17" r="2"/><circle cx="17" cy="47" r="2"/>`,
   crystal:`<path d="M32 6l22 14v24L32 58 10 44V20z" fill="none" stroke="currentColor"
            stroke-width="4" stroke-linejoin="round"/><path d="M32 6v52M10 20l44 24M54 20L10 44"
            stroke="currentColor" stroke-width="2.5" opacity=".45"/>`
