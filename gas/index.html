@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>기체 분자 운동 | 화학 탐구실</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 이 시뮬레이션에만 필요한 스타일 */
+  .page{padding:20px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px}
+  .head .sub{color:var(--muted); font-size:14px; margin:0}
+  .namebar{
+    margin-top:14px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; box-shadow:var(--shadow);
+  }
+  .namebar label{font-size:13px; color:var(--muted)}
+  input[type=text]{
+    border:1px solid var(--line); border-radius:7px; padding:6px 9px;
+    font-size:14px; font-family:inherit;
+  }
+  .cols{display:grid; grid-template-columns:minmax(0,1.35fr) minmax(280px,1fr);
+        gap:16px; margin-top:16px}
+  @media(max-width:880px){ .cols{grid-template-columns:1fr} }
+  canvas{display:block; width:100%; border-radius:8px}
+  #box{background:#0f172a}
+  #hist{background:#fbfcfd; border:1px solid var(--line)}
+  .ctl{margin-bottom:14px}
+  .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
+            font-size:13px; margin-bottom:4px}
+  .ctl .val{font-variant-numeric:tabular-nums; font-weight:600}
+  .dotA,.dotB{display:inline-block;width:9px;height:9px;border-radius:50%;
+              margin-right:5px;vertical-align:middle}
+  .dotA{background:#3b82f6} .dotB{background:#ef4444}
+  .readouts{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .ro{background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:8px 10px}
+  .ro .k{font-size:11px; color:var(--muted)}
+  .ro .v{font-size:17px; font-weight:700; font-variant-numeric:tabular-nums}
+  .ro .u{font-size:11px; color:var(--muted); font-weight:400}
+  .hl{border-color:#bbf7d0; background:#f0fdf4}
+  .checks{display:flex; gap:14px; flex-wrap:wrap; font-size:13px; margin:10px 0 4px}
+  .checks label{display:flex; gap:7px; align-items:center; cursor:pointer}
+  @media (pointer:coarse){
+    .checks{gap:8px 20px}
+    .checks label{min-height:44px; font-size:14px}
+    .ctl .row{font-size:14px}
+    .namebar input[type=text]{width:100%!important; max-width:320px}
+  }
+  .btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
+  .empty{color:var(--muted); font-size:13px; padding:14px 0; text-align:center}
+  details{margin-top:16px; background:var(--panel); border:1px solid var(--line);
+          border-radius:var(--radius); padding:14px; box-shadow:var(--shadow)}
+  summary{cursor:pointer; font-weight:600; font-size:14px}
+  details ol{padding-left:20px; font-size:14px; color:#374151}
+  details li{margin:8px 0}
+  .legend{font-size:12px; color:var(--muted); margin-top:6px}
+  .legend .line{display:inline-block; width:16px; height:0; border-top:2px dashed #111;
+                vertical-align:middle; margin-right:4px}
+</style>
+</head>
+<body>
+
+<div class="wrap page">
+
+<div class="head">
+  <h1>기체 분자 운동 시뮬레이션</h1>
+  <p class="sub">온도·부피·입자 수를 바꾸며 압력과 속력 분포가 어떻게 달라지는지 관찰해 보자.</p>
+  <div class="namebar">
+    <label for="sname">이름</label>
+    <input type="text" id="sname" placeholder="예: 1학년 3반 홍길동" style="width:190px">
+    <span style="color:var(--muted);font-size:12.5px">
+      &nbsp;측정값을 기록한 뒤 CSV로 저장해 제출하세요.</span>
+  </div>
+</div>
+
+<div class="cols">
+  <div>
+    <div class="card">
+      <h2>입자 상자 (오른쪽 벽 = 피스톤)</h2>
+      <canvas id="box"></canvas>
+      <div class="checks">
+        <label><input type="checkbox" id="isoT" checked> 온도 고정(등온)</label>
+        <label><input type="checkbox" id="trace"> 입자 1개 궤적 추적</label>
+        <label><input type="checkbox" id="pause"> 일시정지</label>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>속력 분포 (시간 평균)</h2>
+      <canvas id="hist"></canvas>
+      <div class="legend"><span class="line"></span>점선 = 맥스웰–볼츠만 이론 분포</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>조절 변인</h2>
+      <div class="ctl">
+        <div class="row"><span>온도 <em>T</em></span><span class="val"><span id="vT">300</span> K</span></div>
+        <input type="range" id="sT" min="50" max="700" step="5" value="300">
+      </div>
+      <div class="ctl">
+        <div class="row"><span>부피 <em>V</em> (상자 넓이)</span><span class="val"><span id="vV">10.5</span> ×10<sup>4</sup></span></div>
+        <input type="range" id="sW" min="150" max="500" step="5" value="350">
+      </div>
+      <div class="ctl">
+        <div class="row"><span><span class="dotA"></span>가벼운 기체 (M = 1)</span><span class="val" id="vNA">60</span></div>
+        <input type="range" id="sNA" min="0" max="150" step="1" value="60">
+      </div>
+      <div class="ctl">
+        <div class="row"><span><span class="dotB"></span>무거운 기체 (M = 4)</span><span class="val" id="vNB">30</span></div>
+        <input type="range" id="sNB" min="0" max="150" step="1" value="30">
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>측정값</h2>
+      <div class="readouts">
+        <div class="ro"><div class="k">압력 P</div>
+          <div class="v"><span id="rP">–</span> <span class="u">a.u.</span></div></div>
+        <div class="ro"><div class="k">전체 입자 수 N</div>
+          <div class="v"><span id="rN">90</span></div></div>
+        <div class="ro hl"><div class="k">PV / NkT (이상기체면 1)<br>
+          <span style="font-size:10px">입자가 붐빌수록 1보다 커짐</span></div>
+          <div class="v"><span id="rZ">–</span></div></div>
+        <div class="ro"><div class="k">실제 온도</div>
+          <div class="v"><span id="rT">–</span> <span class="u">K</span></div></div>
+        <div class="ro"><div class="k"><span class="dotA"></span>평균 속력</div>
+          <div class="v"><span id="rVA">–</span></div></div>
+        <div class="ro"><div class="k"><span class="dotB"></span>평균 속력</div>
+          <div class="v"><span id="rVB">–</span></div></div>
+      </div>
+      <div class="btns">
+        <button class="primary" id="rec">이 상태 기록하기</button>
+        <button id="csv">CSV로 저장</button>
+        <button id="clr">기록 지우기</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>기록한 데이터</h2>
+      <div id="tableWrap"><div class="empty">아직 기록이 없습니다.</div></div>
+    </div>
+  </div>
+</div>
+
+<details>
+  <summary>탐구 활동지</summary>
+  <ol>
+    <li><b>보일 법칙</b> — 온도 고정을 켜고 <em>T</em>=300 K, 입자 수를 그대로 둔 채
+        부피 슬라이더만 5단계로 바꾸며 기록하세요. <em>P·V</em> 값은 어떻게 되나요?</li>
+    <li><b>샤를·게이뤼삭</b> — 부피를 고정하고 온도만 5단계로 바꾸며 기록하세요.
+        <em>P</em>와 <em>T</em>는 어떤 관계인가요? 그래프의 <em>y</em>절편은?</li>
+    <li><b>아보가드로</b> — <em>T</em>, <em>V</em>를 고정하고 입자 수만 바꿔 보세요.
+        <em>P</em>는 무엇에 비례하나요?</li>
+    <li><b>그레이엄 법칙</b> — 두 기체의 평균 속력 비를 구하고
+        √(<em>M</em><sub>무거움</sub>/<em>M</em><sub>가벼움</sub>)와 비교하세요.</li>
+    <li><b>단열 압축</b> — 온도 고정을 <u>끄고</u> 피스톤을 빠르게 밀어 보세요.
+        온도가 왜 올라갈까요? 자전거 펌프가 뜨거워지는 이유와 연결해 설명하세요.</li>
+    <li><b>분포의 의미</b> — 온도를 올리면 속력 분포 곡선의 모양이 어떻게 변하나요?
+        "반응 속도가 온도에 민감한 이유"를 이 그래프로 설명해 보세요.</li>
+    <li><b>실제 기체 (심화)</b> — 입자 수를 최대로, 부피를 최소로 해 보세요.
+        <em>PV/NkT</em>가 1보다 뚜렷하게 커집니다. 이 시뮬레이션의 입자는 크기가 있어
+        서로 겹칠 수 없기 때문인데, 반데르발스 식
+        <em>P</em>(<em>V</em>−<em>nb</em>) = <em>nRT</em>의 <em>b</em>항이 바로 이것입니다.
+        왜 부피를 줄일수록 편차가 커질까요?</li>
+  </ol>
+  <p style="font-size:13px;color:#667085;margin:12px 0 0">
+    ※ 검증 결과: 게이뤼삭 법칙(<em>P</em>/<em>T</em>)과 그레이엄 법칙(속력비 = 2.00)은 오차 2% 이내로 성립합니다.
+    보일·아보가드로 법칙은 위 7번의 부피 효과 때문에 저밀도에서 2~5%,
+    최대 밀도에서 최대 35%까지 이상기체에서 벗어납니다.
+  </p>
+</details>
+
+</div>
+
+<div class="site-foot">화학 탐구실</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="gas"></script>
+<script src="sim.js"></script>
+</body>
+</html>

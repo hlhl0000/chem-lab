@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>화학 탐구실 — 고등학교 화학 시뮬레이션</title>
+<link rel="stylesheet" href="shared/style.css">
+<style>
+  .hero{padding:40px 0 26px}
+  .hero h1{font-size:29px; margin:0 0 8px; letter-spacing:-.02em}
+  .hero p{margin:0; color:var(--muted); font-size:15px; max-width:640px}
+
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:22px 0 6px}
+  .search{
+    flex:1; min-width:200px; max-width:340px; position:relative;
+  }
+  .search input{
+    width:100%; font-family:inherit; font-size:14px; padding:9px 12px 9px 34px;
+    border:1px solid var(--line); border-radius:9px; background:#fff;
+  }
+  @media (pointer:coarse){ .search{max-width:none} .search svg{top:14px} }
+  .search input:focus{outline:2px solid #bfdbfe; outline-offset:0; border-color:var(--accent)}
+  .search svg{position:absolute; left:11px; top:11px; opacity:.4}
+
+  .chips{display:flex; gap:7px; flex-wrap:wrap; margin:12px 0 22px}
+  .chip{
+    font-size:12.5px; padding:6px 12px; border-radius:999px; border:1px solid var(--line);
+    background:#fff; cursor:pointer; color:var(--muted); font-weight:500;
+  }
+  .chip.on{background:var(--accent); border-color:var(--accent); color:#fff}
+  @media (hover:hover){ .chip:hover{border-color:#c7d2fe} }
+  @media (pointer:coarse){
+    .chip{font-size:14px; padding:10px 16px}
+    .chips{gap:9px}
+  }
+
+  .grid{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(258px,1fr)); gap:16px;
+  }
+  .sim{
+    display:flex; flex-direction:column; background:#fff; border:1px solid var(--line);
+    border-radius:var(--radius); overflow:hidden; text-decoration:none; color:inherit;
+    box-shadow:var(--shadow); transition:transform .14s ease, box-shadow .14s ease;
+  }
+  @media (hover:hover){
+    .sim.live:hover{transform:translateY(-3px); box-shadow:var(--shadow-lg)}
+  }
+  .sim.live:active{transform:scale(.985)}
+  .sim.soon{opacity:.62; cursor:default}
+  .thumb{
+    height:98px; display:grid; place-items:center; background:linear-gradient(135deg,#eef2ff,#e0f2fe);
+    color:var(--accent);
+  }
+  .sim.soon .thumb{background:linear-gradient(135deg,#f1f5f9,#e2e8f0); color:#94a3b8}
+  .thumb svg{width:52px; height:52px; fill:currentColor}
+  .body{padding:14px; display:flex; flex-direction:column; flex:1}
+  .cat{font-size:11px; color:var(--accent); font-weight:700; letter-spacing:.03em}
+  .sim.soon .cat{color:#94a3b8}
+  .sim h3{font-size:16px; margin:3px 0 6px; display:flex; align-items:center; gap:7px}
+  .badge{
+    font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:999px;
+    background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0;
+  }
+  .badge.new{background:#dcfce7; color:#15803d; border-color:#bbf7d0}
+  .sim p{margin:0 0 10px; font-size:13px; color:var(--muted); flex:1; line-height:1.5}
+  .tags{display:flex; gap:5px; flex-wrap:wrap}
+  .tag{font-size:11px; color:#64748b; background:#f8fafc; border:1px solid var(--line);
+       padding:2px 7px; border-radius:6px}
+  .none{grid-column:1/-1; text-align:center; color:var(--muted); padding:40px 0; font-size:14px}
+  .count{font-size:13px; color:var(--muted); margin-bottom:10px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>화학 탐구실</h1>
+    <p>직접 조작하며 화학 개념을 탐구하는 시뮬레이션 모음입니다.
+       슬라이더를 움직여 변인을 바꾸고, 측정값을 기록해 규칙을 찾아보세요.</p>
+  </div>
+
+  <div class="toolbar">
+    <div class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+        <circle cx="11" cy="11" r="7"/><path d="M20 20l-4.2-4.2" stroke-linecap="round"/>
+      </svg>
+      <input type="text" id="q" placeholder="시뮬레이션 검색 (예: 압력, 적정, pH)">
+    </div>
+  </div>
+
+  <div class="chips" id="chips"></div>
+  <div class="count" id="count"></div>
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="site-foot">
+  화학 탐구실 · 고등학교 화학 수업용 · 자유롭게 사용하세요
+</div>
+
+<script src="sims.js"></script>
+<script src="shared/nav.js" data-base="." data-current=""></script>
+<script>
+"use strict";
+
+let activeCat = "전체";
+let query = "";
+
+/* 카테고리 칩 만들기 — SIMS에서 자동 추출 */
+const cats = ["전체", ...new Set(SIMS.map(s => s.cat))];
+document.getElementById("chips").innerHTML = cats
+  .map(c => `<button class="chip${c === "전체" ? " on" : ""}" data-cat="${c}">${c}</button>`)
+  .join("");
+
+document.getElementById("chips").onclick = e => {
+  const btn = e.target.closest(".chip");
+  if (!btn) return;
+  activeCat = btn.dataset.cat;
+  document.querySelectorAll(".chip").forEach(c => c.classList.toggle("on", c === btn));
+  render();
+};
+
+document.getElementById("q").oninput = e => { query = e.target.value.trim(); render(); };
+
+function match(s) {
+  if (activeCat !== "전체" && s.cat !== activeCat) return false;
+  if (!query) return true;
+  const hay = (s.title + " " + s.desc + " " + s.cat + " " + s.tags.join(" ")).toLowerCase();
+  return hay.includes(query.toLowerCase());
+}
+
+function card(s) {
+  const cls  = s.ready ? "sim live" : "sim soon";
+  const tag  = s.ready ? '<span class="badge new">이용 가능</span>'
+                       : '<span class="badge">준비 중</span>';
+  const inner = `
+    <div class="thumb">
+      <svg viewBox="0 0 64 64">${ICONS[s.icon] || ""}</svg>
+    </div>
+    <div class="body">
+      <div class="cat">${s.cat}</div>
+      <h3>${s.title} ${tag}</h3>
+      <p>${s.desc}</p>
+      <div class="tags">${s.tags.map(t => `<span class="tag">${t}</span>`).join("")}</div>
+    </div>`;
+  return s.ready
+    ? `<a class="${cls}" href="${s.path}">${inner}</a>`
+    : `<div class="${cls}">${inner}</div>`;
+}
+
+function render() {
+  const list = SIMS.filter(match);
+  const ready = SIMS.filter(s => s.ready).length;
+  document.getElementById("count").textContent =
+    `전체 ${SIMS.length}개 중 ${ready}개 이용 가능 · 현재 ${list.length}개 표시`;
+  document.getElementById("grid").innerHTML =
+    list.length ? list.map(card).join("")
+                : '<div class="none">검색 결과가 없습니다.</div>';
+}
+render();
+</script>
+</body>
+</html>
