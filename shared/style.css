@@ -133,3 +133,108 @@ input[type=checkbox]{ width:20px; height:20px; accent-color:var(--accent); }
   th,td{ padding:10px 8px; font-size:13.5px; }
   summary{ padding:6px 0; }
 }
+
+/* ============================================================
+   디자인 매뉴얼 v4.0 확장 토큰 (2026-07-28 추가)
+   ── 아래는 전부 "추가"입니다. 위쪽 기존 규칙은 하나도 바꾸지 않았습니다.
+   ── 자세한 사용 규칙은 프로젝트 폴더의 「디자인매뉴얼 v4.0」 참조.
+   ============================================================ */
+:root{
+  /* ── 텍스트 3단계 (대비비는 흰 카드 기준 실측값) ── */
+  --t1:#1f2328;      /* 제목·핵심 수치      15.80:1 */
+  --t2:#454b52;      /* 본문·레이블          8.82:1 */
+  --t3:#5b636b;      /* 소형(11px 이하) 레이블 6.10:1 */
+
+  /* ── 데이터 컬러 (밝은 배경 = 카드·그래프·표 위) ──
+     전부 흰 배경에서 WCAG AA(4.5:1) 이상. 괄호는 실측 대비비. */
+  --d-blue:#1d4ed8;    /* 6.70:1  기본 계열 1 */
+  --d-cyan:#0f5c8c;    /* 7.17:1  보조·수치 강조 */
+  --d-green:#15803d;   /* 5.02:1  안정·정상·성공 */
+  --d-amber:#b45309;   /* 5.02:1  주의·중간값 */
+  --d-red:#b91c1c;     /* 6.47:1  경고·위험 */
+  --d-violet:#6d28d9;  /* 7.10:1  특수 계열 */
+  --d-gray:#5f6b7a;    /* 5.43:1  중성·비활성 */
+
+  /* ── 어두운 무대(관찰영역) 위에서 쓰는 발광 계열 ──
+     배경 --stage-dark 기준 실측 대비비. */
+  --p-sky:#56b4e9;     /* 7.74:1 */
+  --p-orange:#fb923c;  /* 7.89:1 */
+  --p-yellow:#facc15;  /* 11.66:1 */
+  --p-mint:#34d399;    /* 9.29:1 */
+  --p-violet:#a78bfa;  /* 6.56:1 */
+  --p-silver:#cbd5e1;  /* 12.02:1 */
+
+  /* ── 무대(관찰 영역) 배경 ── */
+  --stage-dark:#0f172a;    /* 입자·빛·궤적을 볼 때 */
+  --stage-light:#ffffff;   /* 유리기구·용액·침전을 볼 때 */
+  --stage-line:#94a3b8;    /* 무대 안 눈금·보조선 */
+}
+
+/* ---------- 무대(관찰 영역) ---------- */
+.stage{
+  border-radius:10px; overflow:hidden; position:relative;
+  border:1px solid var(--line);
+}
+.stage canvas{ display:block; width:100%; }
+.stage--dark { background:var(--stage-dark);  border-color:#1e293b; }
+.stage--light{ background:var(--stage-light); border-color:#cbd5e1; }
+/* 무대 안에 얹는 짧은 주석 (Mayer 공간 근접 원칙 — 설명은 대상 옆에) */
+.stage-note{
+  position:absolute; left:10px; bottom:8px; font-size:11px; pointer-events:none;
+}
+.stage--dark  .stage-note{ color:rgba(226,232,240,.62) }
+.stage--light .stage-note{ color:rgba(40,46,54,.50) }
+
+/* ---------- 측정값 표시 (readout) ---------- */
+.readout{
+  background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+}
+.readout .label{ font-size:11.5px; color:var(--t3); font-weight:600; letter-spacing:.02em }
+.readout .value{
+  font-size:22px; font-weight:600; color:var(--t1); line-height:1.2;
+  font-variant-numeric:tabular-nums;   /* 숫자가 바뀌어도 폭이 흔들리지 않게 */
+}
+.readout .unit{ font-size:12px; font-weight:500; color:var(--t3); margin-left:3px }
+.readout.is-ok   { border-color:#bbf7d0; background:#f0fdf4 }
+.readout.is-warn { border-color:#fed7aa; background:#fff7ed }
+.readout.is-bad  { border-color:#fecaca; background:#fef2f2 }
+
+/* ---------- 물리량별 슬라이더 색 ----------
+   같은 파란 슬라이더가 5개 있으면 무엇을 잡는지 매번 레이블을 읽어야 한다.
+   물리량마다 색을 배정하면 위치만 봐도 안다.                                */
+.rng-temp::-webkit-slider-runnable-track{
+  background:linear-gradient(90deg,#93c5fd 0%,#cbd5e1 42%,#fdba74 74%,#dc2626 100%) }
+.rng-temp::-moz-range-track{
+  background:linear-gradient(90deg,#93c5fd 0%,#cbd5e1 42%,#fdba74 74%,#dc2626 100%) }
+.rng-temp::-webkit-slider-thumb{ background:#b91c1c } .rng-temp::-moz-range-thumb{ background:#b91c1c }
+
+.rng-vol::-webkit-slider-runnable-track{ background:linear-gradient(90deg,#dbeafe,#1d4ed8) }
+.rng-vol::-moz-range-track{ background:linear-gradient(90deg,#dbeafe,#1d4ed8) }
+.rng-vol::-webkit-slider-thumb{ background:#1d4ed8 } .rng-vol::-moz-range-thumb{ background:#1d4ed8 }
+
+.rng-count::-webkit-slider-runnable-track{ background:linear-gradient(90deg,#ede9fe,#6d28d9) }
+.rng-count::-moz-range-track{ background:linear-gradient(90deg,#ede9fe,#6d28d9) }
+.rng-count::-webkit-slider-thumb{ background:#6d28d9 } .rng-count::-moz-range-thumb{ background:#6d28d9 }
+
+.rng-time::-webkit-slider-runnable-track{ background:linear-gradient(90deg,#dcfce7,#15803d) }
+.rng-time::-moz-range-track{ background:linear-gradient(90deg,#dcfce7,#15803d) }
+.rng-time::-webkit-slider-thumb{ background:#15803d } .rng-time::-moz-range-thumb{ background:#15803d }
+
+/* ---------- 범례 (색만으로 정보를 전달하지 않기 위한 필수 장치) ---------- */
+.legend{ display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--t2) }
+.legend .item{ display:flex; align-items:center; gap:6px }
+.legend .swatch{ width:12px; height:12px; border-radius:50%; flex:none;
+                 border:1px solid rgba(0,0,0,.22) }
+.legend .swatch.sq{ border-radius:3px }
+.legend .swatch.tri{ border-radius:0; background:none!important; border:none;
+                     width:0;height:0; border-left:6px solid transparent;
+                     border-right:6px solid transparent; border-bottom:11px solid currentColor }
+
+/* ---------- 키보드 포커스 표시 (마우스 클릭 때는 안 나옴) ---------- */
+:focus-visible{ outline:3px solid rgba(37,99,235,.55); outline-offset:2px; border-radius:6px }
+
+/* ---------- 애니메이션 최소화를 켠 사용자 존중 ---------- */
+@media (prefers-reduced-motion:reduce){
+  *{ animation-duration:.001ms!important; animation-iteration-count:1!important;
+     transition-duration:.001ms!important; scroll-behavior:auto!important }
+}
