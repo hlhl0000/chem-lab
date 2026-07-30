@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>삼투와 삼투압 | 화학 탐구실</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+.page-head{ padding:22px 0 4px }
+.page-head h1{ font-size:21px; margin:0 0 6px; color:var(--t1) }
+.page-head .sub{ margin:0; color:var(--t2); font-size:13.5px }
+.namebar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+          margin:14px 0 4px; font-size:13px; color:var(--t2) }
+.namebar .nameinput{ font-family:inherit; padding:8px 10px; border-radius:8px;
+          border:1px solid var(--line); background:#fff; color:var(--t1); width:170px }
+.layout{ display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);
+         gap:14px; align-items:start; margin-top:14px }
+@media (max-width:1023px){ .layout{ grid-template-columns:1fr } }
+.stagewrap{ height:370px }
+@media (max-width:600px){ .stagewrap{ height:300px } }
+.ctl{ margin-bottom:15px }
+.ctl .top{ display:flex; justify-content:space-between; align-items:baseline;
+           gap:8px; font-size:12.5px; color:var(--t2); margin-bottom:2px }
+.ctl .top .now{ color:var(--t1); font-weight:600; font-size:13.5px;
+                font-variant-numeric:tabular-nums }
+.ctl .hint{ font-size:11px; color:var(--t3); margin-top:2px }
+.rowbtn{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px }
+.checkrow{ display:flex; align-items:center; gap:9px; font-size:13px;
+           color:var(--t2); margin:4px 0; cursor:pointer;
+           /* 터치 타깃 44px — 라벨 전체가 클릭 영역이 되도록 높이를 확보한다.
+              공통 CSS는 체크박스 자체만 24px로 키우므로 여기서 라벨을 넓힌다. */
+           min-height:44px; padding:4px 2px; border-radius:8px }
+.grid3{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+        gap:10px; margin-top:12px }
+.blk{ margin-top:14px }
+.callout{ background:#fff; border:1px solid var(--line);
+          border-left:4px solid var(--d-cyan); border-radius:10px; padding:11px 13px;
+          margin-top:12px; font-size:13px; color:var(--t2); line-height:1.65 }
+.callout b{ color:var(--t1) }
+.callout.warn{ border-left-color:var(--d-amber) }
+.pick{ display:flex; gap:6px; flex-wrap:wrap; margin-top:4px }
+.pick .opt{ background:#fff; color:var(--t2) }
+.pick .opt.on{ background:var(--accent); color:#fff; border-color:var(--accent) }
+.tbl-scroll{ overflow-x:auto }
+.sheet{ margin-top:20px }
+.sheet ol{ margin:8px 0 0; padding-left:20px; color:var(--t2);
+           font-size:13.5px; line-height:1.85 }
+.sheet li{ margin-bottom:5px }
+.sheet .sumline{ cursor:pointer; font-weight:600; color:var(--t1); font-size:14px }
+.small{ font-size:11.5px; color:var(--t3); margin-top:8px; line-height:1.65 }
+.legend{ margin-top:9px }
+.counters{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:12px; text-align:center }
+.counters .cv{ font-size:20px; font-weight:600; color:var(--t1); font-variant-numeric:tabular-nums }
+.counters .cl{ font-size:11px; color:var(--t3); display:block; margin-top:2px }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="page-head">
+    <h1>삼투와 삼투압</h1>
+    <p class="sub">
+      물 분자는 <b>양쪽으로 계속 이동한다.</b> 그 결과 묽은 쪽 → 진한 쪽의 <b>순 이동</b>이 생긴다.
+      “물이 농도를 맞추려고 간다”가 아니다 — 세어 보면 알 수 있다.</p>
+  </div>
+
+  <div class="namebar">
+    <label for="who">좌석번호 / 익명코드</label>
+    <input class="nameinput" id="who" type="text" placeholder="예: 2-3-14" autocomplete="off">
+    <span class="small" style="margin:0">측정값을 기록한 뒤 CSV로 저장해 제출하세요.</span>
+  </div>
+
+  <div class="layout">
+
+    <div>
+      <div class="card">
+        <h2>반투막을 사이에 둔 두 방</h2>
+        <div class="stage stage--dark stagewrap" id="wrapMain">
+          <canvas id="cvMain" aria-label="반투막을 사이에 둔 물 분자의 양방향 이동을 그리는 관찰 영역"></canvas>
+          <div class="stage-note" id="stageNote">막을 건너는 물 분자를 한 개씩 세고 있다</div>
+        </div>
+        <div class="legend" id="legendMain"></div>
+      </div>
+
+      <div class="card blk">
+        <h2>막을 건넌 물 분자 세기</h2>
+        <div class="counters">
+          <div><span class="cv" style="color:var(--d-blue)" id="cLR">0</span><span class="cl">왼쪽 → 오른쪽</span></div>
+          <div><span class="cv" style="color:var(--d-amber)" id="cRL">0</span><span class="cl">오른쪽 → 왼쪽</span></div>
+          <div><span class="cv" style="color:var(--d-red)" id="cNet">0</span><span class="cl">순 이동 (차이)</span></div>
+        </div>
+        <p class="small">
+          <b>두 숫자 모두 계속 늘어난다.</b> 한쪽으로만 가는 것이 아니다.
+          다만 <b>차이</b>가 생기고, 그것을 <b>순 이동(net movement)</b>이라 부른다.
+        </p>
+      </div>
+
+      <div class="card blk">
+        <h2>걸어 준 압력과 순 이동 속도 — <b>x절편이 곧 삼투압이다</b></h2>
+        <div class="stage stage--light" style="height:220px" id="wrapChart">
+          <canvas id="cvChart" aria-label="걸어 준 압력에 따른 순 이동 속도 그래프"></canvas>
+        </div>
+        <div class="legend" id="legendChart"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>조절 변인</h2>
+        <div class="ctl">
+          <div class="top"><span>왼쪽 방의 용질 농도</span><span class="now" id="vCL">0.00 M</span></div>
+          <input type="range" class="rng-count" id="sCL" min="0" max="1.5" step="0.05" value="0">
+        </div>
+        <div class="ctl">
+          <div class="top"><span>오른쪽 방의 용질 농도</span><span class="now" id="vCR">0.30 M</span></div>
+          <input type="range" class="rng-count" id="sCR" min="0" max="1.5" step="0.05" value="0.3">
+          <div class="hint">여기서 “농도”는 <b>물에 녹아 있는 입자의 총농도</b>다.
+            NaCl 0.3 M은 이온으로 쪼개져 입자 0.6 M이 된다.</div>
+        </div>
+        <div class="ctl">
+          <div class="top"><span>온도</span><span class="now" id="vT">25 °C</span></div>
+          <input type="range" class="rng-temp" id="sT" min="0" max="60" step="5" value="25">
+        </div>
+        <div class="ctl">
+          <div class="top"><span>오른쪽(진한 쪽)에 걸어 준 압력</span><span class="now" id="vP">0.0 atm</span></div>
+          <input type="range" class="rng-vol" id="sP" min="0" max="60" step="0.5" value="0">
+          <div class="hint">순 이동이 <b>0이 되는 압력</b>을 찾아보자. 그것이 삼투압의 정의다.
+            더 세게 누르면 <b>역삼투</b>가 된다.</div>
+        </div>
+        <label class="checkrow"><input type="checkbox" id="ckHydro">
+          <span>수위 차가 만드는 압력도 함께 세기 <span style="color:var(--t3)">(U자관처럼 저절로 멈춘다)</span></span></label>
+        <div class="rowbtn">
+          <button type="button" class="primary" id="btnRun">일시정지</button>
+          <button type="button" id="btnFind">순 이동이 0이 되는 압력 찾기</button>
+          <button type="button" id="btnReset">세기 다시 시작</button>
+        </div>
+        <div class="ctl" style="margin-top:14px">
+          <div class="top"><span>미리 정해진 상황</span><span class="now"></span></div>
+          <div class="pick" id="pickPre">
+            <button type="button" class="opt" data-p="0">순수한 물 ↔ 0.3 M</button>
+            <button type="button" class="opt" data-p="1">해수 담수화 (역삼투)</button>
+            <button type="button" class="opt" data-p="2">적혈구 ↔ 생리식염수</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card blk">
+        <h2>측정값</h2>
+        <div class="grid3" id="readouts"></div>
+      </div>
+
+      <div class="card blk">
+        <h2>기록</h2>
+        <div class="rowbtn">
+          <button type="button" class="primary" id="btnLog">이 상태 기록하기</button>
+          <button type="button" id="btnCsv">CSV로 저장</button>
+          <button type="button" id="btnClr">기록 지우기</button>
+        </div>
+        <div class="tbl-scroll"><table id="logTbl"></table></div>
+        <p class="small" id="logEmpty">아직 기록이 없습니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout" id="conclusion"></div>
+
+  <div class="card blk">
+    <h2>농도에 따른 삼투압 — 판트호프 법칙과 그 한계</h2>
+    <div class="tbl-scroll"><table id="mainTbl"></table></div>
+    <p class="small">
+      <b>π = CRT</b>는 <span style="color:var(--t3)">[비휘발성·비전해질, 묽은 용액]</span> 조건의 식이다.
+      농도가 진해지면 정확한 값과 벌어진다 — <b>법칙에는 성립 조건이 있다.</b>
+      <br>해수를 약 0.6 M NaCl로 보면 이온으로 쪼개져 입자 총농도 약 1.2 M →
+      π ≈ 1.2 × 0.0821 × 298 ≈ <b>29 atm</b> (실제 해수 약 27 atm).
+      역삼투 설비가 왜 고압인지 알 수 있다.
+    </p>
+  </div>
+
+  <details class="card sheet">
+    <summary class="sumline">탐구 활동지 — 8문항</summary>
+    <ol>
+      <li><b>[관찰]</b> 왼쪽 = 순수한 물, 오른쪽 = 0.3 M로 두고 한참 돌려 보자.
+        <b>“왼쪽 → 오른쪽”과 “오른쪽 → 왼쪽”</b> 두 숫자는 각각 어떻게 되는가?
+        한쪽만 늘어나는가?</li>
+      <li><b>[설명]</b> 물 분자가 <b>양쪽으로 모두 이동한다</b>는 사실을 확인했다.
+        그렇다면 “물이 <u>농도를 맞추려고</u> 진한 쪽으로 간다”는 설명은 왜 부적절한가?
+        <span class="small" style="display:inline">(발문: 물 분자는 어떻게 반대편의 농도를 아는가?)</span></li>
+      <li><b>[관계]</b> 오른쪽 농도를 0.1 → 0.3 → 1.0 M로 올려 보자. 순 이동 속도는 어떻게 변하는가?</li>
+      <li><b>[관찰 → 정의]</b> 압력 슬라이더를 올려 <b>순 이동이 0이 되는 압력</b>을 찾으시오.
+        그 값을 적고, π = CRT로 계산한 값과 비교하시오.
+        <b>이 압력이 곧 삼투압의 정의다.</b></li>
+      <li><b>[설명]</b> 4번의 결과를 근거로, “삼투압은 진한 용액이 반투막을 미는 압력”이라는 설명이
+        왜 부적절한지 밝히시오. 삼투압을 <b>한 문장으로</b> 정의하시오.</li>
+      <li><b>[심화]</b> 압력을 삼투압보다 <b>더 크게</b> 걸면 무슨 일이 일어나는가?
+        이것이 바닷물에서 마실 물을 얻는 장치와 어떤 관계가 있는가?</li>
+      <li><b>[관계]</b> 왼쪽에도 용질을 넣어 <b>양쪽 농도를 같게</b> 만들어 보자.
+        순 이동은 어떻게 되는가? 그때도 물 분자는 막을 건너는가?</li>
+      <li><b>[모형의 한계]</b> 이 시뮬레이션이 실제 삼투와 다른 점을 두 가지 이상 쓰시오.
+        <span class="small" style="display:inline">(힌트: 실제 반투막은 무엇으로 물질을 가려내는가?
+        수위 차가 만드는 압력은 화면에서 얼마나 과장되어 있는가?)</span></li>
+    </ol>
+    <p class="small">
+      ⚠ 이 모형은 <b>“용질이 있으면 용매가 그 액체를 떠나기 어려워진다”</b>는 한 문장을 그대로 규칙으로 삼는다.
+      막을 건널 확률을 각 방의 <b>용매 몰분율</b>에 비례하게 두었고, 걸어 준 압력은 반대쪽 확률에
+      exp(<i>P</i>·V̄/<i>RT</i>) 인자로 넣었다. 이렇게 하면 순 이동이 0이 되는 압력이
+      −(<i>RT</i>/V̄)·ln <i>X</i> 가 되고, 묽은 용액에서 <b>π = CRT</b>로 수렴한다(Node 검증 완료).
+      <br>⚠ <b>“묽은 쪽에 물 분자가 더 빽빽해서 막에 부딪히는 횟수가 많다”고 설명하지 않는다.</b>
+      이 설명은 화학교육 문헌이 오개념으로 특정한 것이다(Kramer &amp; Myers, <i>Am. J. Phys.</i> 80, 694, 2012).
+      설탕물이 순수한 물보다 밀도가 크다는 것을 학생은 이미 알고 있다.
+    </p>
+  </details>
+
+</div>
+
+<footer class="site-foot">화학 탐구실</footer>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="osmosis"></script>
+<script src="sim.js"></script>
+</body>
+</html>

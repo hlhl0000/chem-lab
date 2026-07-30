@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>온도와 반응 속도 — 활성화 에너지 | 화학 탐구실</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+.page-head{ padding:22px 0 4px }
+.page-head h1{ font-size:21px; margin:0 0 6px; color:var(--t1) }
+.page-head .sub{ margin:0; color:var(--t2); font-size:13.5px }
+.namebar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+          margin:14px 0 4px; font-size:13px; color:var(--t2) }
+.namebar .nameinput{ font-family:inherit; padding:8px 10px; border-radius:8px;
+          border:1px solid var(--line); background:#fff; color:var(--t1); width:170px }
+.tabs{ display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 2px }
+.tab{ background:#fff; color:var(--t2) }
+.tab.on{ background:var(--accent); color:#fff; border-color:var(--accent) }
+.layout{ display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);
+         gap:14px; align-items:start; margin-top:12px }
+@media (max-width:1023px){ .layout{ grid-template-columns:1fr } }
+.stagewrap{ height:360px }
+@media (max-width:600px){ .stagewrap{ height:290px } }
+.ctl{ margin-bottom:15px }
+.ctl .top{ display:flex; justify-content:space-between; align-items:baseline;
+           gap:8px; font-size:12.5px; color:var(--t2); margin-bottom:2px }
+.ctl .top .now{ color:var(--t1); font-weight:600; font-size:13.5px;
+                font-variant-numeric:tabular-nums }
+.ctl .hint{ font-size:11px; color:var(--t3); margin-top:2px }
+.rowbtn{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px }
+.checkrow{ display:flex; align-items:center; gap:9px; font-size:13px;
+           color:var(--t2); margin:4px 0; cursor:pointer;
+           /* 터치 타깃 44px — 라벨 전체가 클릭 영역이 되도록 높이를 확보한다.
+              공통 CSS는 체크박스 자체만 24px로 키우므로 여기서 라벨을 넓힌다. */
+           min-height:44px; padding:4px 2px; border-radius:8px }
+.grid3{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+        gap:10px; margin-top:12px }
+.blk{ margin-top:14px }
+.callout{ background:#fff; border:1px solid var(--line);
+          border-left:4px solid var(--d-red); border-radius:10px; padding:11px 13px;
+          margin-top:12px; font-size:13px; color:var(--t2); line-height:1.65 }
+.callout b{ color:var(--t1) }
+.callout.ok{ border-left-color:var(--d-green) }
+.tbl-scroll{ overflow-x:auto }
+.sheet{ margin-top:20px }
+.sheet ol{ margin:8px 0 0; padding-left:20px; color:var(--t2);
+           font-size:13.5px; line-height:1.85 }
+.sheet li{ margin-bottom:5px }
+.sheet .sumline{ cursor:pointer; font-weight:600; color:var(--t1); font-size:14px }
+.small{ font-size:11.5px; color:var(--t3); margin-top:8px; line-height:1.65 }
+.legend{ margin-top:9px }
+.mulbox{ display:grid; grid-template-columns:1fr auto 1fr auto 1fr; gap:6px;
+         align-items:center; margin-top:12px; text-align:center }
+.mulbox .cellv{ font-size:19px; font-weight:600; color:var(--t1);
+                font-variant-numeric:tabular-nums }
+.mulbox .celll{ font-size:11px; color:var(--t3); display:block; margin-top:2px }
+.mulbox .op{ font-size:17px; color:var(--t3) }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="page-head">
+    <h1>온도와 반응 속도 — 문턱을 넘는 분자의 비율</h1>
+    <p class="sub">온도를 10 ℃ 올리면 반응 속도는 약 <b>2배</b>가 되는데, 충돌 수는 겨우 <b>2 %</b>쯤 늘어난다.
+      <b>나머지는 어디서 왔는가?</b> 직접 재 보자.</p>
+  </div>
+
+  <div class="namebar">
+    <label for="who">좌석번호 / 익명코드</label>
+    <input class="nameinput" id="who" type="text" placeholder="예: 2-3-14" autocomplete="off">
+    <span class="small" style="margin:0">측정값을 기록한 뒤 CSV로 저장해 제출하세요.</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" id="tabA" type="button">① 에너지 분포와 문턱</button>
+    <button class="tab"    id="tabB" type="button">② 활성화 에너지 도표</button>
+  </div>
+
+  <div class="layout">
+
+    <div>
+      <div class="card">
+        <h2 id="stageTitle">분자의 운동 에너지 분포 (맥스웰–볼츠만)</h2>
+        <div class="stage stage--light stagewrap" id="wrapMain">
+          <canvas id="cvMain" aria-label="두 온도의 에너지 분포 곡선과 활성화 에너지 문턱을 그리는 관찰 영역"></canvas>
+          <div class="stage-note" id="stageNote">Ea 오른쪽 꼬리의 넓이 = 반응할 수 있는 분자의 비율</div>
+        </div>
+        <div class="legend" id="legendMain"></div>
+      </div>
+
+      <div class="card blk" id="boxMul">
+        <h2>속도 배율은 더하는 게 아니라 <b style="color:var(--d-red)">곱한다</b></h2>
+        <div class="mulbox">
+          <div><span class="cellv" id="mCol">1.017</span><span class="celll">충돌 수 배율 √(T₂/T₁)</span></div>
+          <div class="op">×</div>
+          <div><span class="cellv" id="mTail">1.88</span><span class="celll">문턱을 넘는 비율의 배율</span></div>
+          <div class="op">=</div>
+          <div><span class="cellv" style="color:var(--d-red)" id="mAll">1.91</span><span class="celll">전체 속도 배율</span></div>
+        </div>
+        <p class="small">
+          충돌 빈도는 √T에 비례한다 → 300 K → 310 K에서 <b>약 1.7 %</b>.
+          교과서(119쪽)는 “약 2 %”라고 쓴다. 어느 쪽이든 <b>속도가 2배가 된 이유를 설명하지 못한다.</b>
+        </p>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>조절 변인</h2>
+
+        <div id="ctlA">
+          <div class="ctl">
+            <div class="top"><span>낮은 온도 T₁</span><span class="now" id="vT1">300 K</span></div>
+            <input type="range" class="rng-temp" id="sT1" min="250" max="400" step="5" value="300">
+          </div>
+          <div class="ctl">
+            <div class="top"><span>온도 차 ΔT</span><span class="now" id="vDT">+10 K</span></div>
+            <input type="range" class="rng-temp" id="sDT" min="5" max="60" step="5" value="10">
+            <div class="hint">교과서의 “10 ℃ 상승” 조건이 기본값이다.</div>
+          </div>
+          <div class="ctl">
+            <div class="top"><span>활성화 에너지 E<sub>a</sub></span><span class="now" id="vEa">50 kJ/mol</span></div>
+            <input type="range" class="rng-count" id="sEa" min="10" max="150" step="5" value="50">
+            <div class="hint">“10 ℃당 2배”는 E<sub>a</sub> ≈ 50 kJ/mol 부근에서 성립하는 <b>경험 규칙</b>이다.
+              E<sub>a</sub>를 바꿔 보면 배율이 달라진다.</div>
+          </div>
+          <label class="checkrow"><input type="checkbox" id="ckZoom" checked>
+            <span>꼬리 부분 확대해서 보기 <span style="color:var(--t3)">(안 하면 꼬리가 안 보인다)</span></span></label>
+          <label class="checkrow"><input type="checkbox" id="ckCat">
+            <span>정촉매 넣기 — E<sub>a</sub>가 낮은 <b>다른 길</b>이 열린다</span></label>
+          <div class="ctl" id="ctlCat" hidden>
+            <div class="top"><span>촉매를 쓸 때의 E<sub>a</sub></span><span class="now" id="vEc">30 kJ/mol</span></div>
+            <input type="range" class="rng-count" id="sEc" min="5" max="150" step="5" value="30">
+          </div>
+          <div class="rowbtn">
+            <button type="button" id="btnPre1">교과서 조건 (Ea 50, 300→310 K)</button>
+          </div>
+        </div>
+
+        <div id="ctlB" hidden>
+          <div class="ctl">
+            <div class="top"><span>정반응의 E<sub>a</sub></span><span class="now" id="vEf">183 kJ</span></div>
+            <input type="range" class="rng-count" id="sEf" min="20" max="300" step="1" value="183">
+          </div>
+          <div class="ctl">
+            <div class="top"><span>반응 엔탈피 ΔH</span><span class="now" id="vDH">+13 kJ</span></div>
+            <input type="range" class="rng-vol" id="sDH" min="-200" max="200" step="1" value="13">
+            <div class="hint">음수 = 발열, 양수 = 흡열</div>
+          </div>
+          <label class="checkrow"><input type="checkbox" id="ckCat2">
+            <span>정촉매 경로 함께 그리기</span></label>
+          <div class="ctl" id="ctlCat2" hidden>
+            <div class="top"><span>촉매 경로의 E<sub>a</sub>(정)</span><span class="now" id="vEfc">110 kJ</span></div>
+            <input type="range" class="rng-count" id="sEfc" min="5" max="300" step="1" value="110">
+          </div>
+          <div class="rowbtn">
+            <button type="button" id="btnPre2">2HI → H₂ + I₂ (Ea 183 / ΔH +13)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card blk">
+        <h2>측정값</h2>
+        <div class="grid3" id="readouts"></div>
+      </div>
+
+      <div class="card blk">
+        <h2>기록</h2>
+        <div class="rowbtn">
+          <button type="button" class="primary" id="btnLog">이 상태 기록하기</button>
+          <button type="button" id="btnCsv">CSV로 저장</button>
+          <button type="button" id="btnClr">기록 지우기</button>
+        </div>
+        <div class="tbl-scroll"><table id="logTbl"></table></div>
+        <p class="small" id="logEmpty">아직 기록이 없습니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout" id="conclusion"></div>
+
+  <div class="card blk" id="boxTable">
+    <h2>활성화 에너지에 따른 “10 K 상승 시 속도 배율”</h2>
+    <div class="tbl-scroll"><table id="mainTbl"></table></div>
+    <p class="small">
+      “온도 10 ℃ 상승 → 속도 2배”는 <b>모든 반응에 맞는 법칙이 아니다.</b>
+      E<sub>a</sub>가 50 kJ/mol 부근일 때 성립하는 경험 규칙이다. 수업에서는 반드시 “약”을 붙인다.
+    </p>
+  </div>
+
+  <details class="card sheet">
+    <summary class="sumline">탐구 활동지 — 8문항</summary>
+    <ol>
+      <li><b>[관찰]</b> T₁ = 300 K, ΔT = +10 K, E<sub>a</sub> = 50 kJ/mol로 두자.
+        두 곡선을 비교하면 <b>봉우리의 높이</b>와 <b>퍼진 정도</b>가 어떻게 달라졌는가?</li>
+      <li><b>[관찰]</b> 온도를 올려도 <b>곡선 아래 전체 넓이</b>는 변하지 않는다. 이것은 무엇을 뜻하는가?</li>
+      <li><b>[관계]</b> E<sub>a</sub> 오른쪽 꼬리의 넓이는 몇 배가 되었는가?
+        같은 조건에서 <b>충돌 수</b>는 몇 배가 되었는가? 두 값을 나란히 적으시오.</li>
+      <li><b>[설명]</b> “온도를 올리면 분자가 더 자주 충돌해서 반응이 빨라진다”는 설명이
+        <b>왜 불충분한지</b> 위 두 숫자를 근거로 밝히시오.</li>
+      <li><b>[설명]</b> 그렇다고 “충돌은 반응과 무관하다”고 말해도 되는가?
+        <span class="small" style="display:inline">(힌트: 충돌이 아예 없으면 반응은 어떻게 되는가?
+        농도·압력·표면적 효과는 무엇으로 설명하는가?)</span></li>
+      <li><b>[관계]</b> E<sub>a</sub>를 30 → 50 → 100 kJ/mol로 바꿔 보자.
+        같은 10 K 상승인데도 속도 배율이 달라진다. 무엇을 알 수 있는가?</li>
+      <li><b>[설명]</b> 정촉매를 켜 보자. <b>곡선은 그대로인데 문턱만 왼쪽으로 옮겨간다.</b>
+        온도를 올리는 것과 촉매를 넣는 것은 무엇이 다른가?
+        ② 탭에서 촉매 경로를 켜고, <b>ΔH가 변하는지</b> 확인하시오.</li>
+      <li><b>[모형의 한계]</b> 이 곡선은 분자가 <b>어떤 방향으로</b> 충돌하는지는 전혀 다루지 않는다.
+        실제 반응이 일어나려면 에너지 말고 무엇이 더 필요한가?
+        이 시뮬레이션이 실제와 다른 점을 두 가지 더 쓰시오.</li>
+    </ol>
+    <p class="small">
+      ⚠ 이 시뮬레이션은 <b>기체의 병진 운동 에너지 분포(3차원 맥스웰–볼츠만)</b>를 쓴다.
+      실제 반응 속도는 충돌 방향(방향 인자)과 반응 메커니즘의 영향도 받는다.
+      아레니우스 식과 활성화 에너지의 정량 계산은 이 교과의 범위 밖이다.
+    </p>
+  </details>
+
+</div>
+
+<footer class="site-foot">화학 탐구실</footer>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="rate"></script>
+<script src="sim.js"></script>
+</body>
+</html>

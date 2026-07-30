@@ -2,104 +2,135 @@
    시뮬레이션 목록 (사이트의 "카탈로그")
 
    ★ 새 시뮬레이션을 추가하는 방법 ★
-   1) 폴더를 만든다.          예) titration/
+   1) 폴더를 만든다.  예) titration/
    2) 그 안에 index.html 을 만든다.
    3) 아래 SIMS 배열에 한 줄 추가한다.
-   → 대문 페이지의 카드와 모든 페이지의 이동 메뉴에 자동으로 나타납니다.
+      → 대문 페이지의 카드와 모든 페이지의 이동 메뉴에 자동으로 나타납니다.
 
    ready:false 로 두면 "준비 중" 카드로만 보이고 클릭되지 않습니다.
+   cat 에 새 이름을 쓰면 대문의 분류 칩이 자동으로 하나 늘어납니다.
    ============================================================ */
 
 const SIMS = [
   {
-    id:    "gas",
+    id: "gas",
     title: "기체 분자 운동",
-    cat:   "물질의 상태",
-    path:  "gas/",
-    icon:  "gas",
+    cat: "물질의 상태",
+    path: "gas/",
+    icon: "gas",
     ready: true,
-    desc:  "온도·부피·입자 수를 바꾸며 압력과 속력 분포의 변화를 관찰합니다. 피스톤 압축과 맥스웰–볼츠만 분포까지.",
-    tags:  ["보일 법칙","샤를 법칙","그레이엄 법칙","맥스웰–볼츠만"]
+    desc: "온도·부피·입자 수를 바꾸며 압력과 속력 분포의 변화를 관찰합니다. 피스톤 압축과 맥스웰–볼츠만 분포까지.",
+    tags: ["보일 법칙","샤를 법칙","그레이엄 법칙","맥스웰–볼츠만"]
   },
   {
-    id:    "universe",
+    id: "universe",
     title: "우주 초기 원소의 생성",
-    cat:   "통합과학",
-    path:  "universe/",
-    icon:  "universe",
+    cat: "통합과학",
+    path: "universe/",
+    icon: "universe",
     ready: true,
-    desc:  "빅뱅 직후 쿼크에서 시작해 핵자 → 헬륨 원자핵 → 중성 원자가 만들어지기까지를 단계별로 따라갑니다.",
-    tags:  ["빅뱅","쿼크","핵융합","원자의 형성","물질과 규칙성"]
+    desc: "빅뱅 직후 쿼크에서 시작해 핵자 → 헬륨 원자핵 → 중성 원자가 만들어지기까지를 단계별로 따라갑니다.",
+    tags: ["빅뱅","쿼크","핵융합","원자의 형성","물질과 규칙성"]
   },
   {
-    id:    "titration",
+    id: "vapor",
+    title: "증기 압력 내림과 총괄성",
+    cat: "용액의 성질",
+    path: "vapor/",
+    icon: "vapor",
+    ready: true,
+    desc: "밀폐 용기의 동적 평형에서 라울 법칙이 저절로 나옵니다. 수면을 덮어 보면 '차단은 속도를 바꾸고 평형을 바꾸지 않는다'가 화면에서 확인됩니다. 증기 압력 곡선의 교점 이동으로 끓는점 오름·어는점 내림까지.",
+    tags: ["라울 법칙","동적 평형","몰분율","끓는점 오름","어는점 내림","총괄성"]
+  },
+  {
+    id: "osmosis",
+    title: "삼투와 삼투압",
+    cat: "용액의 성질",
+    path: "osmosis/",
+    icon: "osmosis",
+    ready: true,
+    desc: "반투막을 건너는 물 분자를 양방향으로 세어 '순 이동'을 눈으로 봅니다. 압력을 걸어 삼투를 멈추게 하면 그 값이 곧 삼투압입니다. 역삼투와 해수 담수화까지.",
+    tags: ["삼투","순 이동","삼투압","판트호프 법칙","역삼투","반투막"]
+  },
+  {
+    id: "entropy",
+    title: "엔트로피 — 경우의 수 세기",
+    cat: "에너지와 자발성",
+    path: "entropy/",
+    icon: "entropy",
+    ready: true,
+    desc: "엔트로피를 '무질서'가 아니라 셀 수 있는 가짓수로 다룹니다. 위치의 경우의 수(입자가 어디에 있는가)와 에너지의 경우의 수(에너지를 어떻게 나눠 갖는가)를 모두 세고, 온도가 높을수록 ΔS주위가 작아지는 이유까지 확인합니다.",
+    tags: ["엔트로피","경우의 수","ΔS주위","자발성","제2법칙"]
+  },
+  {
+    id: "rate",
+    title: "온도와 반응 속도 — 활성화 에너지",
+    cat: "화학 반응",
+    path: "rate/",
+    icon: "rate",
+    ready: true,
+    desc: "온도를 10 ℃ 올리면 충돌 수는 2 %만 느는데 속도는 2배가 됩니다. 나머지가 어디서 오는지 맥스웰–볼츠만 분포의 꼬리 면적으로 직접 계산합니다. 촉매와 Ea·ΔH 2색 도표까지.",
+    tags: ["활성화 에너지","맥스웰–볼츠만","유효 충돌","촉매","반응 엔탈피"]
+  },
+  {
+    id: "titration",
     title: "산-염기 적정",
-    cat:   "산과 염기",
-    path:  "titration/",
-    icon:  "flask",
+    cat: "산과 염기",
+    path: "titration/",
+    icon: "flask",
     ready: false,
-    desc:  "적하량에 따른 pH 변화를 실시간 곡선으로. 지시약 색 변화와 당량점 판별.",
-    tags:  ["적정 곡선","당량점","지시약","pH"]
+    desc: "적하량에 따른 pH 변화를 실시간 곡선으로. 지시약 색 변화와 당량점 판별.",
+    tags: ["적정 곡선","당량점","지시약","pH"]
   },
   {
-    id:    "equilibrium",
+    id: "equilibrium",
     title: "화학 평형과 르샤틀리에",
-    cat:   "화학 평형",
-    path:  "equilibrium/",
-    icon:  "balance",
+    cat: "화학 평형",
+    path: "equilibrium/",
+    icon: "balance",
     ready: false,
-    desc:  "농도·온도·압력을 바꿨을 때 평형이 어느 쪽으로 이동하는지 막대그래프로 확인합니다.",
-    tags:  ["평형 상수","르샤틀리에","정반응/역반응"]
+    desc: "농도·온도·압력을 바꿨을 때 평형이 어느 쪽으로 이동하는지 막대그래프로 확인합니다.",
+    tags: ["평형 상수","르샤틀리에","정반응/역반응"]
   },
   {
-    id:    "rate",
-    title: "반응 속도와 활성화 에너지",
-    cat:   "화학 반응",
-    path:  "rate/",
-    icon:  "rate",
-    ready: false,
-    desc:  "활성화 에너지 문턱을 넘는 분자의 비율이 온도에 따라 어떻게 급증하는지 봅니다.",
-    tags:  ["활성화 에너지","촉매","아레니우스"]
-  },
-  {
-    id:    "orbital",
+    id: "orbital",
     title: "원자 오비탈과 전자 배치",
-    cat:   "원자와 주기율",
-    path:  "orbital/",
-    icon:  "atom",
+    cat: "원자와 주기율",
+    path: "orbital/",
+    icon: "atom",
     ready: false,
-    desc:  "s·p·d 오비탈의 확률 밀도 단면과 쌓음 원리에 따른 전자 배치.",
-    tags:  ["오비탈","양자수","쌓음 원리","훈트 규칙"]
+    desc: "s·p·d 오비탈의 확률 밀도 단면과 쌓음 원리에 따른 전자 배치.",
+    tags: ["오비탈","양자수","쌓음 원리","훈트 규칙"]
   },
   {
-    id:    "periodic",
+    id: "periodic",
     title: "주기율표 경향성",
-    cat:   "원자와 주기율",
-    path:  "periodic/",
-    icon:  "grid",
+    cat: "원자와 주기율",
+    path: "periodic/",
+    icon: "grid",
     ready: false,
-    desc:  "원자 반지름·이온화 에너지·전기음성도를 주기율표 위에 색으로 표시합니다.",
-    tags:  ["이온화 에너지","전기음성도","유효 핵전하"]
+    desc: "원자 반지름·이온화 에너지·전기음성도를 주기율표 위에 색으로 표시합니다.",
+    tags: ["이온화 에너지","전기음성도","유효 핵전하"]
   },
   {
-    id:    "polarity",
+    id: "polarity",
     title: "결합의 극성과 쌍극자",
-    cat:   "화학 결합",
-    path:  "polarity/",
-    icon:  "dipole",
+    cat: "화학 결합",
+    path: "polarity/",
+    icon: "dipole",
     ready: false,
-    desc:  "두 원자의 전기음성도 차이에 따라 전자구름이 치우치는 정도를 조절해 봅니다.",
-    tags:  ["전기음성도","쌍극자 모멘트","극성/무극성"]
+    desc: "두 원자의 전기음성도 차이에 따라 전자구름이 치우치는 정도를 조절해 봅니다.",
+    tags: ["전기음성도","쌍극자 모멘트","극성/무극성"]
   },
   {
-    id:    "solubility",
+    id: "solubility",
     title: "용해도 곡선과 재결정",
-    cat:   "물질의 상태",
-    path:  "solubility/",
-    icon:  "crystal",
+    cat: "물질의 상태",
+    path: "solubility/",
+    icon: "crystal",
     ready: false,
-    desc:  "온도를 낮출 때 석출되는 양을 용해도 곡선 위에서 계산하고 확인합니다.",
-    tags:  ["용해도","포화 용액","재결정"]
+    desc: "온도를 낮출 때 석출되는 양을 용해도 곡선 위에서 계산하고 확인합니다.",
+    tags: ["용해도","포화 용액","재결정"]
   }
 ];
 
@@ -128,13 +159,33 @@ const ICONS = {
           <path d="M20 52h26M40 47l6 5-6 5" fill="none" stroke="currentColor"
           stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`,
   universe:`<circle cx="32" cy="32" r="6"/><circle cx="32" cy="32" r="13" fill="none"
-             stroke="currentColor" stroke-width="2.5" opacity=".55"/>
-             <circle cx="32" cy="32" r="22" fill="none" stroke="currentColor"
-             stroke-width="2.5" opacity=".3"/>
-             <circle cx="32" cy="10" r="3"/><circle cx="54" cy="32" r="2.5"/>
-             <circle cx="32" cy="54" r="3"/><circle cx="10" cy="32" r="2.5"/>
-             <circle cx="47" cy="17" r="2"/><circle cx="17" cy="47" r="2"/>`,
+            stroke="currentColor" stroke-width="2.5" opacity=".55"/>
+            <circle cx="32" cy="32" r="22" fill="none" stroke="currentColor"
+            stroke-width="2.5" opacity=".3"/>
+            <circle cx="32" cy="10" r="3"/><circle cx="54" cy="32" r="2.5"/>
+            <circle cx="32" cy="54" r="3"/><circle cx="10" cy="32" r="2.5"/>
+            <circle cx="47" cy="17" r="2"/><circle cx="17" cy="47" r="2"/>`,
   crystal:`<path d="M32 6l22 14v24L32 58 10 44V20z" fill="none" stroke="currentColor"
            stroke-width="4" stroke-linejoin="round"/><path d="M32 6v52M10 20l44 24M54 20L10 44"
-           stroke="currentColor" stroke-width="2.5" opacity=".45"/>`
+           stroke="currentColor" stroke-width="2.5" opacity=".45"/>`,
+
+  /* ↓ 물질과 에너지 교과용으로 추가 (2026-07-30) */
+  vapor:`<path d="M20 28h24v20a10 10 0 0 1-10 10h-4a10 10 0 0 1-10-10z" fill="none"
+         stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+         <path d="M17 28h30" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+         <path d="M22 44h20" stroke="currentColor" stroke-width="3" opacity=".5"/>
+         <circle cx="26" cy="17" r="3"/><circle cx="37" cy="11" r="2.6"/>
+         <circle cx="33" cy="21" r="2.2"/><circle cx="44" cy="18" r="2.4"/>`,
+  osmosis:`<rect x="6" y="14" width="52" height="38" rx="4" fill="none"
+           stroke="currentColor" stroke-width="4"/>
+           <path d="M32 14v38" stroke="currentColor" stroke-width="3" stroke-dasharray="3 3"/>
+           <path d="M18 33h20M34 28l6 5-6 5" fill="none" stroke="currentColor"
+           stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+           <circle cx="47" cy="23" r="3.6"/><circle cx="50" cy="43" r="3.6"/>`,
+  entropy:`<rect x="6" y="16" width="52" height="34" rx="4" fill="none"
+           stroke="currentColor" stroke-width="4"/>
+           <path d="M32 16v34" stroke="currentColor" stroke-width="3" stroke-dasharray="4 4"/>
+           <circle cx="16" cy="28" r="3.4"/><circle cx="24" cy="40" r="3.4"/>
+           <circle cx="42" cy="26" r="3.4"/><circle cx="50" cy="38" r="3.4"/>
+           <circle cx="45" cy="43" r="3.4"/>`
 };
