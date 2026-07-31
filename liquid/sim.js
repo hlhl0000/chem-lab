@@ -124,7 +124,7 @@ function timeToBoilDry(st, liq) {
 const $ = id => document.getElementById(id);
 const CSSV = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const C = {
-  blue: CSSV("--d-blue"), amber: CSSV("--d-amber"), ink: CSSV("--t1"),
+  blue: CSSV("--d-blue"), red: CSSV("--d-red"), ink: CSSV("--t1"),
   gray: CSSV("--d-gray"), t3: CSSV("--t3"), stageLight: CSSV("--stage-light")
 };
 const GRID = "rgba(40,45,52,0.055)";
@@ -408,6 +408,91 @@ function shade(hex, f) {
   return `rgb(${r},${g},${b})`;
 }
 
+/* ── 온도계 (§3-B) — 비커 무대 오른쪽 별도 2D 캔버스.
+   WebGL 셰이더 안이 아니라 여기서 그린다(§5 금지10) — 폴백 시에도 계속 그려진다.
+   데이터 색 정확히 3색: --d-blue(선택된 액체 마커) · --d-red(액주) · --t1(눈금·비선택 마커). */
+const tcv = $("thermo"), tctx = tcv.getContext("2d");
+/* 이름 표기 맵 — F-1이 허용한 유일한 예외(LIQ.LIST 순서 고정). 온도계·60 ℃ 줄이 함께 쓴다.
+   mid = 중간명(온도계 풀 폭 · vp60line), ab = 1글자 약칭(온도계 좁은 폭) */
+const DISPLAY = {
+  ether: { mid: "에터", ab: "에" }, ethanol: { mid: "에탄올", ab: "탄" },
+  water: { mid: "물", ab: "물" }, acetic: { mid: "아세트산", ab: "산" }
+};
+function drawThermo() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = tcv.width / dpr, H = tcv.height / dpr;
+  if (W < 40 || H < 60) return;   // 매뉴얼 §5 — 숨은/작은 캔버스 방어(arc 반지름 음수 예외 회피)
+  tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  tctx.clearRect(0, 0, W, H);
+  tctx.fillStyle = C.stageLight; tctx.fillRect(0, 0, W, H);
+
+  const TMIN = -10, TMAX = 140;   // 확정 22(검산 완료) — 손대지 않는다
+  const pad = 8;                  // 상하좌우 8px 여백(P4-A2)
+  const bulbR = 9;
+  const y0 = H - pad - bulbR;     // TMIN 위치(구근 중심)
+  const y1 = pad;                 // TMAX 위치
+  const Y = t => y0 - (t - TMIN) / (TMAX - TMIN) * (y0 - y1);
+
+  tctx.font = "13px sans-serif";
+  const tickW = Math.max(tctx.measureText(String(TMIN)).width, tctx.measureText(String(TMAX)).width);
+  const tubeW = 8;
+  const tubeX = pad + tickW + 4 + tubeW / 2;    // 눈금 숫자 | 간격 4 | 유리관(중심)
+  const afterTubeX = tubeX + tubeW / 2 + 4;     // 유리관 | 간격 4 | 마커 레이블
+  const labelMaxW = Math.max(10, W - pad - afterTubeX);
+
+  // 유리관 + 구근
+  tctx.strokeStyle = C.ink; tctx.lineWidth = 1;
+  tctx.strokeRect(tubeX - tubeW / 2, y1, tubeW, y0 - y1);
+  tctx.beginPath(); tctx.arc(tubeX, y0, bulbR, 0, 6.2832); tctx.stroke();
+
+  // 액주 — 구근에서 현재 온도까지 --d-red로 채움. 범위 밖은 양끝에서 자른다
+  const tClamped = Math.max(TMIN, Math.min(TMAX, st.t));
+  const colY = Y(tClamped);
+  tctx.fillStyle = C.red;
+  tctx.beginPath(); tctx.arc(tubeX, y0, bulbR - 1, 0, 6.2832); tctx.fill();
+  tctx.fillRect(tubeX - tubeW / 2 + 1, colY, tubeW - 2, y0 - colY + bulbR);
+
+  // 눈금선 10 ℃ 간격 + 숫자 20 ℃ 간격(눈금 숫자는 유리관 왼쪽)
+  tctx.textAlign = "right"; tctx.textBaseline = "middle";
+  for (let t = Math.ceil(TMIN / 10) * 10; t <= TMAX; t += 10) {
+    const y = Y(t);
+    tctx.strokeStyle = C.ink; tctx.globalAlpha = 0.55; tctx.lineWidth = 1;
+    tctx.beginPath(); tctx.moveTo(tubeX - tubeW / 2 - 4, y); tctx.lineTo(tubeX - tubeW / 2, y); tctx.stroke();
+    tctx.globalAlpha = 1;
+    if (t % 20 === 0) {
+      tctx.fillStyle = C.ink; tctx.font = "13px sans-serif";
+      tctx.fillText(String(t), tubeX - tubeW / 2 - 6, y);
+    }
+  }
+
+  // 네 액체의 끓는점 마커(유리관 오른쪽) — 선택된 액체는 --d-blue+▶+굵은 선, 나머지는 --t1+가는 선
+  // 표기(중간명/약칭)는 레이블별이 아니라 캔버스 단위로 한 번만 판정한다 — ▶ 접두어를 포함한 최장 문자열로 잰다(§3-B, review A-1)
+  // ★ 가장 불리한 조건(선택 상태 = 굵은 글꼴)으로 잰다 — 실기기 한글 볼드는 보통 굵기보다 넓다(review B-6)
+  tctx.font = "700 13px sans-serif";
+  // 넓은 폭에서는 "▶ 이름 끓는점" — 사용자 확정 U9. 좁은 폭에서는 약칭만(숫자는 어떤 방식으로도 안 들어간다)
+  const wideLabel = l => "▶ " + DISPLAY[l.id].mid + " " + boilingPoint(l, st.pext).toFixed(1);
+  const narrow = LIQ.LIST.some(l => tctx.measureText(wideLabel(l)).width > labelMaxW);
+  $("thermolegend").style.display = narrow ? "block" : "none";
+
+  tctx.textAlign = "left"; tctx.textBaseline = "middle";
+  LIQ.LIST.forEach(l => {
+    const bp = boilingPoint(l, st.pext);
+    if (!(bp >= TMIN && bp <= TMAX)) return;
+    const y = Y(bp);
+    const sel = l.id === liq.id;
+    tctx.strokeStyle = sel ? C.blue : C.ink;
+    tctx.lineWidth = sel ? 2.4 : 1;
+    tctx.beginPath(); tctx.moveTo(tubeX - tubeW / 2 - 3, y); tctx.lineTo(tubeX + tubeW / 2 + 3, y); tctx.stroke();
+
+    tctx.font = sel ? "700 13px sans-serif" : "13px sans-serif";
+    const text = narrow ? ((sel ? "▶" : "") + DISPLAY[l.id].ab)
+                        : ((sel ? "▶ " : "") + DISPLAY[l.id].mid + " " + boilingPoint(l, st.pext).toFixed(1));
+    tctx.fillStyle = sel ? C.blue : C.ink;
+    tctx.fillText(text, afterTubeX, y);
+  });
+  tctx.textAlign = "left"; tctx.textBaseline = "alphabetic";
+}
+
 /* ── 그래프 ── */
 const ccv = $("chart"), cctx = ccv.getContext("2d");
 let chartMode = "heat";     // heat = 가열 곡선 / vp = 증기 압력 곡선
@@ -427,7 +512,7 @@ function drawChart() {
     cctx.textAlign = "left";
   };
   const grid = (x0, x1, y0, y1, fx, fy, X, Y) => {
-    cctx.font = "10.5px sans-serif";
+    cctx.font = "11px sans-serif";
     for (let i = 0; i <= 4; i++) {
       const xv = x0 + (x1 - x0) * i / 4, yv = y0 + (y1 - y0) * i / 4;
       if (i > 0) {
@@ -451,10 +536,10 @@ function drawChart() {
     // 끓는점 수평선
     const Tb = boilingPoint(liq, st.pext);
     if (Tb < ymax) {
-      cctx.strokeStyle = C.amber; cctx.setLineDash([6, 4]); cctx.lineWidth = 2;
+      cctx.strokeStyle = C.red; cctx.setLineDash([6, 4]); cctx.lineWidth = 2;
       cctx.beginPath(); cctx.moveTo(pad.l, Y(Tb)); cctx.lineTo(W - pad.r, Y(Tb)); cctx.stroke();
       cctx.setLineDash([]);
-      cctx.fillStyle = C.amber; cctx.font = "600 10.5px sans-serif";
+      cctx.fillStyle = C.red; cctx.font = "600 10.5px sans-serif";
       cctx.fillText(`끓는점 ${Tb.toFixed(1)} ℃ (외부 ${st.pext.toFixed(2)} atm)`, pad.l + 6, Y(Tb) - 5);
     }
     if (trace.length > 1) {
@@ -478,16 +563,34 @@ function drawChart() {
       cctx.fillText("가열 출력을 올리고 『실험 시작』을 누르면 곡선이 그려집니다", pad.l + 8, pad.t + 16);
     }
   } else {
-    const x0 = -20, x1 = 140, ymax = 1400;
+    /* v2.2 3-F — 세로축 1400→1900(확정 23: 60 ℃ 에터 1721 mmHg가 눈금 안에 들어와야 한다).
+       ⓐ 60 ℃ 세로선(양방향 발문 전반부) + ⓑ 760 mmHg 고정 수평선(후반부)을 한 화면에 동시 표시한다. */
+    const x0 = -20, x1 = 140, ymax = 1900;
     const X = v => pad.l + (v - x0) / (x1 - x0) * PL, Y = v => (H - pad.b) - v / ymax * PH;
     frame("온도 (℃)", "증기 압력 (mmHg)");
     grid(x0, x1, 0, ymax, v => v.toFixed(0), v => v.toFixed(0), X, Y);
-    // 외부 압력 수평선
+
+    // 외부 압력 수평선(슬라이더로 조작한 현재 외부 압력) — 760과 8 mmHg 이내로 겹치면 생략(A3·B1 보호)
     const pe = st.pext * 760;
-    cctx.strokeStyle = C.ink; cctx.lineWidth = 2;
-    cctx.beginPath(); cctx.moveTo(pad.l, Y(pe)); cctx.lineTo(W - pad.r, Y(pe)); cctx.stroke();
-    cctx.fillStyle = C.ink; cctx.font = "600 10.5px sans-serif";
-    cctx.fillText(`외부 압력 ${pe.toFixed(0)} mmHg`, pad.l + 6, Y(pe) - 5);
+    const peNearRef = Math.abs(pe - 760) < 8;
+    if (!peNearRef) {
+      cctx.strokeStyle = C.ink; cctx.lineWidth = 2;
+      cctx.beginPath(); cctx.moveTo(pad.l, Y(pe)); cctx.lineTo(W - pad.r, Y(pe)); cctx.stroke();
+      cctx.fillStyle = C.ink; cctx.font = "600 11px sans-serif";
+      cctx.fillText(`외부 압력 ${pe.toFixed(0)} mmHg`, pad.l + 6, Y(pe) - 5);
+    }
+
+    // ⓑ 760 mmHg 고정 수평선 — "각자의 기준 끓는점에서는 모두 760 mmHg로 같다"
+    cctx.strokeStyle = C.ink; cctx.lineWidth = 1.6;
+    cctx.beginPath(); cctx.moveTo(pad.l, Y(760)); cctx.lineTo(W - pad.r, Y(760)); cctx.stroke();
+    cctx.fillStyle = C.ink; cctx.font = "600 11px sans-serif";
+    cctx.fillText("760 mmHg = 1 atm", pad.l + 6, Y(760) - 5);
+
+    // ⓐ 60 ℃ 세로 점선 — "같은 온도에서는 서로 다르다"
+    cctx.strokeStyle = C.ink; cctx.setLineDash([4, 4]); cctx.lineWidth = 1.6;
+    cctx.beginPath(); cctx.moveTo(X(60), pad.t); cctx.lineTo(X(60), H - pad.b); cctx.stroke();
+    cctx.setLineDash([]);
+
     // 네 액체의 곡선 — 색 2개 + 파선/실선 + 이름 직접 붙이기 (매뉴얼 §9 두 번째 채널)
     LIQ.LIST.forEach((l, i) => {
       const sel = l.id === liq.id;
@@ -503,22 +606,35 @@ function drawChart() {
         started ? cctx.lineTo(px, py) : cctx.moveTo(px, py); started = true;
       }
       cctx.stroke(); cctx.setLineDash([]);
-      // 이름을 곡선 옆에 직접
+      // 이름을 곡선 옆에 직접 (§6 H군: 12px 이상)
       const tb = boilingPoint(l, 1);
       cctx.fillStyle = sel ? C.blue : C.t3;
-      cctx.font = sel ? "700 10.5px sans-serif" : "10px sans-serif";
+      cctx.font = sel ? "700 12px sans-serif" : "12px sans-serif";
       const ly = Y(760);
       cctx.save(); cctx.translate(X(tb), ly - 8); cctx.rotate(-0.5);
       cctx.fillText(l.name, 0, 0); cctx.restore();
-      // 교점 표시
+
+      // ⓑ 교점 — 각자의 기준 끓는점(pext=1 atm)에서 760 mmHg와 만나는 점. 전부 760이므로 숫자는 쓰지 않는다
+      cctx.fillStyle = sel ? C.blue : "rgba(95,107,122,0.6)";
+      cctx.beginPath(); cctx.arc(X(tb), Y(760), sel ? 5 : 3, 0, 6.2832); cctx.fill();
+
+      // ⓐ 교점 — 60 ℃에서 곡선과 만나는 점. 값 숫자는 캔버스에 그리지 않는다(그래프 카드 아래 HTML 줄로 이전)
+      const p60 = vaporP(l, 60);
+      if (p60 <= ymax * 1.2) {
+        cctx.fillStyle = sel ? C.blue : "rgba(95,107,122,0.6)";
+        cctx.beginPath(); cctx.arc(X(60), Y(Math.min(p60, ymax)), sel ? 5 : 3, 0, 6.2832); cctx.fill();
+      }
+
+      // 현재 외부 압력선과의 교점(기존 기능 — 슬라이더로 조작한 압력에서의 끓는점)
       const bx = boilingPoint(l, st.pext);
       if (bx > x0 && bx < x1) {
         cctx.fillStyle = sel ? C.blue : "rgba(95,107,122,0.55)";
         cctx.beginPath(); cctx.arc(X(bx), Y(pe), sel ? 5 : 3, 0, 6.2832); cctx.fill();
       }
     });
-    cctx.fillStyle = C.t3; cctx.font = "10.5px sans-serif";
-    cctx.fillText("● 곡선과 외부 압력선이 만나는 온도 = 그 액체의 끓는점", pad.l + 6, pad.t + 12);
+    cctx.fillStyle = C.t3; cctx.font = "11px sans-serif";
+    cctx.fillText("● 같은 온도(60 ℃)에서는 서로 다르다.", pad.l + 6, pad.t + 12);
+    cctx.fillText("● 각자의 기준 끓는점에서는 모두 760 mmHg로 같다.", pad.l + 6, pad.t + 26);
   }
 }
 
@@ -537,18 +653,20 @@ function readouts() {
   else if (st.boiling) { $("rState").textContent = "끓는 중"; ro.classList.add("is-ok"); }
   else if (st.heat > 0) { $("rState").textContent = "가열 중"; }
   else { $("rState").textContent = "정지"; }
-  $("stateNote").innerHTML = st.boiling
+  $("stateNote").innerHTML = st.volume <= 0
+    ? "<b>⚠ 여기서부터는 모형이 실제와 다릅니다.</b> 액체가 다 증발하자 화면이 온도를 실온으로 되돌렸습니다. 실제 실험에서는 불을 끄지 않는 한 빈 비커가 계속 뜨거워집니다."
+    : st.boiling
     ? "증기 압력이 외부 압력과 <b>같아졌습니다</b> → 액체 <b>속에서도</b> 기화가 일어납니다. 이것이 끓음입니다."
     : `증기 압력 ${pv.toFixed(0)} mmHg &lt; 외부 압력 ${(st.pext * 760).toFixed(0)} mmHg → 아직 표면에서만 증발합니다.`;
 }
 
 /* ── 기록 ── */
-const HEADERS = ["좌석번호", "액체", "외부 압력(atm)", "액체의 양(mL)", "가열 출력(W)",
+const HEADERS = ["학번", "액체", "외부 압력(atm)", "액체의 양(mL)", "가열 출력(W)",
   "측정한 끓는점(℃)", "이론 끓는점(℃)", "끓기까지 걸린 시간(초)", "그때의 증기 압력(mmHg)"];
 function record() {
   const Tb = boilingPoint(liq, st.pext);
   if (!st.boiling) {
-    $("recnote").innerHTML = '<span style="color:var(--d-amber);font-weight:700">아직 끓지 않았습니다. 끓기 시작한 뒤에 기록하세요.</span>';
+    $("recnote").innerHTML = '<span style="color:var(--d-red);font-weight:700">아직 끓지 않았습니다. 끓기 시작한 뒤에 기록하세요.</span>';
     return;
   }
   rows.push({
@@ -563,22 +681,22 @@ function renderTable() {
   $("recCount").textContent = rows.length ? `— ${rows.length}회` : "";
   const w = $("tableWrap");
   if (!rows.length) { w.innerHTML = '<div class="empty">아직 기록이 없습니다.</div>'; return; }
-  w.innerHTML = "<table><thead><tr><th>#</th><th>액체</th><th>외부압(atm)</th><th>양(mL)</th>" +
-    "<th>출력(W)</th><th>측정 끓는점(℃)</th><th>이론(℃)</th><th>걸린 시간(초)</th></tr></thead><tbody>" +
+  /* 화면 기록표는 5열(§1-2 추정10 · 가독성 목적). CSV는 HEADERS 9열 그대로 유지한다(F-1과 별개). */
+  w.innerHTML = "<table><thead><tr><th>#</th><th>액체</th><th>외부압(atm)</th>" +
+    "<th>측정 끓는점(℃)</th><th>이론(℃)</th></tr></thead><tbody>" +
     rows.map((r, i) => `<tr><td>${i + 1}</td><td>${r.liq}</td><td>${r.pext.toFixed(2)}</td>` +
-      `<td>${r.vol0}</td><td>${r.heat}</td><td>${r.tb.toFixed(1)}</td><td>${r.tbTheory.toFixed(1)}</td>` +
-      `<td>${r.time.toFixed(0)}</td></tr>`).join("") + "</tbody></table>";
+      `<td>${r.tb.toFixed(1)}</td><td>${r.tbTheory.toFixed(1)}</td></tr>`).join("") + "</tbody></table>";
 }
 $("rec").onclick = record;
 $("clr").onclick = () => { rows = []; $("recnote").textContent = ""; renderTable(); };
 $("csv").onclick = () => {
-  if (!rows.length) { $("recnote").innerHTML = '<span style="color:var(--d-amber);font-weight:700">먼저 기록하세요.</span>'; return; }
+  if (!rows.length) { $("recnote").innerHTML = '<span style="color:var(--d-red);font-weight:700">먼저 기록하세요.</span>'; return; }
   const body = rows.map(r => [r.seat, r.liq, r.pext.toFixed(2), r.vol0, r.heat,
     r.tb.toFixed(2), r.tbTheory.toFixed(2), r.time.toFixed(1), r.pv.toFixed(1)]);
   const csv = "﻿" + [HEADERS, ...body].map(a => a.join(",")).join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-  a.download = (($("seat").value.trim() || "끓음실험").replace(/[\\/:*?"<>|]/g, "")) + "_끓음실험.csv";
+  a.download = (($("seat").value.trim() || "무기명").replace(/[\\/:*?"<>|]/g, "")) + "_액체끓음.csv";
   a.click(); URL.revokeObjectURL(a.href);
 };
 
@@ -594,7 +712,7 @@ function buildLiquidPicker() {
   LIQ.LIST.forEach(l => {
     const b = document.createElement("button");
     b.className = "lq"; b.setAttribute("aria-pressed", String(l.id === liq.id));
-    b.innerHTML = `<b>${l.name}</b><span>${l.formula} · ${l.bpLit} ℃</span>`;
+    b.innerHTML = `<b>${l.name}</b><span>${l.formula} · 문헌 끓는점 ${l.bpLit} ℃</span>`;
     b.onclick = () => { liq = l; buildLiquidPicker(); resetRun(); info(); };
     host.appendChild(b);
   });
@@ -603,23 +721,37 @@ function info() {
   $("liqInfo").innerHTML =
     `<b>${liq.name}</b> ${liq.formula} · 분자량 ${liq.M} · 밀도 ${liq.rho} g/mL<br>` +
     `분자 사이의 힘: <b>${liq.force}</b><br>` +
-    `비열 ${liq.c} J/(g·K) · 기화 엔탈피 ${(liq.dHvap * liq.M / 1000).toFixed(1)} kJ/mol · 기준 끓는점 ${liq.bpLit} ℃`;
+    `비열 ${liq.c} J/(g·K) · 기화 엔탈피 ${(liq.dHvap * liq.M / 1000).toFixed(1)} kJ/mol · 문헌 끓는점 ${liq.bpLit} ℃`;
 }
-$("sPext").oninput = e => { st.pext = +e.target.value; $("vPext").textContent = st.pext.toFixed(2); readouts(); drawChart(); };
-$("sVol").oninput = e => { st.volume = +e.target.value; startVol = st.volume; $("vVol").textContent = st.volume; readouts(); };
+$("sPext").oninput = e => { st.pext = +e.target.value; $("vPext").textContent = st.pext.toFixed(2); readouts(); drawChart(); drawThermo(); };
+/* ★★ 반박 장치의 인과 근접 보강(3-G-5-③) — #sVol을 조작한 순간 그 값을 무대 바로 아래에 4초간 찍는다 */
+let volNoteTimer = null;
+$("sVol").oninput = e => {
+  const before = st.volume;
+  const T = st.t, pvBefore = vaporP(liq, T), tbBefore = boilingPoint(liq, st.pext);
+  st.volume = +e.target.value; startVol = st.volume; $("vVol").textContent = st.volume; readouts();
+  const pvAfter = vaporP(liq, st.t), tbAfter = boilingPoint(liq, st.pext);
+  const note = $("volNote");
+  note.textContent = `액체의 양 ${before} → ${st.volume} mL · 같은 온도(${T.toFixed(1)} ℃)에서 증기 압력 ${pvBefore.toFixed(0)} → ${pvAfter.toFixed(0)} mmHg · 끓는점 ${tbBefore.toFixed(1)} → ${tbAfter.toFixed(1)} ℃`;
+  note.style.display = "";
+  if (volNoteTimer) clearTimeout(volNoteTimer);
+  volNoteTimer = setTimeout(() => { note.style.display = "none"; }, 4000);
+};
 $("sHeat").oninput = e => { st.heat = +e.target.value; $("vHeat").textContent = st.heat; };
 $("run").onclick = () => { running = !running; $("run").textContent = running ? "일시정지" : "이어서 실험"; };
-$("reset").onclick = () => { resetRun(); readouts(); drawChart(); };
+$("reset").onclick = () => { resetRun(); readouts(); drawChart(); drawThermo(); };
 $("zoomBtn").onclick = () => {
   zoom = !zoom;
   $("zoomWrap").style.display = zoom ? "" : "none";
   $("glWrap").style.display = zoom ? "none" : "";
+  $("zoomNote").style.display = zoom ? "" : "none";
   $("zoomBtn").textContent = zoom ? "← 비커로 돌아가기" : "분자 크기로 확대해 보기";
   resize();
 };
 document.querySelectorAll(".cmode").forEach(b => b.onclick = () => {
   chartMode = b.dataset.mode;
   document.querySelectorAll(".cmode").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  $("vp60line").style.display = chartMode === "vp" ? "" : "none";
   drawChart();
 });
 
@@ -635,8 +767,9 @@ function resize() {
   const h = Math.max(240, Math.min(380, w * 0.80));
   gcv.style.height = h + "px";
   fit2d(zcv, h);
+  fit2d(tcv, h);   // 온도계는 비커 캔버스와 높이를 공유한다(3-B)
   fit2d(ccv, Math.max(220, Math.min(300, (ccv.clientWidth || 300) * 0.42)));
-  drawGL(); drawZoom(); drawChart();
+  drawGL(); drawZoom(); drawChart(); drawThermo();
 }
 
 /* ── 루프 ── */
@@ -657,7 +790,7 @@ function loop(ts) {
     }
   }
   if (zoom) drawZoom(); else drawGL();
-  drawChart(); readouts();
+  drawChart(); drawThermo(); readouts();
   $("vClock").textContent = clock.toFixed(0);
   rafId = requestAnimationFrame(loop);
 }
@@ -665,9 +798,16 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) { if (rafId) cancelAnimationFrame(rafId); rafId = null; lastT = 0; }
   else if (!rafId) rafId = requestAnimationFrame(loop);
 });
-if (window.ResizeObserver) new ResizeObserver(() => resize()).observe($("glWrap"));
+/* #glWrap은 확대 모드에서 display:none이 되어 관찰이 무의미해지므로 .stagewrap 전체를 관찰한다(3-E) */
+if (window.ResizeObserver) new ResizeObserver(() => resize()).observe($("stageWrap"));
 window.addEventListener("resize", resize);
 if (matchMedia("(prefers-reduced-motion:reduce)").matches) { running = false; $("run").textContent = "이어서 실험"; }
+
+/* 60 ℃ 값 HTML 줄(§3-F ⓐ) — 상태와 무관한 고정값이므로 1회만 계산한다 */
+(function initVp60Line() {
+  $("vp60line").textContent = "60 ℃에서 — " +
+    LIQ.LIST.map(l => `${DISPLAY[l.id].mid} ${vaporP(l, 60).toFixed(0)}`).join(" · ") + " mmHg";
+})();
 
 initGL();
 buildLiquidPicker(); info(); resetRun(); readouts();
