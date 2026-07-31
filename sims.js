@@ -13,6 +13,46 @@
 
 const SIMS = [
   {
+    id: "mineral",
+    title: "고체 — 겉모습에서 입자 배열까지",
+    cat: "물질의 상태",
+    path: "mineral/",
+    icon: "mineral",
+    ready: true,
+    desc: "석영·암염·황철석·구리·얼음·흑요석을 손에 든 크기에서 입자 크기까지 연속으로 확대합니다. 불투명한 황철석도 결정이고 유리질 흑요석은 비결정입니다 — 결정 여부는 겉모습이 아니라 배열이 정합니다. 입자를 누르면 결합 종류와 전기 전도성이 나옵니다.",
+    tags: ["결정성","비결정성","이온 결정","금속 결정","분자 결정","공유 결정","전기 전도성","유리"]
+  },
+  {
+    id: "liquid",
+    title: "액체 — 끓음 실험",
+    cat: "물질의 상태",
+    path: "liquid/",
+    icon: "liquid",
+    ready: true,
+    desc: "다이에틸에터·에탄올·물·아세트산 네 액체를 실제로 끓여 봅니다. 비커의 굴절과 기포를 3D로 그리고, 분자 크기로 확대하면 떠나는 분자가 원자로 쪼개지지 않는 것이 보입니다. 가열 곡선의 평평한 구간과 증기 압력 곡선을 함께 다룹니다.",
+    tags: ["끓는점","증기 압력","Antoine 식","가열 곡선","기화 엔탈피","분자 간 힘","외부 압력"]
+  },
+  {
+    id: "press",
+    title: "유압 프레스 도전 — 이상 기체 방정식으로 힘 만들기",
+    cat: "물질의 상태",
+    path: "press/",
+    icon: "press",
+    ready: true,
+    desc: "목표 압력(또는 힘)이 주어지면 P = nRT/V 를 풀어 값을 계산해 넣고 딱 한 번 제출합니다. 정확도로 점수가 매겨집니다. 파스칼 원리로 작은 힘이 큰 힘이 되는 까닭까지 4단계로 도전합니다.",
+    tags: ["이상 기체 방정식","파스칼 원리","유압","압력과 힘","도전 게임","계산"]
+  },
+  {
+    id: "gaslaws",
+    title: "기체 법칙 — 보일·샤를·아보가드로·이상 기체 방정식",
+    cat: "물질의 상태",
+    path: "gaslaws/",
+    icon: "gaslaws",
+    ready: true,
+    desc: "세 법칙을 같은 상자·같은 입자로 다룹니다. 달라지는 것은 무엇을 잠그고 무엇을 여는가뿐입니다. 피스톤이 스스로 움직여 안팎 압력이 같아지는 자리에서 멈추고, 입자 지름과 입자 수는 어떤 조작에도 변하지 않습니다.",
+    tags: ["보일 법칙","샤를 법칙","아보가드로 법칙","이상 기체 방정식","절대 온도","변인 통제"]
+  },
+  {
     id: "gas",
     title: "기체 분자 운동",
     cat: "물질의 상태",
@@ -136,6 +176,29 @@ const SIMS = [
 
 /* 카드에 쓰이는 작은 아이콘들 (SVG) */
 const ICONS = {
+  mineral:`<path d="M32 5l24 15v24L32 59 8 44V20z" fill="none" stroke="currentColor"
+           stroke-width="4" stroke-linejoin="round"/>
+           <path d="M32 5v54M8 20l48 24M56 20L8 44" stroke="currentColor" stroke-width="2" opacity=".38"/>
+           <circle cx="32" cy="20" r="3.2"/><circle cx="20" cy="32" r="3.2"/>
+           <circle cx="44" cy="32" r="3.2"/><circle cx="32" cy="44" r="3.2"/>`,
+  liquid:`<path d="M18 8v14L10 46a5 5 0 0 0 4.6 7h34.8A5 5 0 0 0 54 46L46 22V8" fill="none"
+          stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M14 8h36" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+          <path d="M13 38h38" stroke="currentColor" stroke-width="3" opacity=".55"/>
+          <circle cx="24" cy="45" r="3"/><circle cx="34" cy="48" r="2.4"/><circle cx="42" cy="43" r="2.8"/>
+          <circle cx="27" cy="15" r="2.4"/><circle cx="38" cy="12" r="2"/>`,
+  press:`<rect x="8" y="10" width="18" height="26" rx="2" fill="none" stroke="currentColor" stroke-width="4"/>
+         <circle cx="14" cy="24" r="2.6"/><circle cx="20" cy="30" r="2.6"/><circle cx="17" cy="18" r="2.6"/>
+         <path d="M26 46h30" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+         <rect x="34" y="22" width="16" height="8" rx="2"/>
+         <path d="M42 30v10" stroke="currentColor" stroke-width="4"/>
+         <path d="M8 46h12" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>`,
+  gaslaws:`<rect x="6" y="16" width="34" height="34" rx="3" fill="none" stroke="currentColor" stroke-width="4"/>
+           <rect x="40" y="24" width="7" height="18" rx="2"/>
+           <path d="M58 33H49M53 29l-4 4 4 4" fill="none" stroke="currentColor" stroke-width="3.5"
+           stroke-linecap="round" stroke-linejoin="round"/>
+           <circle cx="16" cy="27" r="3.4"/><circle cx="28" cy="38" r="3.4"/><circle cx="18" cy="42" r="3.4"/>
+           <circle cx="31" cy="24" r="3.4"/>`,
   gas:`<circle cx="18" cy="20" r="5"/><circle cx="40" cy="14" r="4"/><circle cx="46" cy="38" r="6"/>
        <circle cx="24" cy="44" r="4"/><circle cx="34" cy="29" r="3"/>`,
   flask:`<path d="M26 8v18L12 50a4 4 0 0 0 3.5 6h33A4 4 0 0 0 52 50L38 26V8" fill="none"

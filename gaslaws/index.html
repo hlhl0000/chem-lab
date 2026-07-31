@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>기체 법칙 — 보일·샤를·아보가드로·이상 기체 방정식 | 화학 탐구실</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 이 페이지에만 필요한 스타일.
+     색은 shared/style.css 의 토큰만 쓴다. 요소 선택자(button{}, input{}) 는 쓰지 않는다
+     — 공통 CSS 의 터치 규칙(44px·16px)을 덮어쓰기 때문이다. (매뉴얼 §12①) */
+  .page{padding:18px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0}
+
+  .namebar{margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:9px 12px; box-shadow:var(--shadow)}
+  .namebar label{font-size:13px; color:var(--t2)}
+  .namebar .hint{color:var(--t3); font-size:12px}
+  /* 16px 미만이면 iOS 가 탭할 때 화면을 확대해 버린다 (매뉴얼 §7) */
+  .namebar .seat{border:1px solid var(--line); border-radius:7px; padding:7px 9px;
+    font-size:16px; font-family:inherit; width:190px; color:var(--t1)}
+
+  /* ── 탭 ── */
+  .tabs{display:flex; gap:6px; margin-top:14px; flex-wrap:wrap}
+  .tab{font-family:inherit; font-size:13.5px; padding:9px 14px; border-radius:9px 9px 0 0;
+    border:1px solid var(--line); border-bottom-color:transparent; background:#eef1f5;
+    color:var(--t2); cursor:pointer; min-height:44px; font-weight:600}
+  .tab[aria-selected="true"]{background:var(--panel); color:var(--t1);
+    box-shadow:inset 0 3px 0 var(--accent)}
+  .tabdesc{background:var(--panel); border:1px solid var(--line); border-radius:0 10px 10px 10px;
+    padding:11px 13px; font-size:13.5px; color:var(--t2); box-shadow:var(--shadow); margin-bottom:14px}
+  .tabdesc b{color:var(--t1)}
+  .tabdesc .cond{display:inline-block; background:#f1eefe; color:var(--d-violet);
+    border:1px solid #ddd6fe; border-radius:6px; padding:1px 7px; font-size:12.5px;
+    font-weight:700; margin-right:6px}
+
+  /* ── 2단: 왼쪽 무대 / 오른쪽 조절 변인·측정값 ──
+     1024px 미만에서 1단이 되면 순서는 무대 → 조절 변인 → 측정값 이다 (매뉴얼 §3).
+     그래프는 이 격자 바깥, 맨 아래 전체 폭에 둔다. */
+  .cols{display:grid; grid-template-columns:minmax(0,1.42fr) minmax(272px,1fr); gap:14px}
+  @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+
+  .stage canvas{display:block; width:100%}
+
+  .ctl{margin-bottom:13px}
+  .ctl.locked{opacity:.52}
+  .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
+    font-size:13px; margin-bottom:3px; color:var(--t2); gap:8px}
+  .ctl .row .val{font-variant-numeric:tabular-nums; font-weight:600; color:var(--t1); white-space:nowrap}
+  .ctl .lockmark{font-size:11px; color:var(--d-gray); font-weight:700}
+  .checkrow{display:flex; gap:8px; align-items:center; min-height:44px; padding:4px 2px;
+    font-size:13.5px; color:var(--t2); cursor:pointer}
+
+  .ros{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .ros .readout{padding:8px 10px}
+  .ros .readout .value{font-size:19px}
+  .ros .wide{grid-column:1 / -1}
+
+  .btns{display:flex; gap:7px; flex-wrap:wrap; margin-top:11px}
+  .empty{color:var(--t3); font-size:13px; padding:12px 0; text-align:center}
+
+  .eq{font-size:13px; color:var(--t2); background:#f8fafc; border:1px solid var(--line);
+    border-radius:8px; padding:9px 10px; margin-top:9px; line-height:1.65}
+  .eq b{color:var(--t1)}
+  .eq .ok{color:var(--d-green); font-weight:700}
+  .eq .warn{color:var(--d-amber); font-weight:700}
+  .eqrow{display:flex; align-items:center; gap:8px; margin:3px 0}
+  .eqrow .k{width:96px; font-size:12px; color:var(--t3); line-height:1.25}
+  .eqrow .track{flex:1; height:11px; background:rgba(40,45,52,.07); border-radius:6px; overflow:hidden}
+  .eqrow .fill{display:block; height:100%}
+  .eqrow .v{width:58px; text-align:right; font-variant-numeric:tabular-nums;
+    font-weight:600; font-size:12.5px; color:var(--t1)}
+
+  .fixnote{font-size:12px; color:var(--t3); margin-top:2px; line-height:1.6}
+  .tablewrap{max-height:260px; overflow:auto}
+  .axisbar{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px}
+  .axisbar .lb{font-size:12px; color:var(--t3)}
+
+  details.sheet{margin-top:16px; background:var(--panel); border:1px solid var(--line);
+    border-radius:var(--radius); padding:14px; box-shadow:var(--shadow)}
+  details.sheet summary{cursor:pointer; font-weight:700; font-size:14.5px; color:var(--t1)}
+  details.sheet ol{padding-left:20px; font-size:14px; color:var(--t2)}
+  details.sheet li{margin:9px 0}
+  details.sheet .tagq{display:inline-block; font-size:11.5px; font-weight:700; color:#fff;
+    background:var(--d-violet); border-radius:5px; padding:1px 6px; margin-right:5px}
+  .limits{font-size:12.5px; color:var(--t3); margin:12px 0 0; line-height:1.8}
+  .subcard{margin-top:14px}
+</style>
+</head>
+<body>
+
+<div class="wrap page">
+
+<div class="head">
+  <h1>기체 법칙 — 보일 · 샤를 · 아보가드로 · 이상 기체 방정식</h1>
+  <p class="sub">세 법칙은 모두 <b>같은 상자, 같은 입자</b>로 만든다. 달라지는 것은 <b>무엇을 잠그고 무엇을 여는가</b>뿐이다.</p>
+  <div class="namebar">
+    <label for="seat">좌석번호</label>
+    <input type="text" id="seat" class="seat" placeholder="예: 1-3-14">
+    <span class="hint">실명 대신 좌석번호를 쓰세요. 기록한 표는 CSV로 저장해 제출합니다.</span>
+  </div>
+</div>
+
+<div class="tabs" role="tablist">
+  <button class="tab" id="tabA" role="tab" aria-selected="true"  data-tab="A">① 보일 법칙</button>
+  <button class="tab" id="tabB" role="tab" aria-selected="false" data-tab="B">② 샤를 법칙</button>
+  <button class="tab" id="tabC" role="tab" aria-selected="false" data-tab="C">③ 아보가드로 법칙</button>
+  <button class="tab" id="tabD" role="tab" aria-selected="false" data-tab="D">④ 이상 기체 방정식</button>
+</div>
+<div class="tabdesc" id="tabdesc"></div>
+
+<div class="cols">
+  <!-- ───────── 왼쪽: 무대 ───────── -->
+  <div>
+    <div class="card">
+      <h2 id="stageTitle">입자 상자</h2>
+      <div class="stage stage--dark">
+        <canvas id="box" aria-label="기체 입자가 든 상자와 피스톤. 입자 지름과 입자 수는 상자 왼쪽 위에 항상 표시되며, 어떤 조작에도 변하지 않습니다."></canvas>
+      </div>
+      <div class="legend" style="margin-top:7px">
+        <span class="item"><span class="swatch" style="background:#56b4e9"></span>기체 입자</span>
+        <span class="item"><span class="swatch sq" style="background:#cbd5e1"></span>피스톤</span>
+        <span class="item"><span class="swatch sq" style="background:#fb923c"></span>바깥에서 누르는 압력</span>
+      </div>
+      <div class="eq" id="eqBox"></div>
+    </div>
+  </div>
+
+  <!-- ───────── 오른쪽: 조절 변인 → 측정값 → 기록 ───────── -->
+  <div>
+    <div class="card">
+      <h2>조절 변인 <span style="font-weight:400;color:var(--t3)">— 흐린 것은 이 탭에서 잠긴 변인</span></h2>
+
+      <div class="ctl" id="cT">
+        <div class="row"><span>온도 <em>T</em> <span class="lockmark" id="lkT"></span></span>
+          <span class="val"><span id="vT">300</span> K <span style="color:var(--t3);font-weight:400">(<span id="vTc">27</span> ℃)</span></span></div>
+        <input type="range" class="rng-temp" id="sT" min="180" max="600" step="5" value="300" aria-label="온도 (켈빈)">
+      </div>
+
+      <div class="ctl" id="cP">
+        <div class="row"><span>바깥 압력 <em>P</em><sub>외부</sub> <span class="lockmark" id="lkP"></span></span>
+          <span class="val"><span id="vP">100</span> a.u.</span></div>
+        <input type="range" class="rng-vol" id="sP" min="70" max="200" step="2" value="100" aria-label="바깥에서 누르는 압력">
+      </div>
+
+      <div class="ctl" id="cN">
+        <div class="row"><span>입자 수 <em>N</em> <span class="lockmark" id="lkN"></span></span>
+          <span class="val"><span id="vN">35</span> 개</span></div>
+        <input type="range" class="rng-count" id="sN" min="15" max="110" step="1" value="35" aria-label="입자 수">
+      </div>
+
+      <div class="ctl" id="cV">
+        <div class="row"><span>부피 <em>V</em> — 피스톤을 직접 민다 <span class="lockmark" id="lkV"></span></span>
+          <span class="val"><span id="vV">7.50</span> ×10<sup>4</sup></span></div>
+        <input type="range" class="rng-vol" id="sW" min="100" max="440" step="2" value="250" aria-label="상자 부피 (피스톤 위치)">
+      </div>
+
+      <label class="checkrow"><input type="checkbox" id="pause"> 일시정지</label>
+      <div class="fixnote" id="fixnote"></div>
+    </div>
+
+    <div class="card subcard">
+      <h2>측정값</h2>
+      <div class="ros">
+        <div class="readout"><div class="label">압력 P</div>
+          <div><span class="value" id="rP">–</span><span class="unit">a.u.</span></div></div>
+        <div class="readout"><div class="label">부피 V (상자 넓이)</div>
+          <div><span class="value" id="rV">–</span><span class="unit">×10⁴</span></div></div>
+        <div class="readout"><div class="label">온도 T</div>
+          <div><span class="value" id="rT">–</span><span class="unit">K</span></div></div>
+        <div class="readout"><div class="label">입자 수 N — 변하지 않음</div>
+          <div><span class="value" id="rN">–</span><span class="unit">개</span></div></div>
+        <div class="readout wide" id="roZ"><div class="label">PV / NkT — 벽에서 잰 압력으로 직접 계산</div>
+          <div><span class="value" id="rZ">–</span><span class="unit" id="rZnote"></span></div></div>
+      </div>
+      <div class="btns">
+        <button class="primary" id="rec">이 상태 기록하기</button>
+        <button id="csv">CSV로 저장</button>
+        <button id="clr">이 탭 기록 지우기</button>
+      </div>
+      <div class="fixnote" id="recnote"></div>
+    </div>
+
+    <div class="card subcard">
+      <h2>기록한 데이터 <span style="font-weight:400;color:var(--t3)" id="recCount"></span></h2>
+      <div class="tablewrap" id="tableWrap"><div class="empty">아직 기록이 없습니다.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ───────── 전체 폭: 그래프 ───────── -->
+<div class="card subcard">
+  <h2 id="graphTitle">그래프</h2>
+  <div class="axisbar" id="axisbar"></div>
+  <div class="stage stage--light">
+    <canvas id="graph" aria-label="기록한 측정값으로 그린 그래프. 속이 빈 점은 지금 상태, 속이 찬 점은 기록한 값입니다."></canvas>
+  </div>
+  <div class="legend" id="graphLegend" style="margin-top:7px"></div>
+</div>
+
+<details class="sheet" open>
+  <summary>탐구 활동지</summary>
+  <ol>
+    <li><span class="tagq">예측</span><b>화면을 켜기 전에 먼저 쓴다.</b> 온도를 일정하게 유지하면서 부피를 절반으로 만들면
+        (가) 분자 <b>하나의 크기</b> (나) 분자의 <b>개수</b> (다) 분자의 <b>평균 속력</b>은 각각 어떻게 될까?
+        예측을 적은 뒤에 ① 탭을 열어 확인하세요.</li>
+
+    <li><span class="tagq">관찰</span><b>보일 법칙</b> — ① 탭에서 <em>바깥 압력만</em> 5단계로 바꾸며 기록하세요.
+        상자 왼쪽 위의 <b>입자 지름</b>과 <b>입자 수</b>는 조작하는 동안 어떻게 되나요?
+        <em>P·V</em> 값은 어떻게 되나요? 가로축을 <b>1/V</b> 로 바꾸면 그래프가 어떤 모양이 되나요?</li>
+
+    <li><span class="tagq">관계</span><b>피스톤은 왜 멈추는가</b> — 압력을 바꾸면 피스톤이 움직이다가 멈춥니다.
+        멈추는 순간 <em>P</em><sub>안쪽</sub>과 <em>P</em><sub>바깥</sub>은 어떤 관계인가요?
+        무대 아래의 두 압력 막대를 근거로 설명하세요.</li>
+
+    <li><span class="tagq">관계</span><b>샤를 법칙과 절대 온도</b> — ② 탭에서 온도만 5단계 이상 바꾸며 기록하세요.
+        그래프의 <b>파란 실선</b>은 실제로 측정한 구간, <b>주황 점선</b>은 그것을 <u>늘려 그린</u> 구간입니다.
+        늘린 직선이 <em>V</em> = 0 과 만나는 온도는 몇 ℃인가요? 이 온도를 무엇이라 부르나요?</li>
+
+    <li><span class="tagq">설명</span><b>−273 ℃에서 실제로 부피가 0이 될까?</b> 그래프의 회색 띠는
+        실제 질소·산소가 <b>액체가 되는 온도</b>입니다. 실제 기체는 그 아래에서 어떻게 되나요?
+        점선 구간을 "측정한 값"이라고 말하면 왜 안 되나요?</li>
+
+    <li><span class="tagq">관계</span><b>아보가드로 법칙</b> — ③ 탭에서 입자 수만 바꾸며 기록하세요.
+        <em>V</em>/<em>N</em> 값은 어떻게 되나요? 이 결과를 "같은 온도·압력에서 같은 부피에는 …" 형태의
+        한 문장으로 쓰세요.</li>
+
+    <li><span class="tagq">통합</span><b>세 법칙을 하나로</b> — ④ 탭에서 <em>T</em>, <em>N</em>, <em>V</em>를
+        동시에 바꿔 보세요. 세 법칙을 묶으면 <em>V</em> ∝ <em>nT</em>/<em>P</em>, 즉
+        <b><em>PV</em> = <em>nRT</em></b>가 됩니다. 어떻게 조작해도 <em>PV</em>/<em>NkT</em>는 <b>1</b>입니다.
+        <em>T</em>를 2배로 하고 <em>V</em>도 2배로 하면 압력은 어떻게 되나요? 먼저 계산하고 확인하세요.</li>
+
+    <li><span class="tagq">모형</span><b>이 시뮬레이션은 어떤 가정 위에 서 있는가</b> —
+        아래 물음에 답하세요. (로드맵 4차시 「새로운 생각 구성」)
+        <br>ⓐ 온도를 가장 낮게, 부피를 가장 작게 해도 이 모형에서는 <b>절대 일어나지 않는 일</b>이 있습니다.
+        무엇인가요? 왜 일어나지 않을까요? (힌트: 이 모형의 입자 사이에는 무엇이 <u>없나요</u>?)
+        <br>ⓑ 화면의 <em>PV</em>/<em>NkT</em>가 <b>언제나 1</b>인 이유는 무엇인가요?
+        이 값이 1에서 벗어나는 기체를 이 화면에서 만들 수 있나요?
+        <br>ⓒ 그래서 이 시뮬레이션으로 <b>확인할 수 있는 것</b>과 <b>확인할 수 없는 것</b>을 각각 하나씩 쓰세요.</li>
+
+    <li><span class="tagq">한계</span><b>실제 기체는 이상 기체인가</b> —
+        산소·질소는 상온·상압에서는 이 모형처럼 행동하지만 <b>고압·저온</b>에서는 어긋납니다.
+        <br>ⓐ 실제 기체의 <em>PV</em>/<em>nRT</em> 값이 1에서 벗어나는 까닭을, 이 모형이 세운 가정
+        <u>ⓐ 분자 자체의 부피 무시</u>와 <u>ⓑ 분자 사이에 인력·척력 없음</u> 두 가지에 각각 연결해 설명하세요.
+        <br>ⓑ 진단 3번("산소 기체는 이상 기체인가?")을 다시 읽고, 지금은 어떻게 답하겠는지 쓰세요.
+        <br>※ 실제 기체의 <em>PV</em>/<em>nRT</em> 실측표는 <b>선생님이 따로 나눠 줍니다.</b>
+        이 시뮬레이션으로는 볼 수 없습니다 — 이 모형에는 그 편차를 만들 재료가 아예 없기 때문입니다.</li>
+    </ol>
+
+  <p class="limits">
+    <b>이 모형의 가정과 한계 — 반드시 함께 읽을 것</b><br>
+    ① <b>이것은 이상 기체 모형입니다.</b> 일부러 그렇게 만들었습니다. 그래서 보일·샤를·아보가드로
+       세 법칙이 <b>정확히</b> 성립하고, ② 탭의 외삽선은 <b>정확히 −273 ℃</b>에서 <em>V</em> = 0 과 만납니다.<br>
+    ② 이 모형이 세운 가정 네 가지 — ⓐ 분자 자체의 <b>부피를 무시</b>한다 ⓑ 분자 사이에
+       <b>인력·척력이 없다</b> ⓒ 충돌은 <b>완전 탄성 충돌</b>이다 ⓓ 평균 운동 에너지는 <b>절대 온도에 비례</b>한다.<br>
+    ③ ⓐ 때문에 화면의 동그라미는 <b>분자의 크기가 아니라 위치를 나타내는 표시</b>입니다.
+       눈에 보이라고 후광을 둘렀을 뿐, 실제로는 크기가 없다고 가정한 입자입니다.<br>
+    ④ ⓑ 때문에 <b>아무리 압축하거나 냉각해도 액화가 일어나지 않습니다.</b> 실제 기체와 결정적으로 다른 점입니다.<br>
+    ⑤ 그래서 <b>실제 기체의 비이상성(PV/nRT ≠ 1)은 이 화면으로 볼 수 없습니다.</b>
+       그것은 실제 기체의 측정 자료로 다룹니다.<br>
+    ⑥ 이 상자는 <b>2차원</b>입니다. "부피"는 상자의 <b>넓이</b>이고, 단위는 실제 단위가 아닌
+       <b>임의 단위(a.u.)</b>입니다. 압력 100 a.u.는 1 atm이 아닙니다.<br>
+    ⑦ 화면의 압력은 식을 넣어 준 값이 아니라 <b>입자가 벽에 부딪힌 충격량을 실제로 세어 계산한 값</b>입니다.
+       그래서 아주 조금(1~2 %) 흔들리고, 표시할 때 짧은 시간 평균을 씁니다.<br>
+    ⑧ 절대 온도 환산은 로드맵에 맞춰 273.15가 아니라 <b>273</b>으로 통일했습니다.
+  </p>
+</details>
+
+</div>
+
+<div class="site-foot">화학 탐구실</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="gaslaws"></script>
+<script src="sim.js"></script>
+</body>
+</html>

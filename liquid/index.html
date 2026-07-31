@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>액체 — 끓음 실험 | 화학 탐구실</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색은 shared/style.css 토큰만. 요소 선택자(button{}, input{})는 쓰지 않는다 (매뉴얼 §12①) */
+  .page{padding:18px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0}
+  .namebar{margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:9px 12px; box-shadow:var(--shadow)}
+  .namebar label{font-size:13px; color:var(--t2)}
+  .namebar .hint{color:var(--t3); font-size:12px}
+  .namebar .seat{border:1px solid var(--line); border-radius:7px; padding:7px 9px;
+    font-size:16px; font-family:inherit; width:180px; color:var(--t1)}
+
+  .liqpick{display:grid; grid-template-columns:repeat(auto-fit,minmax(126px,1fr)); gap:7px; margin-top:14px}
+  .lq{font-family:inherit; padding:9px 10px; border-radius:10px; border:1px solid var(--line);
+    background:var(--panel); color:var(--t2); cursor:pointer; min-height:56px; text-align:left;
+    display:flex; flex-direction:column; gap:2px; box-shadow:var(--shadow)}
+  .lq b{font-size:14px; color:var(--t1)}
+  .lq span{font-size:11.5px; color:var(--t3)}
+  .lq[aria-pressed="true"]{border-color:var(--accent); box-shadow:inset 0 0 0 2px var(--accent)}
+  .lq[aria-pressed="true"] b{color:var(--accent-dark)}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1.3fr) minmax(280px,1fr); gap:14px; margin-top:14px}
+  @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+  .stage canvas{display:block; width:100%}
+  #glFallback{display:none; padding:22px 16px; font-size:13.5px; color:var(--t2); line-height:1.7}
+
+  .ctl{margin-bottom:12px}
+  .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
+    font-size:13px; margin-bottom:4px; color:var(--t2); gap:8px}
+  .ctl .row .val{font-variant-numeric:tabular-nums; font-weight:600; color:var(--t1); white-space:nowrap}
+  .ros{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .ros .readout{padding:9px 10px}
+  .ros .readout .value{font-size:19px}
+  .ros .wide{grid-column:1 / -1}
+  .btns{display:flex; gap:7px; flex-wrap:wrap; margin-top:11px}
+  .empty{color:var(--t3); font-size:13px; padding:12px 0; text-align:center}
+  .fixnote{font-size:12px; color:var(--t3); margin-top:5px; line-height:1.65}
+  .info{font-size:12.5px; color:var(--t2); background:#f8fafc; border:1px solid var(--line);
+    border-radius:8px; padding:9px 11px; margin-top:9px; line-height:1.65}
+  .info b{color:var(--t1)}
+  .statenote{font-size:12.5px; color:var(--t2); margin-top:8px; line-height:1.6}
+  .cmodes{display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; align-items:center}
+  .cmode{font-family:inherit; font-size:13px; padding:8px 12px; border-radius:8px;
+    border:1px solid var(--line); background:#fff; color:var(--t2); cursor:pointer; min-height:44px}
+  .cmode[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .tablewrap{max-height:280px; overflow:auto}
+  .subcard{margin-top:14px}
+  details.sheet{margin-top:16px; background:var(--panel); border:1px solid var(--line);
+    border-radius:var(--radius); padding:14px; box-shadow:var(--shadow)}
+  details.sheet summary{cursor:pointer; font-weight:700; font-size:14.5px; color:var(--t1)}
+  details.sheet ol{padding-left:20px; font-size:14px; color:var(--t2)}
+  details.sheet li{margin:9px 0}
+  details.sheet .tagq{display:inline-block; font-size:11.5px; font-weight:700; color:#fff;
+    background:var(--d-violet); border-radius:5px; padding:1px 6px; margin-right:5px}
+  .limits{font-size:12.5px; color:var(--t3); margin:12px 0 0; line-height:1.8}
+</style>
+</head>
+<body>
+
+<div class="wrap page">
+
+<div class="head">
+  <h1>액체 — 끓음 실험</h1>
+  <p class="sub">끓는 것은 분자가 <b>쪼개지는</b> 것이 아니다. 분자 <b>사이</b>의 힘을 이겨내고
+     <b>분자째</b> 떠나는 것이다. 네 액체로 직접 확인해 보자.</p>
+  <div class="namebar">
+    <label for="seat">좌석번호</label>
+    <input type="text" id="seat" class="seat" placeholder="예: 1-3-14">
+    <span class="hint">실명 대신 좌석번호를 쓰세요. 측정값은 CSV로 저장해 제출합니다.</span>
+  </div>
+</div>
+
+<div class="liqpick" id="liqpick" role="group" aria-label="액체 선택"></div>
+
+<div class="cols">
+  <div>
+    <div class="card">
+      <h2 id="stageTitle">비커 — 실제로 굴절과 기포를 그린다</h2>
+      <div class="stage stage--light" id="glWrap">
+        <canvas id="gl" aria-label="비커에 담긴 액체. 뒤쪽 벽의 줄무늬가 액체를 지나며 굴절되어 좌우가 뒤집혀 보입니다. 끓기 시작하면 바닥에서 기포가 올라오고 액면 위로 증기가 피어오릅니다."></canvas>
+        <div id="glFallback">
+          <b>이 기기에서는 3D 그리기(WebGL)를 쓸 수 없습니다.</b><br>
+          측정값·그래프·활동지는 그대로 쓸 수 있습니다. 아래 <b>『분자 크기로 확대해 보기』</b> 화면도
+          정상 동작합니다. 학교 기기라면 브라우저의 하드웨어 가속 설정을 확인해 보세요.
+        </div>
+      </div>
+      <div class="stage stage--light" id="zoomWrap" style="display:none">
+        <canvas id="zoom" aria-label="액체 표면을 분자 크기로 확대한 그림. 떠나는 분자가 원자로 쪼개지지 않고 통째로 올라갑니다."></canvas>
+      </div>
+      <div class="btns">
+        <button id="zoomBtn">분자 크기로 확대해 보기</button>
+        <button class="primary" id="run">일시정지</button>
+        <button id="reset">실험 처음부터</button>
+        <span style="font-size:12.5px;color:var(--t3);align-self:center">경과 <b id="vClock">0</b> 초</span>
+      </div>
+      <div class="info" id="liqInfo"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>실험 설계 — 무엇을 바꿀지 먼저 정한다</h2>
+      <div class="ctl">
+        <div class="row"><span>가열 출력 (열원의 세기)</span><span class="val"><span id="vHeat">300</span> W</span></div>
+        <input type="range" class="rng-time" id="sHeat" min="0" max="600" step="10" value="300" aria-label="가열 출력 (와트)">
+      </div>
+      <div class="ctl">
+        <div class="row"><span>외부 압력 <em>P</em><sub>외부</sub></span><span class="val"><span id="vPext">1.00</span> atm</span></div>
+        <input type="range" class="rng-vol" id="sPext" min="0.20" max="1.50" step="0.01" value="1.00" aria-label="외부 압력 (기압)">
+      </div>
+      <div class="ctl">
+        <div class="row"><span>액체의 양</span><span class="val"><span id="vVol">100</span> mL</span></div>
+        <input type="range" class="rng-count" id="sVol" min="20" max="200" step="5" value="100" aria-label="액체의 양 (밀리리터)">
+      </div>
+      <div class="ctl">
+        <div class="row"><span>시간 배속 (실험을 빨리 돌리기)</span><span class="val">×<span id="vSpeed">10</span></span></div>
+        <input type="range" class="rng-time" id="sSpeed" min="1" max="40" step="1" value="10" aria-label="시간 배속">
+      </div>
+      <div class="fixnote">
+        <b>변인 통제</b> — 한 번에 <b>하나만</b> 바꾸고 나머지는 그대로 두세요.
+        바꾼 뒤에는 <b>『실험 처음부터』</b>를 눌러야 곡선이 새로 그려집니다.
+      </div>
+    </div>
+
+    <div class="card subcard">
+      <h2>측정값</h2>
+      <div class="ros">
+        <div class="readout"><div class="label">지금 온도</div>
+          <div><span class="value" id="rT">–</span><span class="unit">℃</span></div></div>
+        <div class="readout"><div class="label">이 압력에서의 끓는점</div>
+          <div><span class="value" id="rTb">–</span><span class="unit">℃</span></div></div>
+        <div class="readout"><div class="label">지금 증기 압력</div>
+          <div><span class="value" id="rPv">–</span><span class="unit">mmHg</span></div></div>
+        <div class="readout"><div class="label">외부 압력</div>
+          <div><span class="value" id="rPe">–</span><span class="unit">mmHg</span></div></div>
+        <div class="readout"><div class="label">남은 액체</div>
+          <div><span class="value" id="rVol">–</span><span class="unit">mL</span></div></div>
+        <div class="readout" id="roState"><div class="label">상태</div>
+          <div><span class="value" id="rState" style="font-size:17px">–</span></div></div>
+      </div>
+      <div class="statenote" id="stateNote"></div>
+      <div class="btns">
+        <button class="primary" id="rec">끓는점 기록하기</button>
+        <button id="csv">CSV로 저장</button>
+        <button id="clr">기록 지우기</button>
+      </div>
+      <div class="fixnote" id="recnote"></div>
+    </div>
+
+    <div class="card subcard">
+      <h2>측정 기록 <span style="font-weight:400;color:var(--t3)" id="recCount"></span></h2>
+      <div class="tablewrap" id="tableWrap"><div class="empty">아직 기록이 없습니다.</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="card subcard">
+  <div class="cmodes">
+    <button class="cmode" data-mode="heat" aria-pressed="true">가열 곡선 (온도 – 시간)</button>
+    <button class="cmode" data-mode="vp" aria-pressed="false">증기 압력 곡선 (증기압 – 온도)</button>
+  </div>
+  <div class="stage stage--light">
+    <canvas id="chart" aria-label="가열 곡선 또는 증기 압력 곡선"></canvas>
+  </div>
+</div>
+
+<details class="sheet" open>
+  <summary>탐구 활동지</summary>
+  <ol>
+    <li><span class="tagq">예측</span><b>화면을 켜기 전에 먼저 쓴다.</b> 물을 계속 가열하면 온도는 어떻게 변할까?
+        가로축 시간, 세로축 온도인 그래프를 <b>손으로 먼저 그려</b> 보세요.
+        100 ℃가 된 뒤에도 계속 가열하면 온도는 어떻게 되나요?</li>
+
+    <li><span class="tagq">설계</span><b>실험 설계</b> — "액체의 종류가 끓는점을 결정한다"를 확인하려면
+        <b>무엇을 바꾸고 무엇을 고정</b>해야 하나요? 조작 변인 / 고정 변인 / 관찰 변인을 적으세요.
+        그런 다음 네 액체를 차례로 끓여 <b>기록하기</b>를 누르세요.</li>
+
+    <li><span class="tagq">관찰</span><b>가열 곡선의 평평한 구간</b> — 끓기 시작하면 온도가 오르지 않습니다.
+        계속 열을 넣고 있는데 <b>그 에너지는 어디로 갔나요?</b>
+        같은 시간 동안 <b>남은 액체</b>가 어떻게 변하는지 함께 보고 답하세요.</li>
+
+    <li><span class="tagq">설명</span><b>★ 끓는점은 분자가 쪼개지는 온도인가</b> —
+        <b>『분자 크기로 확대해 보기』</b>를 눌러 보세요. 떠나는 분자는 원자로 쪼개지나요?
+        <br>· 물 1 mol을 100 ℃에서 수증기로 만드는 데 약 <b>41 kJ</b>
+        <br>· 물 1 mol을 수소와 산소로 분해하는 데 약 <b>486 kJ</b>
+        <br>이 두 값의 차이가 말해 주는 것을 한 문장으로 쓰세요. (진단 8번)</li>
+
+    <li><span class="tagq">관계</span><b>★★ 액체의 양을 바꿔 보자</b> — 액체의 양만 바꾸고 나머지는 그대로 두세요.
+        ⓐ 끓는점이 달라지나요? ⓑ 증기 압력이 달라지나요? ⓒ 그럼 무엇이 달라지나요?
+        세 물음에 각각 답하세요.</li>
+
+    <li><span class="tagq">관계</span><b>★★ 증기 압력 곡선을 두 방향으로 읽기</b> —
+        <b>『증기 압력 곡선』</b> 탭으로 바꾸세요.
+        <br>ⓐ <b>60 ℃에서</b> 네 액체의 증기 압력을 비교하세요. 같나요, 다른가요?
+        <br>ⓑ <b>각자의 기준 끓는점에서</b> 네 액체의 증기 압력을 비교하세요. 같나요, 다른가요?
+        <br>ⓐ와 ⓑ의 답이 왜 다른지 설명하세요.</li>
+
+    <li><span class="tagq">설명</span><b>높은 산에서 밥이 설익는 이유</b> —
+        외부 압력을 0.5 atm으로 낮추고 물을 끓여 보세요. 끓는점이 어떻게 되나요?
+        "높은 산에서는 물이 <u>빨리</u> 끓으니 밥이 <u>빨리</u> 익는다"는 말의 어디가 틀렸나요?</li>
+
+    <li><span class="tagq">관계</span><b>끓는점 순서와 분자 사이의 힘</b> — 네 액체를 끓는점 순으로 나열하고,
+        각각에 작용하는 <b>분자 사이의 힘</b>을 적으세요.
+        <br>⚠ 아세트산은 물보다 끓는점이 <b>높습니다</b>. "물이 항상 최고"가 아닙니다. 왜일까요?
+        <br>⚠ 힘의 세기를 비교하려면 <b>전자 수(분자량)를 통제</b>해야 합니다. 이 넷은 통제되어 있나요?</li>
+
+    <li><span class="tagq">한계</span><b>이 모형이 실제와 다른 점</b> —
+        ⓐ 이 화면은 열이 <b>100 % 액체에만</b> 들어간다고 가정합니다. 실제 실험에서는 어디로 새나요?
+        ⓑ 시간을 <b>배속</b>으로 돌리고 있습니다. 실제로 100 mL 물을 500 W로 끓이면 얼마나 걸릴까요?
+        ⓒ 이 화면에서 <b>확인할 수 없는 것</b>을 하나 찾아 쓰세요.</li>
+  </ol>
+
+  <p class="limits">
+    <b>이 모형의 가정과 한계 — 반드시 함께 읽을 것</b><br>
+    ① 증기 압력은 <b>Antoine 식</b>으로 계산합니다. 네 액체 모두 <b>기준 끓는점이 문헌과 0.2 ℃ 이내</b>,
+       상온 증기 압력이 <b>문헌과 2 % 이내</b>로 맞는 것을 확인했습니다.<br>
+    ② 가열 곡선은 <b>Q = mcΔT</b>(끓기 전)와 <b>Q = mΔH기화</b>(끓는 동안)로 계산합니다.
+       넣어 준 열이 <b>전부</b> 액체에 들어간다고 가정했습니다. 실제로는 비커·공기로 상당량이 새어 나갑니다.<br>
+    ③ <b>아세트산은 증기에서 두 분자가 수소 결합으로 짝(이합체)을 이룹니다.</b> 그래서 문헌표의
+       기화 엔탈피(약 24 kJ/mol)와 증기 압력 곡선의 기울기에서 얻는 값(약 39 kJ/mol)이 다릅니다.
+       이 화면은 곡선과 앞뒤가 맞도록 <b>곡선에서 얻은 값</b>을 썼습니다.<br>
+    ④ 3D 그림은 비커를 <b>가로 단면</b>으로만 굴절 계산했습니다(세로 방향 굴절은 넣지 않았습니다).
+       기포의 크기·개수는 <b>정성적 표현</b>이며 실제 개수가 아닙니다.<br>
+    ⑤ 시간은 <b>배속</b>으로 돌아갑니다. 화면의 "경과 초"는 실제 실험 시간이며, 배속만큼 빨리 흘러갑니다.<br>
+    ⑥ 액체가 끓어 줄어드는 동안 <b>비커 안 압력은 일정</b>하다고 가정했습니다(열린 계).<br>
+    ⑦ 분자 그림의 원자 색은 <b>CPK 국제 표준</b>입니다(O 빨강 · H 흰색 · C 진회색).
+       원자의 크기 비와 결합 각은 정확하지 않습니다 — 구조를 알아보게 하는 그림입니다.
+  </p>
+</details>
+
+</div>
+
+<div class="site-foot">화학 탐구실</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="liquid"></script>
+<script src="sim.js"></script>
+</body>
+</html>

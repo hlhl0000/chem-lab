@@ -201,24 +201,30 @@ input[type=checkbox]{ width:20px; height:20px; accent-color:var(--accent); }
 
 /* ---------- 물리량별 슬라이더 색 ----------
    같은 파란 슬라이더가 5개 있으면 무엇을 잡는지 매번 레이블을 읽어야 한다.
-   물리량마다 색을 배정하면 위치만 봐도 안다.                                */
-.rng-temp::-webkit-slider-runnable-track{
+   물리량마다 색을 배정하면 위치만 봐도 안다.
+
+   ⚠ 2026-07-31 수정 — 아래 선택자에 input[type=range] 를 반드시 앞에 붙인다.
+     .rng-temp::-webkit-slider-thumb            → 특이도 (0,1,0)
+     input[type=range]::-webkit-slider-thumb    → 특이도 (0,1,1)  ← 이쪽이 이긴다
+   접두어가 없으면 위쪽의 공통 규칙이 이겨서 **색이 하나도 적용되지 않는다.**
+   실제로 적용 안 되고 있던 것을 헤드리스 브라우저 스크린샷으로 확인해 고쳤다.   */
+input[type=range].rng-temp::-webkit-slider-runnable-track{
   background:linear-gradient(90deg,#93c5fd 0%,#cbd5e1 42%,#fdba74 74%,#dc2626 100%) }
-.rng-temp::-moz-range-track{
+input[type=range].rng-temp::-moz-range-track{
   background:linear-gradient(90deg,#93c5fd 0%,#cbd5e1 42%,#fdba74 74%,#dc2626 100%) }
-.rng-temp::-webkit-slider-thumb{ background:#b91c1c } .rng-temp::-moz-range-thumb{ background:#b91c1c }
+input[type=range].rng-temp::-webkit-slider-thumb{ background:#b91c1c } input[type=range].rng-temp::-moz-range-thumb{ background:#b91c1c }
 
-.rng-vol::-webkit-slider-runnable-track{ background:linear-gradient(90deg,#dbeafe,#1d4ed8) }
-.rng-vol::-moz-range-track{ background:linear-gradient(90deg,#dbeafe,#1d4ed8) }
-.rng-vol::-webkit-slider-thumb{ background:#1d4ed8 } .rng-vol::-moz-range-thumb{ background:#1d4ed8 }
+input[type=range].rng-vol::-webkit-slider-runnable-track{ background:linear-gradient(90deg,#dbeafe,#1d4ed8) }
+input[type=range].rng-vol::-moz-range-track{ background:linear-gradient(90deg,#dbeafe,#1d4ed8) }
+input[type=range].rng-vol::-webkit-slider-thumb{ background:#1d4ed8 } input[type=range].rng-vol::-moz-range-thumb{ background:#1d4ed8 }
 
-.rng-count::-webkit-slider-runnable-track{ background:linear-gradient(90deg,#ede9fe,#6d28d9) }
-.rng-count::-moz-range-track{ background:linear-gradient(90deg,#ede9fe,#6d28d9) }
-.rng-count::-webkit-slider-thumb{ background:#6d28d9 } .rng-count::-moz-range-thumb{ background:#6d28d9 }
+input[type=range].rng-count::-webkit-slider-runnable-track{ background:linear-gradient(90deg,#ede9fe,#6d28d9) }
+input[type=range].rng-count::-moz-range-track{ background:linear-gradient(90deg,#ede9fe,#6d28d9) }
+input[type=range].rng-count::-webkit-slider-thumb{ background:#6d28d9 } input[type=range].rng-count::-moz-range-thumb{ background:#6d28d9 }
 
-.rng-time::-webkit-slider-runnable-track{ background:linear-gradient(90deg,#dcfce7,#15803d) }
-.rng-time::-moz-range-track{ background:linear-gradient(90deg,#dcfce7,#15803d) }
-.rng-time::-webkit-slider-thumb{ background:#15803d } .rng-time::-moz-range-thumb{ background:#15803d }
+input[type=range].rng-time::-webkit-slider-runnable-track{ background:linear-gradient(90deg,#dcfce7,#15803d) }
+input[type=range].rng-time::-moz-range-track{ background:linear-gradient(90deg,#dcfce7,#15803d) }
+input[type=range].rng-time::-webkit-slider-thumb{ background:#15803d } input[type=range].rng-time::-moz-range-thumb{ background:#15803d }
 
 /* ---------- 범례 (색만으로 정보를 전달하지 않기 위한 필수 장치) ---------- */
 .legend{ display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--t2) }
