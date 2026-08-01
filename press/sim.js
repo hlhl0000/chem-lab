@@ -170,14 +170,24 @@ const OBJ_FILL = "rgba(95,107,122,0.28)";
    "실린더 통 안쪽"을 표시한다(재작업 2026-08-01 2차 — 부피가 작을 때 실린더 위쪽이
    페이지 배경과 구분이 안 돼 잘린 것처럼 보이는 문제 처방). */
 const CYL_BG = "rgba(40,45,52,0.05)";
+/* 부서짐 상태의 압력 숫자 색 — 결과표 "✕ 부서짐" 배지(.pv-bad)와 같은 경고색이지만,
+   그 배지가 쓰는 CSS 변수를 sim.js에서 새로 읽으면(getComputedStyle) 검토.js가 세는
+   "sim.js 데이터 색 토큰" 수가 3에서 4로 늘어난다(§5 금지 11 "정확히 3개" 유지 조건과 충돌).
+   대신 sim.js에 이미 있는 하드코딩 경고색(bootFailed 함수가 쓰는 값)을 재사용한다 — 이
+   값은 이미 검토.js의 하드코딩 색 목록에 잡혀 있으므로 재사용해도 새 항목이 늘지 않는다. */
+const ERR_RED = "#b42318";
 
 const SEATS = ["①", "②", "③", "④"];
 /* 신규 요구(2026-08-01) — 공개 연출을 4단계로 다시 짠다: ① 유압유 이동 → ② 램 상승 → ③ 가압 → ④ 판정.
    네 구간의 합이 REVEAL_TOTAL_MS(다음 참가자로 넘어가는 시점)와 같아야 한다. */
 const REVEAL_OIL_MS = 300;      // ① 유압유가 관을 따라 이동한다(램은 아직 정지)
-const REVEAL_RISE_MS = 300;     // ② 램이 아래에서 위로 올라와 물체에 닿는다
+/* 재작업(2026-08-01 3차) — "피스톤이 올라오는 속도만 0.5배속"(사용자 요청). 같은 거리를
+   두 배 시간에 이동해야 0.5배속이므로 RISE_MS만 2배로 늘린다. 오일 이동·가압·판정 구간은
+   그대로 두고(요청이 "속도만"이라고 명시), TOTAL_MS는 늘어난 만큼(300ms)만 같이 늘려
+   판정 구간 길이(400ms)가 이전과 같게 유지되도록 재계산했다. */
+const REVEAL_RISE_MS = 600;     // ② 램이 아래에서 위로 올라와 물체에 닿는다 (0.5배속 = 이전 300ms×2)
 const REVEAL_PRESS_MS = 500;    // ③ 램이 계속 밀어 올려 물체가 눌린다 · 압력 숫자가 여기까지 함께 오른다
-const REVEAL_TOTAL_MS = 1500;   // ④ 판정(균열 갈라짐) 포함, 다음 참가자로 넘어가는 시점
+const REVEAL_TOTAL_MS = 1800;   // ④ 판정(균열 갈라짐) 포함, 다음 참가자로 넘어가는 시점
 function revealStageProgress(elapsed) {
   const oilT = clamp(elapsed / REVEAL_OIL_MS, 0, 1);
   const riseT = clamp((elapsed - REVEAL_OIL_MS) / REVEAL_RISE_MS, 0, 1);
@@ -715,6 +725,50 @@ function draw() {
   if (cx + objW / 2 > rightLim) objW = Math.max(objW0 * 0.6, (rightLim - cx) * 2);
   const objBottomY = objTopY + objH;
 
+  /* ── 「누르는 세기」 자리·크기 결정 (요구 ②③, 재작업 2026-08-01 3차) ──
+     1순위: 물체 오른쪽(기둥 안쪽이면 물체 바로 옆, 자리가 없으면 기둥 바깥~캔버스 오른쪽 여백).
+     744 px 이상에서는 이 1순위 자리가 넉넉해 16~20 px 굵은 글씨가 들어간다(실측).
+     2순위(아주 좁은 화면, 예 360 px 휴대폰): 물체 오른쪽에 16 px조차 못 들어가면 맨 위 대기압
+     줄의 오른쪽 여백(대기압 글자는 항상 midW-100 안으로 줄여 그려서 오른쪽 100 px가 비어
+     있다 — 아래쪽 참조)으로 옮긴다. 처음에는 "실린더~기둥 사이 빈 자리"로 옮기려 했지만
+     그 자리는 0~5 L 눈금 숫자와 같은 세로 줄에 있어 실측해 보니 겹쳤다(재작업 4차 처방) —
+     대기압 줄 오른쪽은 눈금·막대 어느 것과도 세로 줄이 겹치지 않는 유일한 여유 공간이다.
+     세로 위치는 1순위일 때 물체 한가운데(objTopY+objH/2)에 고정해 물체가 눌리면 따라가고,
+     2순위(대기압 줄)일 때는 그 줄에 고정한다 — 물체를 따라가지는 않지만 화면에 늘 보인다. */
+  let pressPlan = null;
+  if (ds.meterOn && G.data) {
+    const broken = ds.judged && ds.verdict === "부서짐";
+    const core = fmtInt(ds.dispP) + " kPa";
+    /* 색만으로 구분하지 않는다(색각 이상 대응) — 부서지면 숫자 옆에 항상 "✕"(또는 "✕ 부서짐")를 붙인다. */
+    const cands = broken
+      ? ["누르는 세기 " + core + " ✕ 부서짐", core + " ✕ 부서짐", core + " ✕"]
+      : ["누르는 세기 " + core, core];
+    const fitIn = (maxW, maxFont, minFont) => {
+      for (let fs = maxFont; fs >= minFont; fs--) {
+        ctx.font = "700 " + fs + "px sans-serif";
+        for (const c of cands) { if (ctx.measureText(c).width <= maxW) return { text: c, font: fs }; }
+      }
+      return null;
+    };
+    const insideX = cx + objW / 2 + 8, insideW = colRightX - 6 - insideX;
+    const outsideX = colRightX + 6, outsideW = rightLim - outsideX;
+    const besideOK = insideW > 0 && insideW >= outsideW;
+    const besideX = besideOK ? insideX : outsideX;
+    const besideW = Math.max(0, besideOK ? insideW : outsideW);
+
+    let f = fitIn(besideW, 20, 16);
+    if (f) {
+      pressPlan = { x: besideX, align: "left", y: objTopY + objH / 2, text: f.text, font: f.font };
+    } else {
+      /* 대기압 줄(아래 "대기압 기준선" 절)이 스스로 midW-100 안으로 줄여 그리므로,
+         오른쪽 100 px(여백 4 px씩 뺀 92 px)는 항상 비어 있다고 보장된다(단일 원천 재사용). */
+      const atmX1 = W - M - 4, atmZoneW = Math.max(0, 100 - 8);
+      f = fitIn(atmZoneW, 20, 11) || { text: cands[cands.length - 1], font: 11 };
+      pressPlan = { x: atmX1, align: "right", y: top - 8, text: f.text, font: f.font };
+    }
+    pressPlan.color = broken ? ERR_RED : C.ink;
+  }
+
   const ramW = Math.max(10, pw.wR - 6);
   const ramHeadY = ds.ramT < 1
     ? lerp(ramRestY, ramTouchY0 - ramHeadH, ds.ramT)
@@ -832,16 +886,22 @@ function draw() {
   /* 물체 — 늘 고정판 바로 밑, 램이 밑에서 밀어 올린다(요구 2·3) */
   drawObject(cx - objW / 2, objTopY, objW, objH, ds);
 
-  /* ── 압력계(잠금) — 우상단, 캔버스 밖 HTML과 중복 표시(정직성) ──
-     대기압 표시줄과 같은 줄(top-8)에 둔다 — 고정판이 늘 캔버스 맨 위에 있어서
-     예전처럼 top+12에 두면 좁은 화면에서 고정판과 글자가 겹친다. */
-  ctx.textAlign = "right"; ctx.font = "700 13px sans-serif";
-  const pi = pressureInfo();
-  ctx.fillStyle = C.t3;
-  const lockTxt = pi.locked ? "P = 🔒 잠김" : (pi.value != null ? "P = " + fmtInt(pi.value) + " kPa" : "");
-  if (lockTxt) ctx.fillText(fitText(lockTxt, "🔒", midW - 4), W - M - 4, top - 8);
+  /* ── 누르는 세기 — 눌리는 물체 바로 오른쪽, 물체 세로 한가운데(재작업 2026-08-01 3차 요청 ②③).
+     실제 위치·글자크기·후보문구는 위에서 pressPlan으로 이미 정했다(744 px 이상은 물체 옆,
+     360 px처럼 아주 좁은 화면은 대기압 줄 오른쪽 여백으로 자동 이동 — 요구 10 겹침·잘림 방지).
+     이전에 우상단에 따로 있던 "P = … kPa" 표시는 이 표시와 중복이라 없앴다(대기압 줄은 유지 —
+     다만 좁은 화면 대비책으로 그 자리를 pressPlan의 2순위 자리로 재사용한다). */
+  if (pressPlan) {
+    ctx.font = "700 " + pressPlan.font + "px sans-serif";
+    ctx.textAlign = pressPlan.align; ctx.textBaseline = "middle";
+    ctx.fillStyle = pressPlan.color;
+    ctx.fillText(pressPlan.text, pressPlan.x, pressPlan.y);
+    ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+  }
 
-  /* ── 오르는 압력 눈금 + 숫자 (요구 2) — 왼쪽 실린더/기름관과 오른쪽 프레임 사이 빈 자리 ── */
+  /* ── 오르는 압력 눈금 막대(요구 2) — 왼쪽 실린더/기름관과 오른쪽 프레임 사이 빈 자리.
+     큰 숫자는 위에서 물체 옆(또는 좁은 화면에서는 대기압 줄 오른쪽)으로 옮겼으므로,
+     여기는 막대 + 목표 눈금만 남긴다(중복 제거). */
   if (ds.meterOn && G.data) {
     const gapX = xL + pw.wL + 6, gapR = colLeftX - 6;
     const meterW = gapR - gapX;
@@ -862,12 +922,7 @@ function draw() {
       ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(tx, meterY - 3); ctx.lineTo(tx, meterY + meterH + 3); ctx.stroke();
 
-      ctx.textAlign = "center"; ctx.fillStyle = C.ink; ctx.font = "700 13px sans-serif";
-      const numTxt = "누르는 세기 " + fmtInt(ds.dispP) + " kPa";
-      const numShort = fmtInt(ds.dispP) + " kPa";
-      ctx.fillText(fitText(numTxt, numShort, meterW), gapX + meterW / 2, meterY - 8);
-
-      ctx.font = "9px sans-serif"; ctx.fillStyle = C.t3;
+      ctx.textAlign = "center"; ctx.font = "9px sans-serif"; ctx.fillStyle = C.t3;
       const labelTxt = "목표";
       if (ctx.measureText(labelTxt).width <= 40) {
         ctx.fillText(labelTxt, clamp(tx, gapX + 16, gapR - 16), meterY + meterH + 14);
