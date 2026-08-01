@@ -3,85 +3,90 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>유압 프레스 도전 — 이상 기체 방정식으로 힘 만들기 | 화학 탐구실</title>
+<title>유압 프레스 도전 — 물체를 부수지 않고 가장 세게 누르기 | 화학 탐구실</title>
 <link rel="stylesheet" href="../shared/style.css">
 <style>
-  /* 색은 shared/style.css 토큰만 쓴다. 요소 선택자(button{}, input{})는 쓰지 않는다 (매뉴얼 §12①) */
-  .page{padding:18px 0 40px}
-  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
-  .head .sub{color:var(--t2); font-size:14px; margin:0}
+  /* 색은 shared/style.css 토큰만 쓴다. 요소 선택자(button{}, input{})는 쓰지 않는다 (매뉴얼 §12①)
+     ⚠ 744~820px 1단 레이아웃에서 캔버스(≥470px)와 조절 변인이 스크롤 없이 한 화면에 들어와야 한다
+     (P4-B2). 캔버스 높이는 줄이지 않고, 캔버스 위·둘레 패널을 최대한 조인다(§3 3-C⑵ 확정 처방). */
+  .page{padding:4px 0 24px}
+  .head h1{font-size:18px; margin:0 0 2px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:12px; margin:0}
 
-  .namebar{margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    padding:9px 12px; box-shadow:var(--shadow)}
-  .namebar label{font-size:13px; color:var(--t2)}
-  .namebar .hint{color:var(--t3); font-size:12px}
-  .namebar .seat{border:1px solid var(--line); border-radius:7px; padding:7px 9px;
-    font-size:16px; font-family:inherit; width:180px; color:var(--t1)}
+  /* ── 게임 패널 ── */
+  .game{margin-top:4px; padding:5px 10px}
+  .gamerow{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+  .glab{font-size:12px; color:var(--t3); font-weight:700}
+  .pc{font-family:inherit; font-size:12.5px; padding:7px 10px; border-radius:7px;
+    border:1px solid var(--line); background:#fff; color:var(--t2); cursor:pointer; font-weight:600}
+  .pc[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .chk{display:inline-flex; align-items:center; gap:6px; min-height:44px; font-size:12.5px; color:var(--t2)}
+  .flexgap{flex:1}
+  .gamestat{margin-top:3px; font-size:12px; color:var(--t2)}
+  .gamestat b{color:var(--t1)}
+  .howto{margin-top:3px; border-top:1px solid var(--line); padding-top:3px}
+  .howto summary{cursor:pointer; font-weight:700; font-size:12px; color:var(--t2)}
+  .howtolist{margin:5px 0 0; padding-left:18px; font-size:12px; color:var(--t2); line-height:1.5}
+  .howtolist li{margin:2px 0}
 
-  /* ── 미션 패널 ── */
-  .mission{margin-top:14px; background:var(--panel); border:2px solid var(--accent);
-    border-radius:var(--radius); padding:13px 14px; box-shadow:var(--shadow-lg)}
-  .mission .top{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px}
-  .mission .lv{font-family:inherit; font-size:13px; padding:8px 12px; border-radius:8px;
-    border:1px solid var(--line); background:#fff; color:var(--t2); cursor:pointer;
-    min-height:44px; font-weight:600}
-  .mission .lv[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
-  .goalbox{display:flex; gap:14px; align-items:center; flex-wrap:wrap;
-    background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:11px 13px}
-  .goalbox .lab{font-size:12px; color:var(--t3); font-weight:700; letter-spacing:.02em}
-  .goalbox .big{font-size:30px; font-weight:700; color:var(--t1); font-variant-numeric:tabular-nums;
-    line-height:1.1}
-  .goalbox .un{font-size:14px; color:var(--t3); font-weight:600; margin-left:3px}
-  .goalbox .tol{font-size:12.5px; color:var(--t2)}
-  .goalbox .sep{width:1px; align-self:stretch; background:var(--line)}
-  .missnote{font-size:13px; color:var(--t2); margin-top:9px; line-height:1.6}
-  .missnote b{color:var(--t1)}
-  .result{margin-top:10px; border-radius:10px; padding:11px 13px; font-size:14px; display:none}
-  .result.on{display:block}
-  .result .g{font-size:20px; font-weight:700}
-  .result.ok{background:#f0fdf4; border:1px solid #bbf7d0}
-  .result.mid{background:#fff7ed; border:1px solid #fed7aa}
-  .result.bad{background:#fef2f2; border:1px solid #fecaca}
+  /* ── 목표 패널 ── */
+  .goal{margin-top:4px; padding:4px 10px; border:2px solid var(--accent)}
+  .idlenote{font-size:12.5px; color:var(--t2); padding:1px 0}
+  .goalmain{display:flex; column-gap:7px; row-gap:1px; align-items:baseline; flex-wrap:wrap; line-height:1.25}
+  .goallab{font-size:10.5px; color:var(--t3); font-weight:700; letter-spacing:.02em}
+  .goalbig{font-size:20px; font-weight:700; color:var(--t1); font-variant-numeric:tabular-nums}
+  .goalunit{font-size:11.5px; color:var(--t3); font-weight:600; margin-right:6px}
+  .goalwarn{font-size:11px; color:var(--t2)}
+  .winrule{flex-basis:100%; font-size:10.5px; color:var(--t2); margin:0}
+  .startinfo{display:none; align-items:baseline; gap:4px; background:#f8fafc; border:1px solid var(--line);
+    border-radius:6px; padding:1px 8px; margin-left:auto}
+  .startlab{font-size:10px; color:var(--t3); font-weight:700}
+  .startbig{font-size:14px; font-weight:700; color:var(--t1); font-variant-numeric:tabular-nums}
+  .startunit{font-size:10px; color:var(--t3)}
+  .timerwrap{display:none; align-items:center; gap:8px; margin-top:3px}
+  .timerbar{flex:1; height:6px; border-radius:3px; background:#e2e8f0}
+  .timerfill{height:100%; width:100%; background:var(--accent); border-radius:3px; max-width:100%}
+  .timertxt{font-size:11px; color:var(--t3); white-space:nowrap}
+  .goalbtns{margin-top:3px; display:flex; gap:8px; flex-wrap:wrap}
 
   /* ── 2단 ── */
-  .cols{display:grid; grid-template-columns:minmax(0,1.35fr) minmax(280px,1fr); gap:14px; margin-top:14px}
+  .cols{display:grid; grid-template-columns:minmax(0,1.35fr) minmax(280px,1fr); gap:7px; margin-top:4px}
   @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
   .stage canvas{display:block; width:100%}
+  .stagecard, .ctlcard{padding:6px 8px}
+  .stagecard h2, .ctlcard h2{font-size:10.5px; margin:0 0 2px; color:var(--t3); font-weight:600}
+  .legend{gap:7px; font-size:10px; margin-top:2px}
+  .motionnote{display:none; align-items:center; gap:8px; font-size:12px; color:var(--t2);
+    margin-top:3px; flex-wrap:wrap}
 
-  .ctl{margin-bottom:12px}
-  .ctl.locked{opacity:.5}
-  .ctl .row{display:flex; justify-content:space-between; align-items:center;
-    font-size:13px; margin-bottom:4px; color:var(--t2); gap:8px}
-  .ctl .num{border:1px solid var(--line); border-radius:7px; padding:6px 8px;
-    font-size:16px; font-family:inherit; width:104px; text-align:right;
-    font-variant-numeric:tabular-nums; font-weight:600; color:var(--t1)}
-  .ctl .lockmark{font-size:11px; color:var(--d-gray); font-weight:700}
-  .areapick{display:flex; gap:6px; flex-wrap:wrap}
-  .areapick .ab{font-family:inherit; font-size:13px; padding:8px 11px; border-radius:8px;
-    border:1px solid var(--line); background:#fff; color:var(--t2); cursor:pointer; min-height:44px}
-  .areapick .ab[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  #roP{padding:5px 8px}
 
-  .ros{display:grid; grid-template-columns:1fr 1fr; gap:8px}
-  .ros .readout{padding:9px 10px}
-  .ros .readout .value{font-size:20px}
-  .ros .wide{grid-column:1 / -1}
+  .ctl{margin-bottom:3px}
+  .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
+    font-size:12px; margin-bottom:1px; color:var(--t2); gap:8px}
+  .unittxt{font-size:10px; color:var(--t3)}
+  .rowval{font-variant-numeric:tabular-nums; font-weight:600; color:var(--t1); font-size:12.5px}
+  .edgehint{font-size:10px; color:var(--t3); margin:0 0 4px}
+  .cardsub{font-weight:400; color:var(--t3); font-size:11px}
 
-  .btns{display:flex; gap:7px; flex-wrap:wrap; margin-top:11px}
-  .empty{color:var(--t3); font-size:13px; padding:12px 0; text-align:center}
-  .fixnote{font-size:12px; color:var(--t3); margin-top:4px; line-height:1.6}
-  .tablewrap{max-height:300px; overflow:auto}
-  .subcard{margin-top:14px}
-  .rank td.me{font-weight:700; color:var(--d-blue)}
+  .locknote{font-size:10.5px; color:var(--t3); margin-top:1px}
+
+  .rtwrap{overflow:auto}
+  .pv{font-weight:700; display:inline-block; border-radius:6px; padding:2px 7px; font-size:12.5px}
+  .pv-ok{color:var(--d-green); background:rgba(21,128,61,0.10)}
+  .pv-bad{color:var(--d-red); background:rgba(185,28,28,0.10)}
+  .winrow{background:#f8fafc}
+  .fixline{font-size:13px; color:var(--t2); margin-top:9px}
+  .resulthead{font-size:14.5px; font-weight:700; color:var(--t1); margin:0 0 8px}
+  .winline{font-size:15px; font-weight:700; color:var(--t1); margin:0 0 8px}
 
   details.sheet{margin-top:16px; background:var(--panel); border:1px solid var(--line);
     border-radius:var(--radius); padding:14px; box-shadow:var(--shadow)}
   details.sheet summary{cursor:pointer; font-weight:700; font-size:14.5px; color:var(--t1)}
-  details.sheet ol{padding-left:20px; font-size:14px; color:var(--t2)}
-  details.sheet li{margin:9px 0}
-  details.sheet .tagq{display:inline-block; font-size:11.5px; font-weight:700; color:#fff;
-    background:var(--d-violet); border-radius:5px; padding:1px 6px; margin-right:5px}
-  .limits{font-size:12.5px; color:var(--t3); margin:12px 0 0; line-height:1.8}
+  details.sheet ol{padding-left:20px; font-size:13.5px; color:var(--t2); line-height:1.7}
+  details.sheet li{margin:8px 0}
+  details.sheet h3{font-size:13px; color:var(--t1); margin:14px 0 6px}
+  details.sheet p{font-size:13.5px; color:var(--t2); line-height:1.7; margin:0}
 </style>
 </head>
 <body>
@@ -89,177 +94,129 @@
 <div class="wrap page">
 
 <div class="head">
-  <h1>유압 프레스 도전 — 이상 기체 방정식으로 힘 만들기</h1>
-  <p class="sub">폐차장의 프레스는 어떻게 자동차를 납작하게 누를까? <b>압력은 힘이 아니다.</b>
-     작은 힘으로 큰 힘을 만드는 것은 마술이 아니라 <b>넓이의 비</b>다.</p>
-  <div class="namebar">
-    <label for="seat">좌석번호</label>
-    <input type="text" id="seat" class="seat" placeholder="예: 1-3-14">
-    <span class="hint">실명 대신 좌석번호를 쓰세요. 도전 기록은 CSV로 저장해 제출합니다.</span>
-  </div>
+  <h1>유압 프레스 도전 — 물체를 부수지 않고 가장 세게 누르기</h1>
+  <p class="sub">목표를 넘기지 않으면서 가장 가깝게 누른 사람이 이깁니다. 압력계는 조절하는 동안 잠깁니다 — 실린더 안 그림만 보고 판단하세요.</p>
 </div>
 
-<!-- ───────── 미션 ───────── -->
-<div class="mission">
-  <div class="top" role="group" aria-label="난이도 선택">
-    <span style="font-size:12.5px;color:var(--t3);font-weight:700">난이도</span>
-    <button class="lv" id="lv1" data-lv="1" aria-pressed="true">1단계 · 변인 1개</button>
-    <button class="lv" id="lv2" data-lv="2" aria-pressed="false">2단계 · 변인 2개</button>
-    <button class="lv" id="lv3" data-lv="3" aria-pressed="false">3단계 · 변인 3개</button>
-    <button class="lv" id="lv4" data-lv="4" aria-pressed="false">4단계 · 파스칼 원리</button>
-    <span style="flex:1"></span>
-    <button class="primary" id="newMission">새 미션 받기</button>
+<div class="card game">
+  <div class="gamerow" role="group" aria-label="인원 선택">
+    <span class="glab">인원</span>
+    <button class="pc" id="pc2" data-n="2" aria-pressed="true">②인</button>
+    <button class="pc" id="pc3" data-n="3" aria-pressed="false">③인</button>
+    <button class="pc" id="pc4" data-n="4" aria-pressed="false">④인</button>
+    <label class="chk"><input type="checkbox" id="useLimit" checked> 제한 시간 사용 (<span id="limitTxt">30</span>초)</label>
+    <span class="flexgap"></span>
+    <button id="newGame">새 게임</button>
+    <button id="endGame">여기서 끝내기</button>
   </div>
+  <div class="gamestat">
+    라운드 <b id="roundNow">–</b>/<b id="roundTotal">–</b> ·
+    차례 <b id="turnLab">대기 중</b> ·
+    누적 승수 <span id="winsLab">–</span>
+  </div>
+  <details class="howto" id="howto">
+    <summary>어떻게 하나 — 눌러서 펼치기</summary>
+    <ol class="howtolist">
+      <li>인원을 고르고 <b>새 게임</b>을 누릅니다. 라운드마다 목표 압력이 새로 정해집니다.</li>
+      <li>차례가 오면 <b>입자 수 · 온도 · 부피</b> 세 조절기로 압력을 만듭니다. 손을 대는 순간 압력계가 잠깁니다.</li>
+      <li>전원이 제출하면 <b>공개</b>를 눌러 한꺼번에 결과를 봅니다. 목표를 넘기면 부서지고, 넘기지 않은 사람 중 목표에 가장 가까운 사람이 그 라운드를 이깁니다.</li>
+    </ol>
+  </details>
+</div>
 
-  <div class="goalbox">
-    <div>
-      <div class="lab" id="goalLab">목표 압력</div>
-      <div><span class="big" id="goalVal">–</span><span class="un" id="goalUnit">kPa</span></div>
-    </div>
-    <div class="sep"></div>
-    <div>
-      <div class="lab">허용 오차</div>
-      <div><span class="big" id="tolVal" style="font-size:22px">–</span><span class="un">%</span></div>
-    </div>
-    <div class="sep"></div>
-    <div>
-      <div class="lab">남은 기회</div>
-      <div><span class="big" id="triesVal" style="font-size:22px">1</span><span class="un">회</span></div>
-    </div>
-    <span style="flex:1"></span>
-    <button class="primary" id="submit" style="font-size:15px">제출 (1회뿐!)</button>
+<div class="card goal">
+  <div class="idlenote" id="idleNote">인원을 고르고 <b>새 게임</b>을 누르면 목표가 정해집니다.</div>
+  <div class="goalmain" id="goalMain" style="display:none">
+    <span class="goallab">목표</span>
+    <span class="goalbig" id="goalVal">–</span><span class="goalunit">kPa</span>
+    <span class="goalwarn">— 넘으면 부서집니다</span>
+    <span class="startinfo" id="startInfo">
+      <span class="startlab">지금(시작)</span>
+      <span class="startbig" id="startVal">–</span><span class="startunit">kPa</span>
+    </span>
+    <span class="winrule">넘지 않은 사람 중 가장 가까운 사람이 이깁니다.</span>
   </div>
-  <div class="missnote" id="missNote"></div>
-  <div class="result" id="result"></div>
+  <div class="timerwrap" id="timerWrap">
+    <div class="timerbar"><div class="timerfill" id="timerFill"></div></div>
+    <div class="timertxt" id="timerTxt"></div>
+  </div>
+  <div class="goalbtns">
+    <button class="primary" id="submitBtn" style="display:none">제출</button>
+    <button class="primary" id="revealBtn" style="display:none">공개</button>
+    <button class="primary" id="nextRoundBtn" style="display:none">다음 라운드</button>
+  </div>
 </div>
 
 <div class="cols">
-  <!-- 왼쪽: 장치 -->
-  <div>
-    <div class="card">
-      <h2>장치 — 기체 실린더로 유압을 만든다</h2>
-      <div class="stage stage--light">
-        <canvas id="rig" aria-label="기체 실린더가 유압유를 눌러 작은 피스톤과 큰 피스톤에 힘을 전달하는 유압 프레스 그림. 압력과 힘의 값은 오른쪽 측정값 칸에 숫자로 표시됩니다."></canvas>
-      </div>
-      <div class="legend" style="margin-top:7px">
-        <span class="item"><span class="swatch" style="background:#1d4ed8"></span>기체</span>
-        <span class="item"><span class="swatch sq" style="background:#b45309"></span>유압유 (거의 압축되지 않음)</span>
-        <span class="item"><span class="swatch sq" style="background:#1f2328"></span>금속·피스톤</span>
-      </div>
+  <div class="card stagecard">
+    <h2>장치</h2>
+    <div class="stage stage--light">
+      <canvas id="rig" aria-label="기체 실린더가 유압유를 눌러 큰 피스톤으로 힘을 전달하는 유압 프레스 그림. 입자의 빽빽함과 움직임, 피스톤 높이로 압력의 세기를 짐작합니다. 압력 숫자는 제출 전까지 잠겨 있습니다."></canvas>
+    </div>
+    <div class="legend">
+      <span class="item"><span class="swatch" style="background:var(--d-blue)"></span>기체(입자)</span>
+      <span class="item"><span class="swatch sq" style="background:var(--d-amber)"></span>유압유</span>
+      <span class="item"><span class="swatch sq" style="background:var(--d-gray)"></span>금속·피스톤·물체</span>
+      <span class="item">부피를 반으로 줄이면 기둥도 반이 됩니다.</span>
+    </div>
+    <div class="motionnote" id="motionNote">
+      <span>지금은 멈춰 그린 것입니다 — 실제로는 계속 움직입니다.</span>
+      <button id="playMotion">움직임 재생</button>
     </div>
   </div>
 
-  <!-- 오른쪽: 조절 변인 → 측정값 -->
-  <div>
-    <div class="card">
-      <h2>조절 변인 <span style="font-weight:400;color:var(--t3)">— 흐린 것은 이 단계에서 잠김</span></h2>
+  <div class="card ctlcard">
+    <h2>조절 변인 <span class="cardsub" id="turnHint"></span></h2>
+    <div class="edgehint">세 조절기 모두 표시된 범위 양 끝까지만 조작할 수 있습니다(교육적 제한)</div>
 
-      <div class="ctl" id="cN">
-        <div class="row"><span>몰수 <em>n</em> <span class="lockmark" id="lkN"></span></span>
-          <input type="number" class="num" id="numN" min="0.10" max="2.00" step="0.001" value="1.000"
-                 aria-label="몰수 (mol)"><span style="font-size:12px;color:var(--t3)">mol</span></div>
-        <input type="range" class="rng-count" id="sN" min="0.10" max="2.00" step="0.01" value="1.00" aria-label="몰수 슬라이더">
-      </div>
-
-      <div class="ctl" id="cT">
-        <div class="row"><span>온도 <em>T</em> <span class="lockmark" id="lkT"></span></span>
-          <input type="number" class="num" id="numT" min="250" max="600" step="1" value="300"
-                 aria-label="온도 (켈빈)"><span style="font-size:12px;color:var(--t3)">K</span></div>
-        <input type="range" class="rng-temp" id="sT" min="250" max="600" step="1" value="300" aria-label="온도 슬라이더">
-      </div>
-
-      <div class="ctl" id="cV">
-        <div class="row"><span>부피 <em>V</em> <span class="lockmark" id="lkV"></span></span>
-          <input type="number" class="num" id="numV" min="0.50" max="5.00" step="0.001" value="2.000"
-                 aria-label="부피 (리터)"><span style="font-size:12px;color:var(--t3)">L</span></div>
-        <input type="range" class="rng-vol" id="sV" min="0.50" max="5.00" step="0.01" value="2.00" aria-label="부피 슬라이더">
-      </div>
-
-      <div class="ctl" id="cA">
-        <div class="row"><span>큰 피스톤 넓이 <em>A</em><sub>2</sub> <span class="lockmark" id="lkA"></span></span>
-          <span style="font-size:12px;color:var(--t3)">cm²</span></div>
-        <div class="areapick" id="areapick"></div>
-      </div>
-      <div class="fixnote">슬라이더로 대충 맞춘 뒤 <b>숫자칸에 계산한 값을 직접 쳐 넣으면</b> 훨씬 정확합니다.</div>
+    <div class="ctl" id="cN">
+      <div class="row"><span>입자 수 <span class="unittxt">(상대 개수)</span></span><span class="rowval" id="vN">–</span></div>
+      <input type="range" class="rng-count" id="sN" min="1" max="20" step="1" value="10" aria-label="입자 수 슬라이더">
     </div>
 
-    <div class="card subcard">
-      <h2>측정값</h2>
-      <div class="ros">
-        <div class="readout wide" id="roP"><div class="label">기체 압력 P = nRT / V — 유압유 어디서나 같다</div>
-          <div><span class="value" id="rP">–</span><span class="unit">kPa</span></div></div>
-        <div class="readout"><div class="label">작은 피스톤 F₁ = P·A₁ (A₁ = 12 cm²)</div>
-          <div><span class="value" id="rF1">–</span><span class="unit">N</span></div></div>
-        <div class="readout"><div class="label">큰 피스톤 F₂ = P·A₂</div>
-          <div><span class="value" id="rF2">–</span><span class="unit">N</span></div></div>
-        <div class="readout wide"><div class="label">힘이 몇 배가 되었나 F₂ / F₁ = A₂ / A₁</div>
-          <div><span class="value" id="rRatio">–</span><span class="unit">배 · 약 <span id="rTon">–</span> t 을 드는 힘</span></div></div>
-      </div>
-      <div class="fixnote" id="devNote"></div>
+    <div class="ctl" id="cT">
+      <div class="row"><span>온도</span><span class="rowval" id="vT">–</span></div>
+      <input type="range" class="rng-temp" id="sT" min="250" max="600" step="5" value="400" aria-label="온도 슬라이더">
+    </div>
+
+    <div class="ctl" id="cV">
+      <div class="row"><span>부피</span><span class="rowval" id="vV">–</span></div>
+      <input type="range" class="rng-vol" id="sV" min="0.50" max="5.00" step="0.01" value="2.75" aria-label="부피 슬라이더">
+    </div>
+
+    <div class="readout" id="roP">
+      <div class="label">압력계</div>
+      <div><span class="value" id="rP">–</span><span class="unit" id="rPUnit">kPa</span></div>
+      <div class="locknote" id="lockNote"></div>
     </div>
   </div>
 </div>
 
-<div class="card subcard">
-  <h2>도전 기록 <span style="font-weight:400;color:var(--t3)" id="recCount"></span></h2>
-  <div class="btns" style="margin-top:0;margin-bottom:8px">
-    <button id="csv">CSV로 저장</button>
-    <button id="clr">기록 지우기</button>
-  </div>
-  <div class="tablewrap" id="tableWrap"><div class="empty">아직 도전 기록이 없습니다.</div></div>
-  <div class="fixnote">※ 이 기록은 <b>이 기기의 이 화면에서만</b> 유지됩니다. 새로고침하면 사라지니 CSV로 저장하세요.</div>
+<div class="card" id="resultCard" style="display:none">
+  <h2 class="resulthead" id="resultHead">이번 라운드 결과</h2>
+  <div class="rtwrap"><table id="resultTable"></table></div>
+  <p class="fixline">같은 압력에 이르는 길은 하나가 아닙니다. 세 값이 어떻게 달랐는지 비교해 보세요.</p>
 </div>
 
-<details class="sheet" open>
-  <summary>탐구 활동지</summary>
+<div class="card" id="finalCard" style="display:none">
+  <h2>최종 결과</h2>
+  <div id="finalBody"></div>
+  <div class="goalbtns"><button class="primary" id="restartBtn">새 게임</button></div>
+</div>
+
+<details class="sheet">
+  <summary>이 그림이 실제와 다른 점 — 눌러서 펼치기</summary>
   <ol>
-    <li><span class="tagq">도입</span><b>유압 프레스는 어떻게 작동하는가</b> — 폐차장의 프레스는 사람이 밀 수 있는 정도의
-        힘으로 자동차를 납작하게 만듭니다. 화면의 장치에서 <b>작은 피스톤에 준 힘</b>과
-        <b>큰 피스톤이 내는 힘</b>을 비교해 보고, 그 비가 무엇과 같은지 쓰세요.</li>
-
-    <li><span class="tagq">관계</span><b>압력은 힘이 아니다</b> — 큰 피스톤에서 힘이 커졌습니다.
-        그렇다면 <b>압력</b>도 커졌나요? 화면의 압력 값을 근거로 답하세요.
-        <em>P</em> = <em>F</em>/<em>A</em> 를 써서 설명하세요.</li>
-
-    <li><span class="tagq">설명</span><b>파스칼 원리</b> — 밀폐된 액체에 준 압력은 어떻게 전달되나요?
-        1차시에서 다룬 "대기압은 <u>위에서 누르기만</u> 하는가?"와 연결해 한 문장으로 쓰세요.</li>
-
-    <li><span class="tagq">계산</span><b>1단계 도전</b> — 목표 압력이 주어집니다.
-        <em>P</em> = <em>nRT</em>/<em>V</em> 를 <em>V</em>에 대해 풀면 <em>V</em> = <em>nRT</em>/<em>P</em> 입니다.
-        <b>손으로 먼저 계산한 뒤</b> 숫자칸에 넣고 제출하세요. (<em>R</em> = 8.314 kPa·L/(mol·K))</li>
-
-    <li><span class="tagq">계산</span><b>2·3단계 도전</b> — 변인이 늘면 답이 <b>여러 개</b>가 됩니다.
-        같은 목표 압력을 서로 다른 (<em>n</em>, <em>T</em>, <em>V</em>) 조합 <b>두 가지</b>로 적어 보세요.
-        왜 답이 하나가 아닌가요?</li>
-
-    <li><span class="tagq">계산</span><b>4단계 도전</b> — 이번 목표는 압력이 아니라 <b>힘</b>입니다.
-        <em>F</em>₂ = <em>P</em>·<em>A</em>₂ 이므로 먼저 <b>필요한 압력</b>을 구하고, 그다음 기체 조건을 정해야 합니다.
-        푸는 순서를 두 단계로 나누어 쓰세요.</li>
-
-    <li><span class="tagq">관계</span><b>전략</b> — 같은 힘을 내는 데 큰 피스톤을 <b>넓게</b> 고르면
-        필요한 압력은 어떻게 되나요? 그러면 기체는 어떤 상태여야 하나요?
-        실제 기계를 설계한다면 어느 쪽이 유리할지 근거를 들어 쓰세요.</li>
-
-    <li><span class="tagq">한계</span><b>이 모형이 실제와 다른 점</b> —
-        <br>ⓐ 이 장치는 기체를 <b>이상 기체라고 가정</b>했습니다. 실제 유압 프레스가 내는 압력은
-        수천~수만 kPa 입니다. 그 정도 압력에서 이 가정은 괜찮을까요? 진단 3번과 연결해 설명하세요.
-        <br>ⓑ 실제 유압 프레스는 대개 <b>펌프로 기름을 밀어</b> 압력을 만듭니다.
-        이 화면이 기체 실린더를 쓴 이유는 무엇일까요?
-        <br>ⓒ 이 계산에서 <b>무시한 것</b>을 세 가지 이상 찾아 쓰세요.
-        (힌트: 마찰 / 기름의 압축성 / 관에서의 압력 손실 / 피스톤 자체의 무게)</li>
+    <li>이 계산은 <b>입자 자체의 크기와 입자 사이의 끌어당김을 무시</b>하고 만든 것입니다. 실제 기체는 아주 높은 압력에서 이 계산과 어긋나고, 조건에 따라 <b>액체로 변하기도</b> 합니다. 이 그림의 입자는 그런 변화 없이 항상 기체로만 움직입니다.</li>
+    <li>실제 유압 프레스는 대개 <b>펌프로 기름을 밀어</b> 압력을 만듭니다. 이 화면은 기체가 든 실린더를 압력원으로 삼았습니다(실제로 존재하는 방식입니다).</li>
+    <li><b>마찰 · 기름의 압축성 · 관에서의 압력 손실 · 피스톤 무게 · 유압유 양쪽 액면의 높이 차이가 만드는 압력 차</b>를 모두 무시했습니다. 실제 장치는 이 때문에 계산보다 약하게 눌립니다.</li>
+    <li>그림의 입자 <b>개수는 실제 개수가 아닙니다.</b> 화면의 「입자 수」 1칸은 눈으로 셀 수 있는 크기로 줄여 그린 <b>상대 개수</b>입니다.</li>
+    <li>입자의 <b>빠르기는 절대 온도의 제곱근에 비례</b>하게 그렸습니다(실제 관계와 같습니다). 다만 화면에서의 절대 속도는 <b>임의 배율(a.u.)</b>입니다.</li>
+    <li><b>실제 입자는 서로도 부딪힙니다.</b> 이 그림은 벽과의 충돌만 그렸습니다.</li>
+    <li>실제 장치라면 <b>압력계를 언제든 읽을 수 있습니다.</b> 이 게임은 도전을 위해 일부러 가려 둔 것입니다.</li>
   </ol>
-
-  <p class="limits">
-    <b>이 모형의 가정과 한계 — 반드시 함께 읽을 것</b><br>
-    ① 기체는 <b>이상 기체라고 가정</b>했습니다. 실제 기체는 이 정도 고압에서 어긋납니다.<br>
-    ② 실제 유압 프레스는 보통 <b>펌프</b>로 압력을 만듭니다. 여기서는 이상 기체 방정식을 쓰려고
-       <b>기체 실린더를 압력원</b>으로 삼았습니다. (실제로 존재하는 방식이며 '공압-유압 증압기'라 부릅니다)<br>
-    ③ <b>마찰·기름의 압축성·관에서의 압력 손실·피스톤 무게·중력에 의한 액체 기둥 압력</b>을 모두 무시했습니다.
-       실제 장치는 이 때문에 계산값보다 힘이 작게 나옵니다.<br>
-    ④ 기체가 압축·팽창하면 실제로는 온도가 함께 변합니다. 이 화면에서는 <b>온도를 따로 정하는 값</b>으로 두었습니다.<br>
-    ⑤ <em>R</em> = 8.314 kPa·L/(mol·K), 무게 환산은 <em>g</em> = 9.807 m/s² 를 썼습니다.<br>
-    ⑥ 목표값은 <b>반드시 도달 가능한 값</b>만 나오도록 만들었습니다. 못 맞히는 문제는 나오지 않습니다.
-  </p>
+  <h3>그림이 정확한 곳</h3>
+  <p>두 피스톤의 굵기 비는 실제 장치와 같게 그렸습니다. 세로 축척만 화면에 맞춰 줄였습니다.</p>
 </details>
 
 </div>

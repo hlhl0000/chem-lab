@@ -1,261 +1,488 @@
 "use strict";
 /* ================================================================
-   유압 프레스 도전 — 계산부 (화면과 무관)
+   유압 프레스 도전 — 계산부 (화면과 무관, sim.js 계산부와 동일본)
 
-   장치 구성
-     ① 기체 실린더 : 학생이 n(몰수)·T(온도)·V(부피)를 정한다.
-                     기체 압력  P = nRT / V     ← 이상 기체 방정식
-     ② 유압유      : 기체가 누르는 압력이 액체를 통해 **모든 방향으로 같은 크기로**
-                     전달된다 (파스칼 원리). 액체는 거의 압축되지 않는다.
-     ③ 작은 피스톤 A₁ / 큰 피스톤 A₂
-                     F₁ = P·A₁,  F₂ = P·A₂   →   F₂ / F₁ = A₂ / A₁
-                     압력이 같기 때문에 **넓이가 넓은 쪽이 더 큰 힘**을 받는다.
+   장치 구성 (학생 화면에는 식·용어를 노출하지 않는다 — X-4)
+     ① 기체 실린더 : 입자 수(상대 개수, 내부 mol로 환산) · 온도 · 부피를 정한다.
+                     P = n·R·T / V   ← 이상 기체 방정식(내부 계산에만 사용)
+     ② 유압유      : 기체 압력이 액체를 통해 전달된다(파스칼 원리 — 화면 미노출).
+     ③ 작은 피스톤 A1 / 큰 피스톤 A2(고정, 화면 미노출)
 
-   단위 — 이 시뮬레이션은 **실제 단위**를 쓴다 (gaslaws 는 임의 단위였다)
-     R = 8.314 kPa·L/(mol·K)   ( = 8.314 J/(mol·K) )
-     P [kPa] = n[mol] × R × T[K] / V[L]
-     F [N]   = P[kPa] × 1000 [Pa/kPa] × A[m²],  A[m²] = A[cm²] × 1e-4
-             = P[kPa] × A[cm²] × 0.1
+   v3 설계 변경 요지(설계지시안 §0·§3 3-B)
+     · 목표 압력은 제출 전까지 숨긴다. 학생은 그림 신호(입자 밀도·속도·피스톤 높이)만 본다.
+     · 판정은 "상한만"이다(확정 39) — 목표 초과 = 부서짐 0점. 미달 하한(밴드)은 없다.
+       BAND 상수는 두지 않는다.
+     · 「입자 수」 변인은 정수 1~20의 상대 개수로 표기하고, 내부적으로 n = 값 × 0.1 mol 로 환산한다
+       (확정 37 — 명칭만 바뀌었고 내부 mol 범위 0.1~2.0은 기존과 같다).
 
-   ⚠ 모형의 한계 (활동지 마지막 문항에서 학생에게 직접 묻는다)
-     · 실제 유압 프레스는 대개 **펌프로 기름을 밀어** 압력을 만든다.
-       여기서는 이상 기체 방정식을 쓰려고 **기체 실린더를 압력원**으로 삼았다.
-       (공압-유압 증압기라는 실제 장치가 이 방식이다)
-     · 기체는 **이상 기체라고 가정**했다. 실제 고압에서는 어긋난다.
+   모형의 한계(3-F 7항목이 화면 <details>에 그대로 들어간다. 여기서는 계산 근거만 남긴다)
+     · 입자 자체의 크기·입자 사이의 인력을 무시한 이상 기체 근사다.
+     · 입자끼리의 충돌은 계산하지 않는다(벽 반사만, 추정 9).
      · 마찰·기름의 압축성·관의 압력 손실·피스톤 무게를 모두 무시했다.
    ================================================================ */
 
 const PRESS = {
-  R: 8.314,                                  // kPa·L/(mol·K)
-  /* step = 슬라이더 눈금, fine = 숫자칸에 직접 칠 때의 정밀도.
-     ★ 숫자칸을 둔 이유: 이 게임의 핵심은 슬라이더를 흔드는 것이 아니라
-       **P = nRT/V 를 풀어 값을 계산해 넣는 것**이다. */
-  N: { min: 0.10, max: 2.00, step: 0.01, fine: 0.001 },   // 몰수 (mol)
-  T: { min: 250, max: 600, step: 1, fine: 1 },            // 온도 (K)
-  V: { min: 0.50, max: 5.00, step: 0.01, fine: 0.001 },   // 부피 (L)
-  A1: 12,                                    // 작은 피스톤 넓이 (cm²) — 고정
-  A2LIST: [40, 80, 150, 300],                // 큰 피스톤 넓이 선택지 (cm²)
-  /* 난이도 — 열리는 변인과 허용 오차 */
-  LEVELS: [
-    { id: 1, name: "1단계 · 변인 1개", open: ["V"], fix: { n: 1.00, T: 300 },
-      goal: "P", tol: 0.02, hint: "부피만 조절한다. P = nRT/V 에서 V 를 거꾸로 구하면 된다." },
-    { id: 2, name: "2단계 · 변인 2개", open: ["T", "V"], fix: { n: 1.00 },
-      goal: "P", tol: 0.015, hint: "온도와 부피 둘 다 쓸 수 있다. 답이 여러 개다 — 하나만 찾으면 된다." },
-    { id: 3, name: "3단계 · 변인 3개", open: ["n", "T", "V"], fix: {},
-      goal: "P", tol: 0.01, hint: "몰수까지 열렸다. 허용 오차가 좁아졌으니 계산하고 넣자." },
-    { id: 4, name: "4단계 · 파스칼 원리", open: ["n", "T", "V", "A2"], fix: {},
-      goal: "F", tol: 0.01, hint: "이번 목표는 압력이 아니라 **큰 피스톤이 내는 힘**이다. 두 단계로 푼다 — ① A₂ 를 고르고 필요한 압력 P = F₂ /(A₂ × 0.1) 을 구한다 ② 그 압력이 나오는 n · T · V 를 정한다. **A₂ 를 넓게 고를수록 필요한 압력은 낮아진다.**" }
-  ]
+  R: 8.314,                                        // kPa·L/(mol·K) — 화면에 노출하지 않는다
+  N: { min: 1, max: 20, step: 1, per: 0.1 },       // 「입자 수」(상대 개수) → 내부 mol = 값 × per
+  T: { min: 250, max: 600, step: 5 },              // 온도 K
+  V: { min: 0.50, max: 5.00, step: 0.01 },         // 부피 L
+  A1: 12,                                          // 작은 피스톤 넓이 cm² (화면 미노출)
+  A2: 150,                                         // 큰 피스톤 넓이 cm² — 고정(추정 12), 화면 미노출
+  PATM: 101.325                                    // 대기압 기준선 kPa (화면 표기는 "≈101 kPa")
+  // ★ BAND는 두지 않는다 — 확정 39. 미달 하한(「덜 눌림」) 규칙 자체가 없다.
 };
 
 const snap = (x, s) => Math.round(x / s) * s;
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
-/* 기체 압력 (kPa) */
-function pressure(n, T, V) {
+/* 기체 압력(kPa). N은 「입자 수」(1~20의 상대 개수) — 내부 mol = N × PRESS.N.per */
+function pressure(N, T, V) {
   if (!(V > 0)) return 0;
-  return n * PRESS.R * T / V;
-}
-/* 피스톤이 받는 힘 (N) — 압력은 파스칼 원리로 어디서나 같다 */
-function force(P_kPa, A_cm2) { return P_kPa * A_cm2 * 0.1; }
-
-/* 그 단계에서 만들 수 있는 압력의 최소·최대 */
-function reach(level) {
-  const L = PRESS.LEVELS.find(l => l.id === level);
-  const nR = L.fix.n !== undefined ? [L.fix.n, L.fix.n] : [PRESS.N.min, PRESS.N.max];
-  const tR = L.fix.T !== undefined ? [L.fix.T, L.fix.T] : [PRESS.T.min, PRESS.T.max];
-  const vR = [PRESS.V.min, PRESS.V.max];
-  return { lo: pressure(nR[0], tR[0], vR[1]), hi: pressure(nR[1], tR[1], vR[0]) };
+  return N * PRESS.N.per * PRESS.R * T / V;
 }
 
-/* 슬라이더 눈금 위에서 목표에 얼마나 가까이 갈 수 있는가 (도달 가능성 보장용) */
-function bestError(level, targetP) {
-  const L = PRESS.LEVELS.find(l => l.id === level);
-  const ns = L.fix.n !== undefined ? [L.fix.n]
-    : Array.from({ length: Math.round((PRESS.N.max - PRESS.N.min) / PRESS.N.step) + 1 }, (_, i) => +(PRESS.N.min + i * PRESS.N.step).toFixed(2));
-  const ts = L.fix.T !== undefined ? [L.fix.T]
-    : Array.from({ length: Math.round((PRESS.T.max - PRESS.T.min) / PRESS.T.step) + 1 }, (_, i) => PRESS.T.min + i * PRESS.T.step);
-  let best = Infinity;
-  for (const n of ns) for (const T of ts) {
-    // 목표 압력을 내는 이상적인 V 를 구한 뒤 눈금에 맞춘다
-    const vIdeal = n * PRESS.R * T / targetP;
-    if (vIdeal < PRESS.V.min - PRESS.V.fine || vIdeal > PRESS.V.max + PRESS.V.fine) continue;
-    const V = clamp(snap(vIdeal, PRESS.V.fine), PRESS.V.min, PRESS.V.max);
-    const e = Math.abs(pressure(n, T, V) - targetP) / targetP;
-    if (e < best) best = e;
-    if (best < 1e-5) return best;
+/* 실린더 안 기체 기둥의 그림 높이 — 원점을 지나는 정비례. 하한을 두지 않는다(결함 A 처방) */
+function gasHeight(V, maxGas) {
+  return (V / PRESS.V.max) * maxGas;
+}
+
+/* 입자 그림 반지름 — ★★★ N·T·V 어느 것에도 의존하지 않는다(반박 장치 ①의 구현) */
+function dotRadius(canvasW) {
+  return clamp(canvasW / 220, 2.2, 4.0);
+}
+
+/* 입자 속도(캔버스 폭 비율/초) — 절대 온도의 제곱근에 비례. T=300 K에서 0.35 */
+const DOT_SPEED_AT_300K = 0.35;
+function dotSpeed(T) {
+  return DOT_SPEED_AT_300K * Math.sqrt(T / 300);
+}
+
+/* 입자 개수 — ★★ 「입자 수」에만 반응한다(부피·온도에는 반응하지 않는다) */
+function dotCount(N) {
+  return N * 3;
+}
+
+/* 두 피스톤의 그림 폭 — 넓이 비의 제곱근으로 왜곡을 없앤다(추정 12) */
+function pistonWidths(midW) {
+  const wL = clamp(midW * 0.11, 40, 96);
+  const ratio = Math.sqrt(PRESS.A2 / PRESS.A1);      // = √12.5 ≈ 3.5355339…
+  const wR = Math.min(midW * 0.50, wL * ratio);
+  return { wL: wL, wR: wR, ratio: ratio };
+}
+
+/* 유효숫자 sig자리로 반올림 (목표 압력을 "보기 좋은" 자리수로 맞출 때 쓴다) */
+function roundToSig(x, sig) {
+  if (x === 0) return 0;
+  const d = Math.ceil(Math.log10(Math.abs(x)));
+  const power = sig - d;
+  const mag = Math.pow(10, power);
+  return Math.round(x * mag) / mag;
+}
+
+/* r 생성 구간 — 목표 = 출발 압력 × r. 방향은 무작위로 두 구간 중 하나(§3 3-B 2)
+   makeRound와 press_check.js가 이 상수 하나만 참조한다(F-1 단일 원천). */
+const R_RANGE = { down: [0.55, 0.75], up: [1.35, 1.90] };
+
+/* 라운드 생성 — 출발 상태를 뽑고 목표를 정한다. 부피 단독 경로로 도달 가능한 라운드만 채택한다.
+   rnd()는 [0,1) 난수 함수를 인자로 받는다(재현 가능한 검증을 위해 필수). */
+function makeRound(rnd) {
+  const N_MIN = 4, N_MAX = 16;
+  const T_MIN = 280, T_MAX = 450, T_STEP = 5;
+  const V_MIN = 1.00, V_MAX = 2.70, V_STEP = 0.01;
+  const MAX_TRIES = 2000;
+
+  for (let tries = 0; tries < MAX_TRIES; tries++) {
+    const N0 = N_MIN + Math.floor(rnd() * (N_MAX - N_MIN + 1));
+    const T0 = clamp(snap(T_MIN + rnd() * (T_MAX - T_MIN), T_STEP), T_MIN, T_MAX);
+    const V0 = clamp(snap(V_MIN + rnd() * (V_MAX - V_MIN), V_STEP), V_MIN, V_MAX);
+    const P0 = pressure(N0, T0, V0);
+
+    const goUp = rnd() < 0.5;
+    const range = goUp ? R_RANGE.up : R_RANGE.down;
+    const r = range[0] + rnd() * (range[1] - range[0]);
+
+    const target = roundToSig(P0 * r, 2);
+    if (!(target > 0)) continue;
+
+    // 부피 단독 경로의 필요 부피 — 이 범위 안이어야 2차시 보일 법칙만으로 도달 가능하다
+    const V_need = N0 * PRESS.N.per * PRESS.R * T0 / target;
+    if (V_need >= 1.00 && V_need <= 5.00) {
+      return { N0: N0, T0: T0, V0: V0, P0: P0, target: target };
+    }
   }
-  return best;
+  throw new Error("makeRound: " + MAX_TRIES + "회 시도에도 V_need 조건을 만족하는 라운드를 만들지 못했다");
 }
 
-/* 점수 — 오차율에 따라 계단식. 허용 오차 안이면 성공. */
-function score(relErr, tol) {
-  const r = Math.abs(relErr);
-  if (r <= tol * 0.25) return 100;
-  if (r <= tol * 0.5) return 90;
-  if (r <= tol) return 80;
-  if (r <= tol * 2) return 55;
-  if (r <= tol * 5) return 30;
-  if (r <= tol * 10) return 10;
-  return 0;
-}
-function grade(relErr, tol) {
-  const s = score(relErr, tol);
-  return s >= 90 ? "완벽" : s >= 80 ? "성공" : s >= 55 ? "아쉬움" : s >= 10 ? "빗나감" : "실패";
+/* 판정 — 상한만(확정 39). 두 값만 반환한다. "덜눌림"은 존재하지 않는다 */
+function verdict(P, target) {
+  return P > target ? "부서짐" : "성공";
 }
 
-/* 미션 목표값 만들기 — 반드시 **눈금 위에서 도달 가능한** 값만 낸다 */
-function makeTarget(level, rnd) {
-  const L = PRESS.LEVELS.find(l => l.id === level);
-  const R = reach(level);
-  for (let tries = 0; tries < 400; tries++) {
-    // 로그 균등하게 뽑아 큰 값·작은 값이 골고루 나오게 한다
-    const lo = Math.log(R.lo * 1.25), hi = Math.log(R.hi * 0.8);
-    let P = Math.exp(lo + rnd() * (hi - lo));
-    // 보기 좋은 자리수로 맞춘다
-    const mag = Math.pow(10, Math.floor(Math.log10(P)) - 1);
-    P = Math.round(P / mag) * mag;
-    if (P < R.lo * 1.1 || P > R.hi * 0.9) continue;
-    if (bestError(level, P) > L.tol * 0.3) continue;   // 만점을 노릴 수 있어야 한다
-    if (L.goal === "P") return { P, A2: PRESS.A2LIST[1], F: null };
-    const A2 = PRESS.A2LIST[Math.floor(rnd() * PRESS.A2LIST.length)];
-    let F = force(P, A2);
-    const fm = Math.pow(10, Math.floor(Math.log10(F)) - 1);
-    F = Math.round(F / fm) * fm;
-    return { P: null, A2: null, F };
+/* 라운드 순위 — 성공자만 목표에 가까운 순으로. 성공자가 없으면 null.
+   entries: [{ ...임의 필드, P: number }, ...] — P 필드만 사용한다.
+   반환: 원본 entry를 얕은 복사한 뒤 missRatio = (target - P) / target 을 덧붙인 배열(오름차순),
+         또는 null(전원 부서짐) */
+function rank(entries, target) {
+  const survivors = [];
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    if (verdict(e.P, target) === "성공") {
+      const missRatio = (target - e.P) / target;
+      survivors.push(Object.assign({}, e, { missRatio: missRatio }));
+    }
   }
-  return { P: Math.round(R.lo * 2), A2: PRESS.A2LIST[1], F: null };
+  if (survivors.length === 0) return null;
+  survivors.sort((a, b) => a.missRatio - b.missRatio);
+  return survivors;
 }
 
+/* 인원별 라운드 수·제한 시간(확정 38 — 정지점 1 승인, 변경 없음) */
+const ROUNDS = { 2: 4, 3: 3, 4: 2 };
+const LIMITS = { 2: 30, 3: 30, 4: 30 };
 
+/* 학생 활동 시간 예산(초) — X-2의 단일 원천(F-1). 화면 코드에 다시 타이핑하지 않는다.
+   공식(§3 「학생 활동 시간 예산」): 총초 = 고정비 160
+     + 라운드수 × (라운드머리 15 + (조작 + 전환 5) × 인원 + 공개·확인 20)
+   고정비 160초 내역: 기기 준비·조 편성 45 + 규칙 설명 60 + 인원 선택 10 + 마무리 45(확정 38) */
+const FIXED_COST_SECONDS = 160;
+function budgetSeconds(k) {
+  return FIXED_COST_SECONDS + ROUNDS[k] * (35 + (LIMITS[k] + 5) * k);
+}
 
 /* ================= UI ================= */
-/* ↑ 위쪽(계산부)은 화면과 무관하다. 검증 스크립트가 이 주석줄을 기준으로 잘라
-   Node 에서 그대로 돌린다. 이 줄을 지우거나 바꾸지 말 것. */
+/* ↑ 위쪽(계산부)은 press_core.js와 문자 그대로 동일해야 한다(§2 #2 ⑵).
+   검증 스크립트가 이 주석줄을 기준으로 계산부를 잘라낸다. 이 줄을 지우거나 바꾸지 말 것. */
 
 const $ = id => document.getElementById(id);
 const CSSV = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-/* 밝은 무대에서 쓰는 데이터 색은 3개다 (매뉴얼 §9 3색 조합, 최악 색각 ΔE 38.2)
-   기체=파랑 / 유압유=황갈 / 금속·눈금=검정  */
+/* 밝은 무대의 데이터 색 — 정확히 3개(§5 금지 11). 기체=파랑 / 유압유=황갈 / 물체·금속=회색 */
 const C = {
-  blue: CSSV("--d-blue"), amber: CSSV("--d-amber"), ink: CSSV("--t1"),
-  gray: CSSV("--d-gray"), t3: CSSV("--t3"), stageLight: CSSV("--stage-light")
+  blue: CSSV("--d-blue"), amber: CSSV("--d-amber"), gray: CSSV("--d-gray"),
+  ink: CSSV("--t1"), t3: CSSV("--t3"), stageLight: CSSV("--stage-light")
 };
 const GRID = "rgba(40,45,52,0.055)";
 const EDGE = "rgba(40,45,52,0.42)";
 const GAS_FILL = "rgba(29,78,216,0.10)";
 const OIL_FILL = "rgba(180,83,9,0.16)";
+const OBJ_FILL = "rgba(95,107,122,0.28)";
 
-const G = 9.80665;
+const SEATS = ["①", "②", "③", "④"];
+const REVEAL_LATCH_MS = 260;     // 걸쇠가 열리는 시점
+const REVEAL_SHOW_MS = 520;      // 압력·판정이 드러나는 시점
+const REVEAL_TOTAL_MS = 1500;    // 다음 참가자로 넘어가는 시점
 
-let level = 1;
-let target = null;          // { P | F, tol, goal }
-let tries = 0;
-let rows = [];
-let submitted = false;
-const state = { n: 1.000, T: 300, V: 2.000, A2: PRESS.A2LIST[1] };
+/* ── 애니메이션 정지(감소 모션) ── */
+let animPaused = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+function showMotionNote(v) { $("motionNote").style.display = v ? "flex" : "none"; }
+showMotionNote(animPaused);
+$("playMotion").onclick = () => { animPaused = false; showMotionNote(false); };
 
+/* ── 캔버스 ── */
 const cv = $("rig"), ctx = cv.getContext("2d");
-const S = { n: $("sN"), T: $("sT"), V: $("sV") };
-const NU = { n: $("numN"), T: $("numT"), V: $("numV") };
-const BOX = { n: $("cN"), T: $("cT"), V: $("cV"), A2: $("cA") };
-const LK = { n: $("lkN"), T: $("lkT"), V: $("lkV"), A2: $("lkA") };
-const RANGE = { n: PRESS.N, T: PRESS.T, V: PRESS.V };
 
-/* ── 난이도 적용 ── */
-function levelDef() { return PRESS.LEVELS.find(l => l.id === level); }
+/* ── 게임 상태 ── */
+let selectedK = 2;
+let useLimit = true;
+const state = { N: 10, T: 400, V: 2.75 };   // 조절 변인의 "지금 값" — 항상 화면에 보인다(그림 신호)
 
-function applyLevel() {
-  const L = levelDef();
-  document.querySelectorAll(".lv").forEach(b =>
-    b.setAttribute("aria-pressed", String(+b.dataset.lv === level)));
-  for (const k of ["n", "T", "V", "A2"]) {
-    const open = L.open.indexOf(k) >= 0;
-    BOX[k].classList.toggle("locked", !open);
-    LK[k].textContent = open ? "" : "잠김";
-    if (k !== "A2") { S[k].disabled = !open; NU[k].disabled = !open; }
-  }
-  if (L.fix.n !== undefined) state.n = L.fix.n;
-  if (L.fix.T !== undefined) state.T = L.fix.T;
-  if (L.goal === "P") state.A2 = PRESS.A2LIST[1];
-  buildAreas();
-  syncInputs();
-  newMission();
+const G = {
+  phase: "idle",         // idle | playing | allSubmitted | reveal | roundResult | ended
+  k: 0, round: 0, totalRounds: 0,
+  startOffset: 0, order: [], turnPos: 0,
+  data: null, entries: [], wins: [],
+  turnLocked: false, turnStart: 0,
+  revealSeatOrder: [], revealIdx: 0, revealPhaseStart: 0,
+  roundWinnerSeat: null
+};
+
+const S = { N: $("sN"), T: $("sT"), V: $("sV") };
+const RANGE = { N: PRESS.N, T: PRESS.T, V: PRESS.V };
+
+function fmtInt(x) { return Math.round(x).toLocaleString("ko-KR"); }
+function seatLabel(i) { return SEATS[i] || ("#" + (i + 1)); }
+
+/* ================= 조절 변인 입력 ================= */
+function syncSliderDom() {
+  S.N.value = state.N; S.T.value = state.T; S.V.value = state.V.toFixed(2);
+  $("vN").textContent = state.N;
+  $("vT").textContent = state.T + " K (" + (state.T - 273) + "℃)";
+  $("vV").textContent = state.V.toFixed(2) + " L";
+}
+function onSlide(k, v) {
+  const R = RANGE[k];
+  if (!isFinite(v)) return;
+  state[k] = clamp(snap(v, R.step), R.min, R.max);
+  syncSliderDom();
+  if (G.phase === "playing" && !G.turnLocked) { G.turnLocked = true; renderDynamic(); }
+}
+S.N.oninput = e => onSlide("N", +e.target.value);
+S.T.oninput = e => onSlide("T", +e.target.value);
+S.V.oninput = e => onSlide("V", +e.target.value);
+function setControlsEnabled(on) {
+  S.N.disabled = S.T.disabled = S.V.disabled = !on;
 }
 
-function buildAreas() {
-  const L = levelDef(), open = L.open.indexOf("A2") >= 0;
-  const host = $("areapick"); host.innerHTML = "";
-  PRESS.A2LIST.forEach(a => {
-    const b = document.createElement("button");
-    b.className = "ab"; b.textContent = a; b.disabled = !open;
-    b.setAttribute("aria-pressed", String(state.A2 === a));
-    b.onclick = () => { state.A2 = a; buildAreas(); draw(); readouts(); };
-    host.appendChild(b);
+/* ================= 게임 진행 ================= */
+function orderForRound(r) {
+  const off = (G.startOffset + (r - 1)) % G.k;
+  return Array.from({ length: G.k }, (_, i) => (off + i) % G.k);
+}
+function currentSeat() { return G.order[G.turnPos]; }
+
+function resetTurnControls() {
+  state.N = G.data.N0; state.T = G.data.T0; state.V = G.data.V0;
+  syncSliderDom();
+  G.turnLocked = false;
+  G.turnStart = performance.now();
+}
+
+function startGame() {
+  G.k = selectedK;
+  G.wins = Array(G.k).fill(0);
+  G.round = 0;
+  G.totalRounds = ROUNDS[G.k];
+  G.startOffset = Math.floor(Math.random() * G.k);
+  $("resultCard").style.display = "none";
+  $("finalCard").style.display = "none";
+  nextRound();
+}
+function nextRound() {
+  G.round++;
+  if (G.round > G.totalRounds) { endGame(); return; }
+  G.data = makeRound(Math.random);
+  G.entries = [];
+  G.order = orderForRound(G.round);
+  G.turnPos = 0;
+  resetTurnControls();
+  G.phase = "playing";
+  setControlsEnabled(true);
+  renderStatic();
+}
+function submitTurn() {
+  const P = pressure(state.N, state.T, state.V);
+  G.entries.push({ seat: currentSeat(), N: state.N, T: state.T, V: state.V, P: P });
+  G.turnPos++;
+  if (G.turnPos >= G.k) {
+    G.phase = "allSubmitted";
+    setControlsEnabled(false);
+  } else {
+    resetTurnControls();
+    G.phase = "playing";
+  }
+  renderStatic();
+}
+function startReveal() {
+  G.revealSeatOrder = Array.from({ length: G.k }, (_, i) => i);   // 참가자 순서(①→②→③→④)대로 공개
+  G.revealIdx = 0;
+  G.revealPhaseStart = performance.now();
+  G.phase = "reveal";
+  setControlsEnabled(false);
+  renderStatic();
+}
+function finishReveal() {
+  const ranked = rank(G.entries, G.data.target);
+  G.roundWinnerSeat = ranked && ranked.length ? ranked[0].seat : null;
+  if (G.roundWinnerSeat !== null) G.wins[G.roundWinnerSeat]++;
+  G.phase = "roundResult";
+  renderStatic();
+}
+function nextRoundOrEnd() {
+  if (G.round >= G.totalRounds) endGame(); else nextRound();
+}
+function endGame() {
+  G.phase = "ended";
+  setControlsEnabled(false);
+  $("resultCard").style.display = "none";
+  renderStatic();
+}
+function endNow() {
+  if (G.phase === "idle" || G.phase === "ended") return;
+  endGame();
+}
+
+/* ================= 화면 갱신(상태 전환 시 1회) ================= */
+function renderStatic() {
+  const playing = G.phase !== "idle" && G.phase !== "ended";
+  /* 재작업 A-4 — "새 게임"은 idle일 때만 강조(primary). 게임 중·종료 후에는 다른 하나의
+     강조 버튼(제출/공개/다음 라운드/최종 카드의 새 게임)과 겹치지 않게 뗀다. 국면마다
+     강조 버튼이 항상 1개 이하가 되게 하는 것이 목적이다(§3 3-E·§6 I군). */
+  $("newGame").classList.toggle("primary", G.phase === "idle");
+  $("roundNow").textContent = playing ? G.round : "–";
+  $("roundTotal").textContent = playing ? G.totalRounds : "–";
+  $("turnLab").textContent =
+    G.phase === "playing" ? seatLabel(currentSeat()) + "번 차례"
+    : G.phase === "allSubmitted" ? "전원 제출 완료"
+    : G.phase === "reveal" ? "공개 중"
+    : G.phase === "roundResult" ? "라운드 결과"
+    : G.phase === "ended" ? "게임 종료"
+    : "대기 중";
+  $("winsLab").textContent = G.k
+    ? Array.from({ length: G.k }, (_, i) => seatLabel(i) + G.wins[i]).join(" ")
+    : "–";
+
+  $("idleNote").style.display = G.phase === "idle" ? "block" : "none";
+  $("goalMain").style.display = G.phase === "idle" ? "none" : "flex";
+  $("goalVal").textContent = G.data ? fmtInt(G.data.target) : "–";
+  if (G.data) $("startVal").textContent = fmtInt(G.data.P0);
+
+  $("submitBtn").style.display = G.phase === "playing" ? "" : "none";
+  $("revealBtn").style.display = G.phase === "allSubmitted" ? "" : "none";
+  $("nextRoundBtn").style.display = G.phase === "roundResult" ? "" : "none";
+  $("nextRoundBtn").textContent = G.round >= G.totalRounds ? "최종 결과 보기" : "다음 라운드";
+
+  $("timerWrap").style.display = G.phase === "playing" ? "flex" : "none";
+
+  $("turnHint").textContent =
+    G.phase === "playing" ? "— " + seatLabel(currentSeat()) + "번, 지금 조절하세요" : "";
+
+  if (G.phase === "roundResult") renderResultTable();
+  if (G.phase === "ended") renderFinal();
+
+  renderDynamic();
+}
+
+/* ================= 화면 갱신(매 프레임) ================= */
+function lastRevealedEntry() {
+  if (!G.revealSeatOrder.length || !G.entries.length) return null;
+  const seat = G.revealSeatOrder[G.revealSeatOrder.length - 1];
+  return G.entries.find(x => x.seat === seat) || null;
+}
+function pressureInfo() {
+  if (G.phase === "playing") {
+    return { locked: G.turnLocked, value: G.turnLocked ? null : pressure(state.N, state.T, state.V) };
+  }
+  if (G.phase === "reveal") {
+    const seat = G.revealSeatOrder[G.revealIdx];
+    const e = G.entries.find(x => x.seat === seat);
+    const elapsed = performance.now() - G.revealPhaseStart;
+    const shown = elapsed > REVEAL_SHOW_MS || animPaused;
+    return { locked: !shown, value: shown ? e.P : null };
+  }
+  if (G.phase === "roundResult" || G.phase === "ended") {
+    const e = lastRevealedEntry();
+    if (e) return { locked: false, value: e.P };
+  }
+  return { locked: true, value: null };
+}
+function renderDynamic() {
+  const pi = pressureInfo();
+  $("rP").textContent = pi.locked ? "🔒 잠김" : fmtInt(pi.value);
+  $("rPUnit").textContent = pi.locked ? "" : "kPa";
+  $("lockNote").textContent = pi.locked
+    ? (G.phase === "playing" ? "조절하는 동안 잠깁니다 — 제출하면 다음 사람에게 열립니다" : "제출하면 열립니다")
+    : "";
+
+  const showStart = G.phase === "playing" && G.turnPos === 0 && !G.turnLocked;
+  $("startInfo").style.display = showStart ? "flex" : "none";
+
+  if (G.phase === "playing" && useLimit) {
+    const limit = LIMITS[G.k];
+    const elapsed = (performance.now() - G.turnStart) / 1000;
+    const remain = Math.max(0, limit - elapsed);
+    $("timerFill").style.width = Math.max(0, Math.min(100, remain / limit * 100)) + "%";
+    $("timerTxt").textContent = "남은 시간 " + Math.ceil(remain) + "초";
+    if (remain <= 0) submitTurn();
+  } else if (G.phase === "playing") {
+    $("timerTxt").textContent = "제한 시간 없음";
+    $("timerFill").style.width = "100%";
+  }
+}
+
+/* ================= 결과 표 ================= */
+function verdictCell(v) {
+  return v === "성공"
+    ? '<span class="pv pv-ok">✓ 성공</span>'
+    : '<span class="pv pv-bad">✕ 부서짐</span>';
+}
+function renderResultTable() {
+  const rows = G.entries.slice().sort((a, b) => a.seat - b.seat).map(e => {
+    const v = verdict(e.P, G.data.target);
+    const pct = Math.round(e.P / G.data.target * 100);
+    const win = e.seat === G.roundWinnerSeat ? ' class="winrow"' : "";
+    return "<tr" + win + "><td>" + seatLabel(e.seat) + "</td><td>" + e.N + "</td><td>" + e.T +
+      " K</td><td>" + e.V.toFixed(2) + " L</td><td>" + fmtInt(e.P) + " kPa</td><td>" + pct +
+      " %</td><td>" + verdictCell(v) + "</td></tr>";
+  }).join("");
+  const head = "<tr><th>참가자</th><th>입자 수</th><th>온도</th><th>부피</th><th>만든 압력</th><th>목표 대비</th><th>판정</th></tr>";
+  $("resultTable").innerHTML = "<thead>" + head + "</thead><tbody>" + rows + "</tbody>";
+  $("resultHead").textContent = G.roundWinnerSeat !== null
+    ? "이번 라운드 승자 — " + seatLabel(G.roundWinnerSeat) + "번"
+    : "전원 부서짐 — 승자 없음";
+  $("resultCard").style.display = "";
+}
+function renderFinal() {
+  const order = Array.from({ length: G.k }, (_, i) => i).sort((a, b) => G.wins[b] - G.wins[a]);
+  const top = G.wins[order[0]];
+  const winners = order.filter(i => G.wins[i] === top);
+  /* 재작업 B-4 — 표만으로는 승자가 강조돼 보이지 않는다(0승-0승도 둘 다 강조된다).
+     문장으로 최종 승자를 명시한다(§3 3-B 10 · §6 E군). */
+  const winTxt = winners.length > 1
+    ? "공동 1위 — " + winners.map(i => seatLabel(i)).join("·") + "번"
+    : "최종 승자 — " + seatLabel(winners[0]) + "번";
+  const rows = order.map(i =>
+    "<tr" + (G.wins[i] === top ? ' class="winrow"' : "") + "><td>" + seatLabel(i) +
+    "번</td><td>" + G.wins[i] + "승</td></tr>").join("");
+  $("finalBody").innerHTML = '<p class="winline">' + winTxt + '</p><table><thead><tr><th>참가자</th><th>승수</th></tr></thead><tbody>' + rows + "</tbody></table>";
+  $("finalCard").style.display = "";
+}
+
+/* ================= 버튼 ================= */
+/* 재작업 B-3⑴ — 제한 시간 표시값을 LIMITS[selectedK]에서 매번 계산한다(하드코딩 제거, F-1). */
+function syncLimitTxt() { $("limitTxt").textContent = LIMITS[selectedK]; }
+document.querySelectorAll(".pc").forEach(b => b.onclick = () => {
+  selectedK = +b.dataset.n;
+  document.querySelectorAll(".pc").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  syncLimitTxt();
+});
+$("useLimit").onchange = e => { useLimit = e.target.checked; };
+$("newGame").onclick = startGame;
+$("endGame").onclick = endNow;
+$("submitBtn").onclick = submitTurn;
+$("revealBtn").onclick = startReveal;
+$("nextRoundBtn").onclick = () => { $("resultCard").style.display = "none"; nextRoundOrEnd(); };
+$("restartBtn").onclick = startGame;
+
+/* ================= 「어떻게 하나」 — 1024px 미만은 기본 접힘, 그 이상은 항상 펼침 ================= */
+function syncHowto() {
+  const wide = window.matchMedia("(min-width:1024px)").matches;
+  const el = $("howto");
+  if (wide) el.setAttribute("open", ""); else el.removeAttribute("open");
+}
+window.addEventListener("resize", syncHowto);
+
+/* ================= 입자 ================= */
+let particles = [], particleN = -1;
+function ensureParticles(n) {
+  if (n === particleN) return;
+  particleN = n;
+  const cnt = dotCount(n);
+  particles = Array.from({ length: cnt }, () => {
+    const a = Math.random() * Math.PI * 2;
+    return { lx: Math.random(), ly: Math.random(), dx: Math.cos(a), dy: Math.sin(a) };
   });
 }
-
-function syncInputs() {
-  for (const k of ["n", "T", "V"]) {
-    const dec = k === "T" ? 0 : 3;
-    S[k].value = clamp(state[k], RANGE[k].min, RANGE[k].max);
-    NU[k].value = (+state[k]).toFixed(dec);
+let lastTs = 0, frameDt = 0;
+/* dotSpeed(T)는 계산부 주석대로 "초당 캔버스 폭의 비율"이다. 화면 px 속도가 실제로
+   그 정의를 따르려면 정규화 이동량을 박스의 실제 폭·높이로 나눠야 한다 — 그래야
+   px 속도가 온도(T)에만 반응하고 부피(박스 높이)에는 반응하지 않는다.
+   (SX-1 A-1 재작업 — 이전 버전은 dotSpeed를 호출하지 않고 dt만 곱해, 온도는
+   화면에 반영되지 않고 부피가 세로 px 속도를 바꾸는 오개념을 심고 있었다.) */
+function updateParticles(dt, T, refW, boxW, boxH) {
+  if (dt <= 0) return;
+  const pxPerSec = dotSpeed(T) * refW;
+  const vx = pxPerSec / Math.max(1, boxW);
+  const vy = pxPerSec / Math.max(1, boxH);
+  for (const p of particles) {
+    p.lx += p.dx * vx * dt; p.ly += p.dy * vy * dt;
+    if (p.lx < 0) { p.lx = 0; p.dx = -p.dx; }
+    if (p.lx > 1) { p.lx = 1; p.dx = -p.dx; }
+    if (p.ly < 0) { p.ly = 0; p.dy = -p.dy; }
+    if (p.ly > 1) { p.ly = 1; p.dy = -p.dy; }
   }
 }
 
-/* ── 미션 ── */
-function newMission() {
-  const L = levelDef();
-  target = makeTarget(level, Math.random);
-  target.goal = L.goal; target.tol = L.tol;
-  tries = 1; submitted = false;
-  $("goalLab").textContent = L.goal === "P" ? "목표 압력" : "목표 힘 (큰 피스톤)";
-  $("goalUnit").textContent = L.goal === "P" ? "kPa" : "N";
-  $("goalVal").textContent = (L.goal === "P" ? target.P : target.F).toLocaleString("ko-KR");
-  $("tolVal").textContent = (L.tol * 100).toFixed(1);
-  $("triesVal").textContent = tries;
-  $("missNote").innerHTML = "<b>힌트</b> — " + L.hint.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>") +
-    "<br>제출은 <b>딱 한 번</b>입니다. 먼저 계산하고 값을 넣은 뒤에 누르세요. " +
-    "<em>R</em> = 8.314 kPa·L/(mol·K)";
-  $("result").className = "result";
-  $("submit").disabled = false;
-  draw(); readouts();
-}
-
-function submit() {
-  if (submitted || !target) return;
-  const L = levelDef();
-  const P = pressure(state.n, state.T, state.V);
-  const got = L.goal === "P" ? P : force(P, state.A2);
-  const want = L.goal === "P" ? target.P : target.F;
-  const err = (got - want) / want;
-  const sc = score(err, L.tol), gr = grade(err, L.tol);
-  submitted = true; tries = 0;
-  $("triesVal").textContent = "0";
-  $("submit").disabled = true;
-
-  const box = $("result");
-  box.className = "result on " + (sc >= 80 ? "ok" : sc >= 30 ? "mid" : "bad");
-  box.innerHTML =
-    `<div class="g">${gr} · ${sc}점</div>` +
-    `<div style="margin-top:5px">목표 <b>${want.toLocaleString("ko-KR")}</b> ${L.goal === "P" ? "kPa" : "N"} · ` +
-    `내가 만든 값 <b>${got.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}</b> · ` +
-    `오차 <b>${(err * 100).toFixed(2)} %</b> (허용 ${(L.tol * 100).toFixed(1)} %)</div>` +
-    `<div style="margin-top:4px;color:var(--t2)">쓴 값 — n = ${state.n.toFixed(3)} mol · T = ${state.T} K · V = ${state.V.toFixed(3)} L` +
-    (L.goal === "F" ? ` · A₂ = ${state.A2} cm²` : "") + `</div>` +
-    (sc < 80 ? `<div style="margin-top:5px;color:var(--t2)">다시 하려면 <b>새 미션 받기</b>를 누르세요. 계산부터 하고 넣는 것이 빠릅니다.</div>` : "");
-
-  rows.push({
-    seat: $("seat").value.trim() || "(무기명)", level, goal: L.goal,
-    want, got, err, score: sc, grade: gr,
-    n: state.n, T: state.T, V: state.V, A2: state.A2, P
-  });
-  renderTable();
-  draw();
-}
-
-/* ── 그리기 ── */
+/* ================= 그리기 ================= */
 function fit(hCss) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   cv.style.height = hCss + "px";
@@ -264,27 +491,52 @@ function fit(hCss) {
 }
 function resize() {
   const w = cv.clientWidth || 320;
-  fit(Math.max(260, Math.min(400, w * 0.62)));
+  const twoCol = window.matchMedia("(min-width:1024px)").matches;
+  const vh = window.innerHeight || 800;
+  const hCss = clamp(Math.min(w * 0.80, vh * (twoCol ? 0.62 : 0.45)), 320, 620);
+  fit(hCss);
   draw();
+}
+
+function displayState() {
+  if (G.phase === "reveal") {
+    const seat = G.revealSeatOrder[G.revealIdx];
+    const e = G.entries.find(x => x.seat === seat);
+    const elapsed = performance.now() - G.revealPhaseStart;
+    return {
+      N: e.N, T: e.T, V: e.V,
+      latched: elapsed < REVEAL_LATCH_MS && !animPaused,
+      pistonT: animPaused ? 1 : clamp((elapsed - REVEAL_LATCH_MS) / (REVEAL_TOTAL_MS - REVEAL_LATCH_MS - 200), 0, 1),
+      shown: elapsed > REVEAL_SHOW_MS || animPaused,
+      verdict: (elapsed > REVEAL_SHOW_MS || animPaused) ? verdict(e.P, G.data.target) : null
+    };
+  }
+  if (G.phase === "roundResult" || G.phase === "ended") {
+    const e = lastRevealedEntry();
+    if (e) return { N: e.N, T: e.T, V: e.V, latched: false, pistonT: 1, shown: true, verdict: verdict(e.P, G.data.target) };
+  }
+  return { N: state.N, T: state.T, V: state.V, latched: G.phase === "playing" || G.phase === "allSubmitted", pistonT: 0, shown: false, verdict: null };
+}
+
+function fitText(text, shortText, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  return shortText;
 }
 
 function draw() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const W = cv.width / dpr, H = cv.height / dpr;
+  if (W < 40 || H < 40) return;   // 매뉴얼 §5 — 너무 작으면 그리지 않는다
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = C.stageLight; ctx.fillRect(0, 0, W, H);
 
-  const P = pressure(state.n, state.T, state.V);
-  const F1 = force(P, PRESS.A1), F2 = force(P, state.A2);
+  const ds = displayState();
+  ensureParticles(ds.N);
 
-  /* 화면을 두 구역으로 나눈다 — 위: 장치 / 아래: 목표 게이지.
-     겹치지 않도록 경계를 먼저 정한다. */
-  const M = 10;                       // 바깥 여백 (가장자리에 아무것도 그리지 않는다)
-  const gaugeH = 40;
-  const top = M, bot = H - gaugeH - M;
+  const M = 12;
+  const top = M + 16, bot = H - M;         // 위쪽에 대기압 기준선 자리를 남긴다
   const midW = W - M * 2;
 
-  // 격자 — 가장자리에서 안쪽으로 들여 그린다
   ctx.save();
   ctx.beginPath(); ctx.rect(M, top, midW, bot - top); ctx.clip();
   ctx.strokeStyle = GRID; ctx.lineWidth = 1;
@@ -292,236 +544,144 @@ function draw() {
   for (let y = top; y < bot; y += 26) { ctx.beginPath(); ctx.moveTo(M, y); ctx.lineTo(W - M, y); ctx.stroke(); }
   ctx.restore();
 
-  /* ── 치수 ──
-     ⚠ 두 피스톤의 그림 폭은 넓이 비를 **그대로** 그리지 않았다.
-       A₂/A₁ 이 최대 25배라 화면을 벗어나기 때문이다. A^0.55 로 줄여 그리고,
-       정확한 비는 숫자(A₂/A₁)로 따로 보여 준다. (매뉴얼 §2③ · 오개념 M4) */
-  const shrink = a => Math.pow(a / PRESS.A1, 0.55);
-  const unit = Math.min(30, midW * 0.075);
-  const wL = unit;                                  // 작은 피스톤(= 기체 실린더) 폭
-  const wR = Math.min(midW * 0.34, unit * shrink(state.A2));   // 큰 피스톤 폭
+  const pw = pistonWidths(midW);
+  const duct = 16;
+  const floor = bot - 4;
+  const oilTopL = top + (bot - top) * 0.58;
+  const oilTopR = top + (bot - top) * 0.50;
+  const xL = M + 8;
+  const xR = Math.min(W - M - pw.wR - 6, xL + pw.wL + Math.max(56, midW * 0.28));
 
-  const duct = 20;                                  // 아래 연결관 높이
-  const floor = bot - 6;                            // 장치 바닥
-  const oilTopL = top + (bot - top) * 0.62;         // 왼쪽 기름면
-  const oilTopR = top + (bot - top) * 0.52;         // 오른쪽 기름면
-  const xL = M + 14;
-  const xR = Math.min(W - M - wR - 6, xL + wL + Math.max(70, midW * 0.32));
-
-  /* ── 유압유 (ㄷ 자 통) ── */
+  /* ── 유압유 (ㄷ 자로 이어진 통 — 끊긴 두 기둥으로 그리지 않는다) ── */
   ctx.beginPath();
-  ctx.moveTo(xL, oilTopL); ctx.lineTo(xL + wL, oilTopL);
-  ctx.lineTo(xL + wL, floor - duct); ctx.lineTo(xR, floor - duct);
-  ctx.lineTo(xR, oilTopR); ctx.lineTo(xR + wR, oilTopR);
-  ctx.lineTo(xR + wR, floor); ctx.lineTo(xL, floor);
+  ctx.moveTo(xL, oilTopL); ctx.lineTo(xL + pw.wL, oilTopL);
+  ctx.lineTo(xL + pw.wL, floor - duct); ctx.lineTo(xR, floor - duct);
+  ctx.lineTo(xR, oilTopR); ctx.lineTo(xR + pw.wR, oilTopR);
+  ctx.lineTo(xR + pw.wR, floor); ctx.lineTo(xL, floor);
   ctx.closePath();
   ctx.fillStyle = OIL_FILL; ctx.fill();
   ctx.strokeStyle = EDGE; ctx.lineWidth = 2; ctx.stroke();
   ctx.fillStyle = C.amber; ctx.font = "600 11px sans-serif"; ctx.textAlign = "center";
-  ctx.fillText("유압유", (xL + wL + xR) / 2, floor - duct / 2 + 4);
+  const oilLabelY = floor - duct / 2 + 4;
+  if (xR - (xL + pw.wL) > 30) ctx.fillText(fitText("유압유", "유압유", xR - (xL + pw.wL) - 6), (xL + pw.wL + xR) / 2, oilLabelY);
 
-  /* 압력이 모든 방향으로 같음 — 화살표 4개 (한 점에서 사방으로) */
-  const ax = Math.min(xR - 26, (xL + wL + xR) / 2 + 42), ay = floor - duct / 2;
-  if (ax > xL + wL + 34) {
-    ctx.strokeStyle = C.amber; ctx.fillStyle = C.amber; ctx.lineWidth = 1.6;
-    for (const ang of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
-      const len = ang % Math.PI === 0 ? 12 : 7;
-      const ex = ax + Math.cos(ang) * len, ey = ay + Math.sin(ang) * len;
-      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ex, ey); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(ex + Math.cos(ang) * 4, ey + Math.sin(ang) * 4);
-      ctx.lineTo(ex - Math.sin(ang) * 3, ey + Math.cos(ang) * 3);
-      ctx.lineTo(ex + Math.sin(ang) * 3, ey - Math.cos(ang) * 3);
-      ctx.closePath(); ctx.fill();
-    }
-  }
-
-  /* ── 왼쪽: 기체 실린더 (기름 위에 얹혀 기름을 누른다) ──
-     실린더 높이가 곧 부피다 — 위에 빈 공간을 남기지 않는다. */
+  /* ── 왼쪽: 기체 실린더 — 부피가 곧 기둥 높이(원점 지나는 정비례, 하한 없음) ── */
   const cylBot = oilTopL;
-  const frac = (state.V - PRESS.V.min) / (PRESS.V.max - PRESS.V.min);
-  const maxGas = cylBot - (top + 26);
-  const gasH = (0.22 + 0.78 * frac) * maxGas;
+  const maxGas = cylBot - (top + 20);
+  const gasH = gasHeight(ds.V, maxGas);
   const cylTop = cylBot - gasH;
   ctx.strokeStyle = EDGE; ctx.lineWidth = 2;
-  ctx.strokeRect(xL, cylTop, wL, cylBot - cylTop);
-  ctx.fillStyle = GAS_FILL;
-  ctx.fillRect(xL + 1, cylTop + 1, wL - 2, gasH - 2);
+  ctx.strokeRect(xL, top + 4, pw.wL, cylBot - (top + 4));
+  if (gasH > 1) {
+    ctx.fillStyle = GAS_FILL;
+    ctx.fillRect(xL + 1, cylTop, pw.wL - 2, Math.max(1, gasH - 1));
+  }
+
+  /* ── 부피 눈금 0~5 L, 1 L 간격 (§3 3-C⑴·⑹ — 재작업 B-1) ── */
+  ctx.strokeStyle = C.t3; ctx.fillStyle = C.t3; ctx.lineWidth = 1;
+  ctx.font = "9px sans-serif"; ctx.textAlign = "left";
+  const tickX = xL + pw.wL + 3;
+  for (let v = 0; v <= PRESS.V.max; v++) {
+    const ty = cylBot - gasHeight(v, maxGas);
+    if (ty < top || ty > bot) continue;
+    ctx.beginPath(); ctx.moveTo(tickX, ty); ctx.lineTo(tickX + 4, ty); ctx.stroke();
+    const label = String(v);
+    if (ctx.measureText(label).width <= Math.max(0, xR - (tickX + 6))) ctx.fillText(label, tickX + 6, ty + 3);
+  }
+
+  const r = dotRadius(W);
+  const boxW = Math.max(1, pw.wL - 8 - r * 2);
+  const boxH = Math.max(1, gasH - 4 - r * 2);
+  if (!animPaused) updateParticles(frameDt, ds.T, W, boxW, boxH);
   ctx.fillStyle = C.blue;
-  const seedy = i => ((i * 9301 + 49297) % 233280) / 233280;
-  const nDots = Math.round(5 + state.n * 9);
-  for (let i = 0; i < nDots; i++) {
-    const x = xL + 5 + seedy(i * 3 + 1) * (wL - 10);
-    const y = cylBot - gasH + 5 + seedy(i * 7 + 2) * (gasH - 10);
-    ctx.beginPath(); ctx.arc(x, y, 2.4, 0, 6.2832); ctx.fill();
+  for (const p of particles) {
+    const px = xL + 4 + r + p.lx * boxW;
+    const py = cylTop + 2 + r + p.ly * boxH;
+    ctx.beginPath(); ctx.arc(px, py, r, 0, 6.2832); ctx.fill();
   }
-  // 기체를 누르는 뚜껑
   ctx.fillStyle = C.ink;
-  ctx.fillRect(xL - 2, cylTop - 7, wL + 4, 7);
-  // 기름과 맞닿는 면 = 작은 피스톤 A₁
-  ctx.fillRect(xL - 2, oilTopL - 5, wL + 4, 5);
+  ctx.fillRect(xL - 2, Math.max(top + 2, cylTop - 6), pw.wL + 4, 6);
+  ctx.fillRect(xL - 2, oilTopL - 4, pw.wL + 4, 4);
 
-  /* ── 오른쪽: 큰 피스톤 + 눌리는 물체 ── */
-  const pistTop = oilTopR - 9;
+  /* ── 오른쪽: 큰 피스톤 + 눌리는 물체 (잠금 중엔 물체 위에 떠 있다) ── */
+  const restY = oilTopR - 8;
+  const floatY = restY - 34;
+  const pistY = ds.latched ? floatY : floatY + (restY - floatY) * ds.pistonT;
   ctx.fillStyle = C.ink;
-  ctx.fillRect(xR - 2, pistTop, wR + 4, 9);
-  ctx.fillRect(xR + wR / 2 - 4, pistTop - 22, 8, 22);
-  ctx.fillStyle = "rgba(40,45,52,0.10)";
-  ctx.fillRect(xR - 2, pistTop - 40, wR + 4, 18);
-  ctx.strokeStyle = "rgba(40,45,52,0.30)"; ctx.lineWidth = 1.2;
-  ctx.strokeRect(xR - 2, pistTop - 40, wR + 4, 18);
-  ctx.fillStyle = C.t3; ctx.font = "10px sans-serif"; ctx.textAlign = "center";
-  ctx.fillText("눌리는 물체", xR + wR / 2, pistTop - 27);
+  ctx.fillRect(xR - 2, pistY, pw.wR + 4, 9);
+  ctx.fillRect(xR + pw.wR / 2 - 4, pistY - 20, 8, 20);
 
-  /* ── 라벨 (서로 겹치지 않게 구역을 나눠 배치) ── */
-  ctx.textAlign = "left";
-  ctx.font = "600 10.5px sans-serif"; ctx.fillStyle = C.blue;
-  ctx.fillText(`기체`, xL + wL + 8, cylTop + 12);
-  ctx.font = "10px sans-serif"; ctx.fillStyle = C.t3;
-  ctx.fillText(`n = ${state.n.toFixed(3)} mol`, xL + wL + 8, cylTop + 25);
-  ctx.fillText(`T = ${state.T} K`, xL + wL + 8, cylTop + 37);
-  ctx.fillText(`V = ${state.V.toFixed(3)} L`, xL + wL + 8, cylTop + 49);
-  // A₁ · F₁ — 기름면 바로 위 (작은 피스톤 옆)
-  ctx.font = "600 10.5px sans-serif"; ctx.fillStyle = C.ink;
-  ctx.fillText(`A₁ = ${PRESS.A1} cm²`, xL + wL + 8, oilTopL - 12);
-  ctx.font = "10px sans-serif"; ctx.fillStyle = C.t3;
-  ctx.fillText(`F₁ = ${F1.toFixed(0)} N`, xL + wL + 8, oilTopL);
-  // A₂ · F₂ — 큰 피스톤 위
-  ctx.textAlign = "center"; ctx.font = "600 10.5px sans-serif"; ctx.fillStyle = C.ink;
-  ctx.fillText(`A₂ = ${state.A2} cm²`, xR + wR / 2, pistTop - 46);
-  ctx.fillStyle = C.t3; ctx.font = "10px sans-serif";
-  ctx.fillText(`F₂ = ${F2.toFixed(0)} N`, xR + wR / 2, pistTop - 56 < top + 10 ? pistTop - 46 + 12 : pistTop - 56);
-  // 압력 — 오른쪽 위 (다른 글자와 겹치지 않는 구역)
-  ctx.textAlign = "right";
-  ctx.font = "700 13px sans-serif"; ctx.fillStyle = C.amber;
-  ctx.fillText(`P = ${P.toLocaleString("ko-KR", { maximumFractionDigits: 0 })} kPa`, W - M - 4, top + 14);
-  ctx.font = "10px sans-serif"; ctx.fillStyle = C.t3;
-  ctx.fillText("기름 어디서나 같은 압력", W - M - 4, top + 27);
-
-  /* ── 목표 게이지 (전용 구역, 장치와 겹치지 않는다) ── */
-  const gy = H - M - gaugeH / 2 + 4, gx0 = M + 4, gx1 = W - M - 4;
-  ctx.fillStyle = "rgba(40,45,52,0.035)";
-  ctx.fillRect(M, H - M - gaugeH, midW, gaugeH);
-  if (target) {
-    const L = levelDef();
-    const want = L.goal === "P" ? target.P : target.F;
-    const got = L.goal === "P" ? P : F2;
-    const hi = Math.max(want * 2, got * 1.08, 1);
-    const X = v => gx0 + Math.min(1, v / hi) * (gx1 - gx0);
-    ctx.fillStyle = "rgba(40,45,52,0.10)";
-    ctx.fillRect(gx0, gy - 6, gx1 - gx0, 12);
-    // 허용 오차 띠 — 초록 + 위아래 검은 눈금(색만으로 알리지 않는다)
-    const bx0 = X(want * (1 - L.tol)), bx1 = X(want * (1 + L.tol));
-    ctx.fillStyle = "rgba(21,128,61,0.30)";
-    ctx.fillRect(bx0, gy - 6, Math.max(2.5, bx1 - bx0), 12);
-    ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(X(want), gy - 10); ctx.lineTo(X(want), gy + 10); ctx.stroke();
-    ctx.fillStyle = C.blue;
-    ctx.beginPath(); ctx.arc(X(got), gy, 5.5, 0, 6.2832); ctx.fill();
-    ctx.strokeStyle = C.stageLight; ctx.lineWidth = 1.6; ctx.stroke();
-    ctx.font = "600 10px sans-serif"; ctx.fillStyle = C.ink; ctx.textAlign = "center";
-    const tx = Math.max(gx0 + 16, Math.min(gx1 - 16, X(want)));
-    ctx.fillText("목표", tx, gy - 13);
-    ctx.textAlign = "left"; ctx.fillStyle = C.t3; ctx.font = "10px sans-serif";
-    ctx.fillText("지금 값 ●", gx0, gy + 18);
-    ctx.textAlign = "right";
-    ctx.fillText("초록 띠 = 허용 오차 안", gx1, gy + 18);
+  if (ds.latched) {
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(xR - 8, pistY + 1, 6, 7);
+    ctx.fillRect(xR + pw.wR + 2, pistY + 1, 6, 7);
   }
+
+  const objY = restY + 9, objH = 12;
+  if (ds.shown && ds.verdict === "부서짐") {
+    ctx.strokeStyle = EDGE; ctx.fillStyle = OBJ_FILL; ctx.lineWidth = 1.4;
+    const midx = xR + pw.wR / 2;
+    ctx.beginPath();
+    ctx.moveTo(xR - 2, objY); ctx.lineTo(midx - 6, objY + 3); ctx.lineTo(midx - 2, objY + objH);
+    ctx.lineTo(xR - 2, objY + objH); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(midx + 2, objY + 2); ctx.lineTo(xR + pw.wR + 2, objY); ctx.lineTo(xR + pw.wR + 2, objY + objH);
+    ctx.lineTo(midx + 4, objY + objH); ctx.closePath(); ctx.fill(); ctx.stroke();
+  } else {
+    ctx.fillStyle = OBJ_FILL; ctx.strokeStyle = EDGE; ctx.lineWidth = 1.4;
+    const h = ds.shown ? objH * 0.7 : objH;
+    ctx.fillRect(xR - 2, objY + (objH - h), pw.wR + 4, h);
+    ctx.strokeRect(xR - 2, objY + (objH - h), pw.wR + 4, h);
+  }
+
+  /* ── 압력계(잠금) — 우상단, 캔버스 밖 HTML과 중복 표시(정직성) ── */
+  ctx.textAlign = "right"; ctx.font = "700 13px sans-serif";
+  const pi = pressureInfo();
+  ctx.fillStyle = C.t3;
+  const lockTxt = pi.locked ? "P = 🔒 잠김" : (pi.value != null ? "P = " + fmtInt(pi.value) + " kPa" : "");
+  if (lockTxt) ctx.fillText(fitText(lockTxt, "🔒", midW - 4), W - M - 4, top + 12);
+
+  /* ── 대기압 기준선 (상시 표시 · 1차시 학습 내용) ── */
+  ctx.strokeStyle = "rgba(95,107,122,0.55)"; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(M, top - 4); ctx.lineTo(W - M, top - 4); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.textAlign = "left"; ctx.font = "10px sans-serif"; ctx.fillStyle = C.t3;
+  /* 재작업 B-3⑵ — 대기압 숫자를 PRESS.PATM(단일 원천)에서 만든다. 텍스트를 다시 타이핑하지 않는다. */
+  const atmRound = Math.round(PRESS.PATM);
+  ctx.fillText(fitText("대기압 ≈ " + atmRound + " kPa", "≈" + atmRound + "kPa", midW - 100), M, top - 8);
+
   ctx.textAlign = "left";
 }
 
-/* ── 측정값 ── */
-function readouts() {
-  const P = pressure(state.n, state.T, state.V);
-  const F1 = force(P, PRESS.A1), F2 = force(P, state.A2);
-  $("rP").textContent = P.toLocaleString("ko-KR", { maximumFractionDigits: 1 });
-  $("rF1").textContent = F1.toLocaleString("ko-KR", { maximumFractionDigits: 0 });
-  $("rF2").textContent = F2.toLocaleString("ko-KR", { maximumFractionDigits: 0 });
-  $("rRatio").textContent = (state.A2 / PRESS.A1).toFixed(1);
-  $("rTon").textContent = (F2 / G / 1000).toFixed(2);
-  const L = target ? levelDef() : null;
-  if (target && L) {
-    const want = L.goal === "P" ? target.P : target.F;
-    const got = L.goal === "P" ? P : F2;
-    const err = (got - want) / want;
-    let msg = `목표까지 <b style="color:${Math.abs(err) <= L.tol ? "var(--d-green)" : "var(--d-amber)"}">` +
-      `${err >= 0 ? "+" : ""}${(err * 100).toFixed(2)} %</b>` +
-      (Math.abs(err) <= L.tol ? " — 허용 오차 안입니다." : " — 아직 허용 오차 밖입니다.");
-    /* ★ 암묵적 안내 (매뉴얼 §2④)
-       힘이 목표일 때는 고른 A₂ 에 따라 **필요한 압력**이 정해진다.
-       그 압력이 이 단계에서 만들 수 없는 값이면, 학생은 아무리 슬라이더를 밀어도 못 맞힌다.
-       그럴 때 무엇을 바꿔야 하는지 화면이 먼저 알려 준다. */
-    if (L.goal === "F") {
-      const needP = target.F / (state.A2 * 0.1);
-      const R = reach(level);
-      if (needP < R.lo || needP > R.hi) {
-        msg += `<br><b style="color:var(--d-red)">지금 고른 A₂ = ${state.A2} cm² 로는 닿을 수 없습니다.</b> ` +
-          `필요한 압력이 ${needP.toFixed(0)} kPa 인데, 이 단계에서 만들 수 있는 압력은 ` +
-          `${R.lo.toFixed(0)} ~ ${R.hi.toFixed(0)} kPa 입니다. → <b>A₂ 를 ${needP < R.lo ? "좁은" : "넓은"} 쪽으로 바꾸세요.</b>`;
-      } else {
-        msg += `<br>고른 A₂ = ${state.A2} cm² 이면 필요한 압력은 <b>${needP.toFixed(1)} kPa</b> 입니다. ` +
-          `이제 그 압력이 나오도록 n · T · V 를 정하세요.`;
-      }
+/* ================= 메인 루프 ================= */
+function tick(ts) {
+  frameDt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0;
+  lastTs = ts;
+  if (G.phase === "playing") renderDynamic();
+  if (G.phase === "reveal") {
+    const elapsed = performance.now() - G.revealPhaseStart;
+    const total = animPaused ? 700 : REVEAL_TOTAL_MS;
+    if (elapsed > total) {
+      G.revealIdx++;
+      if (G.revealIdx >= G.k) { finishReveal(); } else { G.revealPhaseStart = performance.now(); }
     }
-    $("devNote").innerHTML = msg;
-  } else $("devNote").textContent = "";
+    renderDynamic();
+  }
   draw();
 }
+let rafId = null;
+function loop(ts) { rafId = requestAnimationFrame(loop); tick(ts); }
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { if (rafId) { cancelAnimationFrame(rafId); rafId = null; } }
+  else if (!rafId) { lastTs = 0; rafId = requestAnimationFrame(loop); }
+});
 
-/* ── 기록 ── */
-const HEADERS = ["좌석번호", "단계", "목표종류", "목표값", "내가 만든 값", "오차(%)", "점수", "등급",
-  "n (mol)", "T (K)", "V (L)", "A2 (cm²)", "압력 P (kPa)"];
-function renderTable() {
-  $("recCount").textContent = rows.length ? `— ${rows.length}회 · 최고 ${Math.max(...rows.map(r => r.score))}점` : "";
-  const w = $("tableWrap");
-  if (!rows.length) { w.innerHTML = '<div class="empty">아직 도전 기록이 없습니다.</div>'; return; }
-  const best = Math.max(...rows.map(r => r.score));
-  w.innerHTML = "<table class='rank'><thead><tr><th>#</th><th>단계</th><th>목표</th><th>만든 값</th>" +
-    "<th>오차(%)</th><th>점수</th><th>등급</th></tr></thead><tbody>" +
-    rows.map((r, i) => `<tr><td>${i + 1}</td><td>${r.level}</td>` +
-      `<td>${r.want.toLocaleString("ko-KR")} ${r.goal === "P" ? "kPa" : "N"}</td>` +
-      `<td>${r.got.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}</td>` +
-      `<td>${(r.err * 100).toFixed(2)}</td>` +
-      `<td class="${r.score === best ? "me" : ""}">${r.score}</td><td>${r.grade}</td></tr>`).join("") +
-    "</tbody></table>";
-}
-$("clr").onclick = () => { rows = []; renderTable(); };
-$("csv").onclick = () => {
-  if (!rows.length) { $("devNote").innerHTML = '<span style="color:var(--d-amber);font-weight:700">먼저 도전을 한 번 이상 하세요.</span>'; return; }
-  const body = rows.map(r => [r.seat, r.level, r.goal === "P" ? "압력(kPa)" : "힘(N)",
-    r.want, r.got.toFixed(2), (r.err * 100).toFixed(3), r.score, r.grade,
-    r.n.toFixed(3), r.T, r.V.toFixed(3), r.A2, r.P.toFixed(2)]);
-  const csv = "﻿" + [HEADERS, ...body].map(a => a.join(",")).join("\r\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-  a.download = (($("seat").value.trim() || "유압프레스").replace(/[\\/:*?"<>|]/g, "")) + "_유압프레스.csv";
-  a.click(); URL.revokeObjectURL(a.href);
-};
-
-/* ── 입력 ── */
-function setVal(k, v) {
-  const R = RANGE[k];
-  if (!isFinite(v)) return;
-  state[k] = clamp(snap(v, R.fine), R.min, R.max);
-  syncInputs(); readouts();
-}
-for (const k of ["n", "T", "V"]) {
-  S[k].oninput = e => setVal(k, +e.target.value);
-  NU[k].oninput = e => {
-    const v = parseFloat(e.target.value);
-    if (!isFinite(v)) return;
-    state[k] = clamp(snap(v, RANGE[k].fine), RANGE[k].min, RANGE[k].max);
-    S[k].value = state[k];
-    readouts();
-  };
-  NU[k].onblur = () => syncInputs();
-}
-document.querySelectorAll(".lv").forEach(b => b.onclick = () => { level = +b.dataset.lv; applyLevel(); });
-$("newMission").onclick = newMission;
-$("submit").onclick = submit;
-
+/* ================= 시작 ================= */
 if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(cv.parentElement);
 window.addEventListener("resize", resize);
-
-applyLevel();
+syncSliderDom();
+syncHowto();
+syncLimitTxt();
+renderStatic();
 resize();
-renderTable();
+rafId = requestAnimationFrame(loop);
