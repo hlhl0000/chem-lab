@@ -166,11 +166,37 @@ const EDGE = "rgba(40,45,52,0.42)";
 const GAS_FILL = "rgba(29,78,216,0.10)";
 const OIL_FILL = "rgba(180,83,9,0.16)";
 const OBJ_FILL = "rgba(95,107,122,0.28)";
+/* GRID/EDGE와 같은 무채색 계열(40,45,52)을 더 옅게 쓴 것 — 새 색을 들이지 않고
+   "실린더 통 안쪽"을 표시한다(재작업 2026-08-01 2차 — 부피가 작을 때 실린더 위쪽이
+   페이지 배경과 구분이 안 돼 잘린 것처럼 보이는 문제 처방). */
+const CYL_BG = "rgba(40,45,52,0.05)";
 
 const SEATS = ["①", "②", "③", "④"];
-const REVEAL_LATCH_MS = 260;     // 걸쇠가 열리는 시점
-const REVEAL_SHOW_MS = 520;      // 압력·판정이 드러나는 시점
-const REVEAL_TOTAL_MS = 1500;    // 다음 참가자로 넘어가는 시점
+/* 신규 요구(2026-08-01) — 공개 연출을 4단계로 다시 짠다: ① 유압유 이동 → ② 램 상승 → ③ 가압 → ④ 판정.
+   네 구간의 합이 REVEAL_TOTAL_MS(다음 참가자로 넘어가는 시점)와 같아야 한다. */
+const REVEAL_OIL_MS = 300;      // ① 유압유가 관을 따라 이동한다(램은 아직 정지)
+const REVEAL_RISE_MS = 300;     // ② 램이 아래에서 위로 올라와 물체에 닿는다
+const REVEAL_PRESS_MS = 500;    // ③ 램이 계속 밀어 올려 물체가 눌린다 · 압력 숫자가 여기까지 함께 오른다
+const REVEAL_TOTAL_MS = 1500;   // ④ 판정(균열 갈라짐) 포함, 다음 참가자로 넘어가는 시점
+function revealStageProgress(elapsed) {
+  const oilT = clamp(elapsed / REVEAL_OIL_MS, 0, 1);
+  const riseT = clamp((elapsed - REVEAL_OIL_MS) / REVEAL_RISE_MS, 0, 1);
+  const pressT = clamp((elapsed - REVEAL_OIL_MS - REVEAL_RISE_MS) / REVEAL_PRESS_MS, 0, 1);
+  const judgeStart = REVEAL_OIL_MS + REVEAL_RISE_MS + REVEAL_PRESS_MS;
+  const judgeT = clamp((elapsed - judgeStart) / Math.max(1, REVEAL_TOTAL_MS - judgeStart), 0, 1);
+  return { oilT, riseT, pressT, judgeT, judged: elapsed >= judgeStart };
+}
+/* 시드 고정 난수(mulberry32) — 균열 모양이 매 프레임 Math.random()으로 흔들리지 않게 한다.
+   같은 seed면 항상 같은 수열이 나오므로, seed 하나만 참가자 기록(entry)에 저장해 두고
+   그릴 때마다 다시 돌려도(재계산해도) 결과가 프레임마다 흔들리지 않는다(요구 7 — 성능·안정성). */
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 /* ── 애니메이션 정지(감소 모션) ── */
 let animPaused = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -261,7 +287,9 @@ function nextRound() {
 }
 function submitTurn() {
   const P = pressure(state.N, state.T, state.V);
-  G.entries.push({ seat: currentSeat(), N: state.N, T: state.T, V: state.V, P: P });
+  /* crackSeed — 이 참가자가 부서질 경우 균열 모양을 고정할 시드. 라운드 진행 중 값이
+     바뀌지 않으므로 공개·라운드결과·최종화면 어디서 다시 그려도 같은 모양이 나온다. */
+  G.entries.push({ seat: currentSeat(), N: state.N, T: state.T, V: state.V, P: P, crackSeed: Math.floor(Math.random() * 1e9) || 1 });
   G.turnPos++;
   if (G.turnPos >= G.k) {
     G.phase = "allSubmitted";
@@ -356,8 +384,8 @@ function pressureInfo() {
     const seat = G.revealSeatOrder[G.revealIdx];
     const e = G.entries.find(x => x.seat === seat);
     const elapsed = performance.now() - G.revealPhaseStart;
-    const shown = elapsed > REVEAL_SHOW_MS || animPaused;
-    return { locked: !shown, value: shown ? e.P : null };
+    const judged = animPaused || revealStageProgress(elapsed).judged;
+    return { locked: !judged, value: judged ? e.P : null };
   }
   if (G.phase === "roundResult" || G.phase === "ended") {
     const e = lastRevealedEntry();
@@ -498,29 +526,136 @@ function resize() {
   draw();
 }
 
+/* 눌림·부풀림 최대치 — 압력이 목표에 닿을 때 물체 높이를 이만큼까지 줄이고
+   가로 폭을 이만큼까지 부풀린다(요구 3). 목표를 넘겨도 이 이상 더 눌리지는
+   않는다 — 그 이후는 균열(요구 3 균열)로 표현한다. */
+const MAX_SQUEEZE = 0.34;
+const MAX_BULGE = 0.20;
+
 function displayState() {
   if (G.phase === "reveal") {
     const seat = G.revealSeatOrder[G.revealIdx];
     const e = G.entries.find(x => x.seat === seat);
     const elapsed = performance.now() - G.revealPhaseStart;
+    if (animPaused) {
+      /* 요구 8 — 감소 모션에서는 연출을 건너뛰고 최종 상태를 바로 보여준다 */
+      return {
+        N: e.N, T: e.T, V: e.V, ramT: 1,
+        squeezeFrac: Math.min(e.P / G.data.target, 1),
+        meterOn: true, dispP: e.P, finalP: e.P,
+        judged: true, verdict: verdict(e.P, G.data.target), crackT: 1, crackSeed: e.crackSeed
+      };
+    }
+    const st = revealStageProgress(elapsed);
+    const squeezeFrac = st.pressT * Math.min(e.P / G.data.target, 1);
+    /* 압력 숫자는 ①~③(오일 이동+램 상승+가압) 동안 대기압에서 시작해 올라간다.
+       ③이 끝나는 순간(judged) 이후로는 보간을 완전히 멈추고 e.P를 그대로 쓴다 —
+       마지막에 보간 잔차가 남아 계산값과 어긋나지 않게 하는 장치다. */
+    const climbT = clamp((elapsed - REVEAL_OIL_MS) / (REVEAL_RISE_MS + REVEAL_PRESS_MS), 0, 1);
+    const dispP = elapsed < REVEAL_OIL_MS ? PRESS.PATM
+      : (climbT < 1 ? PRESS.PATM + (e.P - PRESS.PATM) * (1 - Math.pow(1 - climbT, 2)) : e.P);
     return {
-      N: e.N, T: e.T, V: e.V,
-      latched: elapsed < REVEAL_LATCH_MS && !animPaused,
-      pistonT: animPaused ? 1 : clamp((elapsed - REVEAL_LATCH_MS) / (REVEAL_TOTAL_MS - REVEAL_LATCH_MS - 200), 0, 1),
-      shown: elapsed > REVEAL_SHOW_MS || animPaused,
-      verdict: (elapsed > REVEAL_SHOW_MS || animPaused) ? verdict(e.P, G.data.target) : null
+      N: e.N, T: e.T, V: e.V, ramT: st.riseT,
+      squeezeFrac,
+      meterOn: true, dispP, finalP: e.P,
+      judged: st.judged, verdict: st.judged ? verdict(e.P, G.data.target) : null,
+      crackT: st.judgeT, crackSeed: e.crackSeed
     };
   }
   if (G.phase === "roundResult" || G.phase === "ended") {
     const e = lastRevealedEntry();
-    if (e) return { N: e.N, T: e.T, V: e.V, latched: false, pistonT: 1, shown: true, verdict: verdict(e.P, G.data.target) };
+    if (e) {
+      return {
+        N: e.N, T: e.T, V: e.V, ramT: 1,
+        squeezeFrac: Math.min(e.P / G.data.target, 1),
+        meterOn: true, dispP: e.P, finalP: e.P,
+        judged: true, verdict: verdict(e.P, G.data.target), crackT: 1, crackSeed: e.crackSeed
+      };
+    }
   }
-  return { N: state.N, T: state.T, V: state.V, latched: G.phase === "playing" || G.phase === "allSubmitted", pistonT: 0, shown: false, verdict: null };
+  return {
+    N: state.N, T: state.T, V: state.V, ramT: 0, squeezeFrac: 0,
+    meterOn: false, dispP: PRESS.PATM, finalP: null,
+    judged: false, verdict: null, crackT: 0, crackSeed: 1
+  };
 }
 
 function fitText(text, shortText, maxW) {
   if (ctx.measureText(text).width <= maxW) return text;
   return shortText;
+}
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/* 균열 모양 — seed 하나로 결정된다(요구 7 · 성능·안정성). 매 프레임 다시 계산해도
+   Math.random()을 쓰지 않으므로 흔들리지 않는다(같은 seed면 항상 같은 수열). */
+function crackGeometry(seed, x, y, w, h) {
+  const rnd = mulberry32(seed);
+  /* 재작업(2026-08-01 2차) — 지그재그 폭을 크게 주면(예전 0.34w) 이가 화살촉처럼 뾰족해
+     보인다. 세그먼트를 늘리고 폭을 줄여 "갈라진 금"처럼 잔잔하게 흔들리게 한다. */
+  const segs = 6;
+  const seam = [{ x: x + w / 2, y: y }];
+  for (let i = 1; i < segs; i++) {
+    seam.push({ x: x + w / 2 + (rnd() - 0.5) * w * 0.16, y: y + h * (i / segs) });
+  }
+  seam.push({ x: x + w / 2, y: y + h });
+  const extra = [];
+  const nExtra = 2 + Math.floor(rnd() * 2);   // 물체 안에서 뻗다 끝나는 잔금 2~3개(요구 3)
+  for (let i = 0; i < nExtra; i++) {
+    const side = rnd() < 0.5 ? -1 : 1;
+    const px = x + w / 2 + side * w * (0.06 + rnd() * 0.18);
+    const py = y + h * (0.12 + rnd() * 0.62);
+    const len = h * (0.14 + rnd() * 0.14);
+    const ang = (rnd() - 0.5) * 1.1 + Math.PI / 2;
+    extra.push({ x1: px, y1: py, x2: px + Math.cos(ang) * len, y2: py + Math.sin(ang) * len });
+  }
+  return { seam, extra };
+}
+
+/* 물체 — 눌림(높이 축소)·부풀림(폭 증가)·부서짐(조각이 어긋나게)을 그린다(요구 3).
+   부서지면 색만이 아니라 모양으로도 구분되도록 조각을 서로 벌리고 살짝 기울인다. */
+/* 재작업(2026-08-01 2차) — 조각이 화살표처럼 보인다는 지적. 조각을 멀리 보내지 않고
+   "제자리에서 갈라진 것처럼" 그린다: 이동은 최대 3 px, 회전은 최대 2°(0.035 rad)만
+   준다 — 그 이상은 갈라진 틈이 아니라 서로 다른 물체처럼 보인다. */
+const SHARD_DX = 2.4, SHARD_DY = 1.1, SHARD_TILT_PX = 2, SHARD_MAX_ROT = 0.035;
+function drawShard(pts, dirX, dirY, rotSign, t) {
+  let sx = 0, sy = 0;
+  for (const p of pts) { sx += p.x; sy += p.y; }
+  const c0x = sx / pts.length, c0y = sy / pts.length;
+  let maxD = 1;
+  for (const p of pts) maxD = Math.max(maxD, Math.hypot(p.x - c0x, p.y - c0y));
+  const rot = rotSign * Math.min(SHARD_MAX_ROT, SHARD_TILT_PX / maxD) * t;
+  ctx.save();
+  ctx.translate(c0x + dirX * SHARD_DX * t, c0y + dirY * SHARD_DY * t);
+  ctx.rotate(rot);
+  ctx.translate(-c0x, -c0y);
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  ctx.fillStyle = OBJ_FILL; ctx.fill();
+  ctx.strokeStyle = EDGE; ctx.lineWidth = 1.4; ctx.stroke();
+  ctx.restore();
+}
+
+function drawObject(x, y, w, h, ds) {
+  if (ds.judged && ds.verdict === "부서짐") {
+    const g = crackGeometry(ds.crackSeed, x, y, w, h);
+    const t = ds.crackT;
+    const leftPts = [{ x, y }].concat(g.seam, [{ x, y: y + h }]);
+    const rightPts = [{ x: x + w, y }].concat(g.seam, [{ x: x + w, y: y + h }]);
+    drawShard(leftPts, -1, 1, -1, t);
+    drawShard(rightPts, 1, -1, 1, t);
+
+    ctx.strokeStyle = EDGE; ctx.lineWidth = 1;
+    for (const c of g.extra) {
+      ctx.beginPath();
+      ctx.moveTo(c.x1, c.y1);
+      ctx.lineTo(lerp(c.x1, c.x2, t), lerp(c.y1, c.y2, t));
+      ctx.stroke();
+    }
+  } else {
+    ctx.fillStyle = OBJ_FILL; ctx.strokeStyle = EDGE; ctx.lineWidth = 1.4;
+    ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+  }
 }
 
 function draw() {
@@ -548,22 +683,65 @@ function draw() {
   const duct = 16;
   const floor = bot - 4;
   const oilTopL = top + (bot - top) * 0.58;
-  const oilTopR = top + (bot - top) * 0.50;
   const xL = M + 8;
   const xR = Math.min(W - M - pw.wR - 6, xL + pw.wL + Math.max(56, midW * 0.28));
+  const rightLim = W - M - 3;   // 오른쪽 여백 — 프레임·물체(부풀림 포함)가 이 선을 넘지 않게 한다
 
-  /* ── 유압유 (ㄷ 자로 이어진 통 — 끊긴 두 기둥으로 그리지 않는다) ── */
+  /* ── 오른쪽 뼈대 자리 계산 (요구 1 — 기둥 두 개 + 맨 위 고정판, 램은 아래에서 올라온다) ──
+     재작업(2026-08-01 2차) — 프레임 가운데가 통째로 비어 보인다는 지적 처방.
+     모든 위치를 그리기 영역 높이(Hd)의 비율로 잡는다: 고정판 밑에 물체를 두껍게(15 %),
+     램은 대기 중에도 물체 가까이(틈 5 %)에 두어 "짧은 거리만" 올라오게 하고,
+     남는 아래 공간은 전부 유압유 밑동에 준다(빈 공간이 아니라 유압유로 채운다). */
+  const Hd = bot - top;
+  const plateTopY = top + Hd * 0.06, plateH = clamp(Hd * 0.02, 6, 12);
+  const cx = xR + pw.wR / 2;
+  const objTopY = plateTopY + plateH + 2;      // 물체 윗면은 늘 고정판 밑에 붙어 있다(고정장치)
+  /* 물체 폭은 램(피스톤) 폭 비를 그대로 따르지 않는다 — 램은 넓이 비를 보여주려고 일부러
+     넓게 그렸는데(추정 12), 그 폭 그대로 물체를 그리면 너무 얇고 길어져 눌림·균열이
+     잘 보이지 않는다(요구 3). 물체는 램 위에 놓인, 더 작은 시료로 그린다. */
+  const objH0 = Hd * 0.15, objW0 = Math.min(pw.wR + 4, 100);
+  const ramHeadH = Hd * 0.032;
+  const ramTouchY0 = objTopY + objH0;             // 물체가 눌리기 전 밑면 — 램이 대기 중 겨냥하는 자리
+  const ramRestY = ramTouchY0 + Hd * 0.05;         // 대기 중 램 머리~물체 틈 = 5 %(4~6 % 지시)
+  const shaftRestLen = Hd * 0.035;                 // 대기 중 램 축 길이 — "짧게"
+  const baseTopY = ramRestY + ramHeadH + shaftRestLen;   // 유압유 밑동 — 램 축 바로 밑에서 시작(빈틈 없음)
+  const baseH = floor - baseTopY;
+  const baseX = xR - 4, baseW = Math.max(20, Math.min(pw.wR + 8, rightLim - baseX));
+  const colLeftX = xR - 6, colRightX = Math.min(xR + pw.wR + 2, rightLim), colW = 5;
+
+  const squeeze = ds.squeezeFrac;
+  const objH = objH0 * (1 - MAX_SQUEEZE * squeeze);
+  let objW = objW0 * (1 + MAX_BULGE * squeeze);
+  if (cx + objW / 2 > rightLim) objW = Math.max(objW0 * 0.6, (rightLim - cx) * 2);
+  const objBottomY = objTopY + objH;
+
+  const ramW = Math.max(10, pw.wR - 6);
+  const ramHeadY = ds.ramT < 1
+    ? lerp(ramRestY, ramTouchY0 - ramHeadH, ds.ramT)
+    : objBottomY - ramHeadH;
+
+  /* ── 유압유 (ㄷ 자로 이어진 통 — 왼쪽 실린더 밑 → 바닥 → 오른쪽 램 밑동, 요구 1) ── */
   ctx.beginPath();
   ctx.moveTo(xL, oilTopL); ctx.lineTo(xL + pw.wL, oilTopL);
-  ctx.lineTo(xL + pw.wL, floor - duct); ctx.lineTo(xR, floor - duct);
-  ctx.lineTo(xR, oilTopR); ctx.lineTo(xR + pw.wR, oilTopR);
-  ctx.lineTo(xR + pw.wR, floor); ctx.lineTo(xL, floor);
+  ctx.lineTo(xL + pw.wL, floor - duct); ctx.lineTo(baseX, floor - duct);
+  ctx.lineTo(baseX, baseTopY); ctx.lineTo(baseX + baseW, baseTopY);
+  ctx.lineTo(baseX + baseW, floor); ctx.lineTo(xL, floor);
   ctx.closePath();
   ctx.fillStyle = OIL_FILL; ctx.fill();
   ctx.strokeStyle = EDGE; ctx.lineWidth = 2; ctx.stroke();
   ctx.fillStyle = C.amber; ctx.font = "600 11px sans-serif"; ctx.textAlign = "center";
   const oilLabelY = floor - duct / 2 + 4;
-  if (xR - (xL + pw.wL) > 30) ctx.fillText(fitText("유압유", "유압유", xR - (xL + pw.wL) - 6), (xL + pw.wL + xR) / 2, oilLabelY);
+  if (baseX - (xL + pw.wL) > 30) ctx.fillText(fitText("유압유", "유압유", baseX - (xL + pw.wL) - 6), (xL + pw.wL + baseX) / 2, oilLabelY);
+
+  /* 밑동 안에 보이는 유압유 양은 램이 올라온 만큼(ramT) 늘어난다 — "유압유가 밀려 들어가
+     램이 올라온다"는 인과를 그림으로 보여 준다(요구 2). 대기 중에도 절반은 이미 차 있게
+     해서(밑동 자체가 넓어졌으니) 항상 두껍게 채워진 것처럼 보이게 한다(재작업 2차 처방). */
+  const fillFrac = 0.5 + 0.5 * ds.ramT;
+  const oilLvl = floor - 3 - fillFrac * (baseH - 6);
+  if (floor - 3 > oilLvl) {
+    ctx.fillStyle = OIL_FILL;
+    ctx.fillRect(baseX + 2, oilLvl, baseW - 4, floor - 3 - oilLvl);
+  }
 
   /* ── 왼쪽: 기체 실린더 — 부피가 곧 기둥 높이(원점 지나는 정비례, 하한 없음) ── */
   const cylBot = oilTopL;
@@ -572,10 +750,23 @@ function draw() {
   const cylTop = cylBot - gasH;
   ctx.strokeStyle = EDGE; ctx.lineWidth = 2;
   ctx.strokeRect(xL, top + 4, pw.wL, cylBot - (top + 4));
+  /* 부피가 작을 때 실린더 위쪽이 페이지 배경과 안 구분돼 잘린 것처럼 보이던 문제 처방 —
+     실린더 통 전체를 옅은 무채색으로 먼저 채워 "여기까지가 안쪽"임을 보여준다(재작업 2차). */
+  ctx.fillStyle = CYL_BG;
+  ctx.fillRect(xL + 1, top + 5, pw.wL - 2, Math.max(1, cylBot - (top + 5)));
   if (gasH > 1) {
     ctx.fillStyle = GAS_FILL;
     ctx.fillRect(xL + 1, cylTop, pw.wL - 2, Math.max(1, gasH - 1));
   }
+
+  /* 실린더 고정장치 — 실린더가 늘 같은 자리에 고정돼 있음을 보여주는 장식 걸쇠(요구 1).
+     기체 부피와 무관하게 위치가 고정돼 있다 — 볼트 두 개로 고정된 느낌을 준다. */
+  const clampY = top + 2;
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(xL - 5, clampY, pw.wL + 10, 5);
+  ctx.fillStyle = C.stageLight;
+  ctx.beginPath(); ctx.arc(xL - 1, clampY + 2.5, 1.6, 0, 6.2832); ctx.fill();
+  ctx.beginPath(); ctx.arc(xL + pw.wL + 1, clampY + 2.5, 1.6, 0, 6.2832); ctx.fill();
 
   /* ── 부피 눈금 0~5 L, 1 L 간격 (§3 3-C⑴·⑹ — 재작업 B-1) ── */
   ctx.strokeStyle = C.t3; ctx.fillStyle = C.t3; ctx.lineWidth = 1;
@@ -586,7 +777,7 @@ function draw() {
     if (ty < top || ty > bot) continue;
     ctx.beginPath(); ctx.moveTo(tickX, ty); ctx.lineTo(tickX + 4, ty); ctx.stroke();
     const label = String(v);
-    if (ctx.measureText(label).width <= Math.max(0, xR - (tickX + 6))) ctx.fillText(label, tickX + 6, ty + 3);
+    if (ctx.measureText(label).width <= Math.max(0, baseX - (tickX + 6))) ctx.fillText(label, tickX + 6, ty + 3);
   }
 
   const r = dotRadius(W);
@@ -603,43 +794,86 @@ function draw() {
   ctx.fillRect(xL - 2, Math.max(top + 2, cylTop - 6), pw.wL + 4, 6);
   ctx.fillRect(xL - 2, oilTopL - 4, pw.wL + 4, 4);
 
-  /* ── 오른쪽: 큰 피스톤 + 눌리는 물체 (잠금 중엔 물체 위에 떠 있다) ── */
-  const restY = oilTopR - 8;
-  const floatY = restY - 34;
-  const pistY = ds.latched ? floatY : floatY + (restY - floatY) * ds.pistonT;
+  /* ── 오른쪽: 프레임(기둥 두 개 + 고정판) · 아래에서 올라오는 램 · 눌리는 물체 (요구 1·2·3) ── */
+  ctx.strokeStyle = EDGE; ctx.lineWidth = colW;
+  ctx.beginPath(); ctx.moveTo(colLeftX, plateTopY); ctx.lineTo(colLeftX, floor); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(colRightX, plateTopY); ctx.lineTo(colRightX, floor); ctx.stroke();
+
+  /* 고정판 — 절대 움직이지 않는다("고정장치"). 볼트 두 개로 고정된 느낌을 준다. */
+  const plateX = colLeftX - 2, plateEndX = Math.min(colRightX + 2, rightLim);
   ctx.fillStyle = C.ink;
-  ctx.fillRect(xR - 2, pistY, pw.wR + 4, 9);
-  ctx.fillRect(xR + pw.wR / 2 - 4, pistY - 20, 8, 20);
+  ctx.fillRect(plateX, plateTopY, Math.max(10, plateEndX - plateX), plateH);
+  ctx.fillStyle = C.stageLight;
+  ctx.beginPath(); ctx.arc(cx - pw.wR / 2 - 3, plateTopY + plateH / 2, 1.6, 0, 6.2832); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + pw.wR / 2 + 3, plateTopY + plateH / 2, 1.6, 0, 6.2832); ctx.fill();
 
-  if (ds.latched) {
-    ctx.fillStyle = C.ink;
-    ctx.fillRect(xR - 8, pistY + 1, 6, 7);
-    ctx.fillRect(xR + pw.wR + 2, pistY + 1, 6, 7);
+  /* 밑동(램의 몸통이 들어 있는 통) — 바닥에 고정 */
+  ctx.strokeStyle = EDGE; ctx.lineWidth = 2;
+  ctx.strokeRect(baseX, baseTopY, baseW, baseH);
+
+  /* 유압유 이동 화살표 — 공개 ① 단계에서 보이다가 램이 올라올수록 옅어진다(요구 2) */
+  const arrowA = ds.meterOn ? clamp(1 - ds.ramT, 0, 1) : 0;
+  if (arrowA > 0.02) {
+    ctx.save();
+    ctx.globalAlpha = arrowA;
+    ctx.strokeStyle = C.amber; ctx.fillStyle = C.amber; ctx.lineWidth = 2;
+    const ax = cx, ayB = baseTopY + baseH - 4, ayT = baseTopY - 8;
+    ctx.beginPath(); ctx.moveTo(ax, ayB); ctx.lineTo(ax, ayT + 6); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ax, ayT); ctx.lineTo(ax - 5, ayT + 8); ctx.lineTo(ax + 5, ayT + 8); ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
 
-  const objY = restY + 9, objH = 12;
-  if (ds.shown && ds.verdict === "부서짐") {
-    ctx.strokeStyle = EDGE; ctx.fillStyle = OBJ_FILL; ctx.lineWidth = 1.4;
-    const midx = xR + pw.wR / 2;
-    ctx.beginPath();
-    ctx.moveTo(xR - 2, objY); ctx.lineTo(midx - 6, objY + 3); ctx.lineTo(midx - 2, objY + objH);
-    ctx.lineTo(xR - 2, objY + objH); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(midx + 2, objY + 2); ctx.lineTo(xR + pw.wR + 2, objY); ctx.lineTo(xR + pw.wR + 2, objY + objH);
-    ctx.lineTo(midx + 4, objY + objH); ctx.closePath(); ctx.fill(); ctx.stroke();
-  } else {
-    ctx.fillStyle = OBJ_FILL; ctx.strokeStyle = EDGE; ctx.lineWidth = 1.4;
-    const h = ds.shown ? objH * 0.7 : objH;
-    ctx.fillRect(xR - 2, objY + (objH - h), pw.wR + 4, h);
-    ctx.strokeRect(xR - 2, objY + (objH - h), pw.wR + 4, h);
-  }
+  /* 램 — 몸통(축) + 머리. 아래에서 위로 올라와 물체 밑면에 닿는다(요구 1·2 — 위→아래가 아니다) */
+  ctx.fillStyle = C.ink;
+  ctx.fillRect(cx - 4, ramHeadY + ramHeadH, 8, Math.max(0, baseTopY + baseH - (ramHeadY + ramHeadH)));
+  ctx.fillRect(cx - ramW / 2, ramHeadY, ramW, ramHeadH);
 
-  /* ── 압력계(잠금) — 우상단, 캔버스 밖 HTML과 중복 표시(정직성) ── */
+  /* 물체 — 늘 고정판 바로 밑, 램이 밑에서 밀어 올린다(요구 2·3) */
+  drawObject(cx - objW / 2, objTopY, objW, objH, ds);
+
+  /* ── 압력계(잠금) — 우상단, 캔버스 밖 HTML과 중복 표시(정직성) ──
+     대기압 표시줄과 같은 줄(top-8)에 둔다 — 고정판이 늘 캔버스 맨 위에 있어서
+     예전처럼 top+12에 두면 좁은 화면에서 고정판과 글자가 겹친다. */
   ctx.textAlign = "right"; ctx.font = "700 13px sans-serif";
   const pi = pressureInfo();
   ctx.fillStyle = C.t3;
   const lockTxt = pi.locked ? "P = 🔒 잠김" : (pi.value != null ? "P = " + fmtInt(pi.value) + " kPa" : "");
-  if (lockTxt) ctx.fillText(fitText(lockTxt, "🔒", midW - 4), W - M - 4, top + 12);
+  if (lockTxt) ctx.fillText(fitText(lockTxt, "🔒", midW - 4), W - M - 4, top - 8);
+
+  /* ── 오르는 압력 눈금 + 숫자 (요구 2) — 왼쪽 실린더/기름관과 오른쪽 프레임 사이 빈 자리 ── */
+  if (ds.meterOn && G.data) {
+    const gapX = xL + pw.wL + 6, gapR = colLeftX - 6;
+    const meterW = gapR - gapX;
+    if (meterW > 34) {
+      const target = G.data.target;
+      const meterMax = Math.max(ds.finalP, target) * 1.05;
+      const meterY = top + 30, meterH = 10;
+      const fillFrac = clamp(ds.dispP / meterMax, 0, 1);
+      const targetFrac = clamp(target / meterMax, 0, 1);
+
+      ctx.strokeStyle = EDGE; ctx.lineWidth = 1;
+      ctx.strokeRect(gapX, meterY, meterW, meterH);
+      ctx.fillStyle = OIL_FILL;
+      ctx.fillRect(gapX + 1, meterY + 1, Math.max(0, meterW - 2) * fillFrac, meterH - 2);
+
+      /* 목표 눈금 — 오르는 숫자가 이 선을 넘는지 학생이 눈으로 볼 수 있게 한다 */
+      const tx = gapX + meterW * targetFrac;
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(tx, meterY - 3); ctx.lineTo(tx, meterY + meterH + 3); ctx.stroke();
+
+      ctx.textAlign = "center"; ctx.fillStyle = C.ink; ctx.font = "700 13px sans-serif";
+      const numTxt = "누르는 세기 " + fmtInt(ds.dispP) + " kPa";
+      const numShort = fmtInt(ds.dispP) + " kPa";
+      ctx.fillText(fitText(numTxt, numShort, meterW), gapX + meterW / 2, meterY - 8);
+
+      ctx.font = "9px sans-serif"; ctx.fillStyle = C.t3;
+      const labelTxt = "목표";
+      if (ctx.measureText(labelTxt).width <= 40) {
+        ctx.fillText(labelTxt, clamp(tx, gapX + 16, gapR - 16), meterY + meterH + 14);
+      }
+    }
+  }
 
   /* ── 대기압 기준선 (상시 표시 · 1차시 학습 내용) ── */
   ctx.strokeStyle = "rgba(95,107,122,0.55)"; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
@@ -677,11 +911,40 @@ document.addEventListener("visibilitychange", () => {
 });
 
 /* ================= 시작 ================= */
-if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(cv.parentElement);
-window.addEventListener("resize", resize);
-syncSliderDom();
-syncHowto();
-syncLimitTxt();
-renderStatic();
-resize();
-rafId = requestAnimationFrame(loop);
+
+/* 부팅이 실패해도 캔버스가 백지로 남지 않게 한다.
+   백지는 "그릴 게 없음"과 "코드가 죽음"을 구분해 주지 않아서, 예전 sim.js가 캐시에
+   남아 있거나 요소 하나가 사라졌을 때 원인이 화면에 전혀 드러나지 않았다.
+   여기서 잡아 캔버스에 이유를 적는다 — 교실에서 교사가 바로 읽을 수 있어야 한다. */
+function bootFailed(err) {
+  try {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = cv.width / dpr || cv.clientWidth || 320;
+    const H = cv.height / dpr || cv.clientHeight || 200;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#b42318"; ctx.textAlign = "center";
+    ctx.font = "bold 15px sans-serif";
+    ctx.fillText("화면을 그리지 못했습니다", W / 2, H / 2 - 22);
+    ctx.fillStyle = "#475467"; ctx.font = "13px sans-serif";
+    ctx.fillText("브라우저에서 Ctrl+Shift+R 을 눌러 새로 고쳐 주세요.", W / 2, H / 2 + 4);
+    ctx.fillText("그래도 안 되면 아래 내용을 알려 주세요.", W / 2, H / 2 + 24);
+    ctx.fillStyle = "#98a2b3"; ctx.font = "11px sans-serif";
+    ctx.fillText(String(err && err.message ? err.message : err).slice(0, 70), W / 2, H / 2 + 46);
+    ctx.textAlign = "left";
+  } catch (_) { /* 캔버스조차 못 쓰면 조용히 포기한다 */ }
+  if (window.console) console.error("[press] 부팅 실패:", err);
+}
+
+try {
+  if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(cv.parentElement);
+  window.addEventListener("resize", resize);
+  syncSliderDom();
+  syncHowto();
+  syncLimitTxt();
+  renderStatic();
+  resize();
+  rafId = requestAnimationFrame(loop);
+} catch (err) {
+  bootFailed(err);
+}

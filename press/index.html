@@ -151,12 +151,12 @@
   <div class="card stagecard">
     <h2>장치</h2>
     <div class="stage stage--light">
-      <canvas id="rig" aria-label="기체 실린더가 유압유를 눌러 큰 피스톤으로 힘을 전달하는 유압 프레스 그림. 입자의 빽빽함과 움직임, 피스톤 높이로 압력의 세기를 짐작합니다. 압력 숫자는 제출 전까지 잠겨 있습니다."></canvas>
+      <canvas id="rig" aria-label="기체 실린더가 유압유를 밀어 아래에서 위로 램이 올라오며 고정판 밑의 물체를 누르는 유압 프레스 그림. 입자의 빽빽함과 움직임, 램이 올라오는 정도, 물체가 눌리거나 갈라지는 모습으로 누르는 세기를 짐작합니다. 압력 숫자는 제출 전까지 잠겨 있습니다."></canvas>
     </div>
     <div class="legend">
       <span class="item"><span class="swatch" style="background:var(--d-blue)"></span>기체(입자)</span>
       <span class="item"><span class="swatch sq" style="background:var(--d-amber)"></span>유압유</span>
-      <span class="item"><span class="swatch sq" style="background:var(--d-gray)"></span>금속·피스톤·물체</span>
+      <span class="item"><span class="swatch sq" style="background:var(--d-gray)"></span>금속(고정판·기둥·램)·물체</span>
       <span class="item">부피를 반으로 줄이면 기둥도 반이 됩니다.</span>
     </div>
     <div class="motionnote" id="motionNote">
@@ -214,6 +214,7 @@
     <li>입자의 <b>빠르기는 절대 온도의 제곱근에 비례</b>하게 그렸습니다(실제 관계와 같습니다). 다만 화면에서의 절대 속도는 <b>임의 배율(a.u.)</b>입니다.</li>
     <li><b>실제 입자는 서로도 부딪힙니다.</b> 이 그림은 벽과의 충돌만 그렸습니다.</li>
     <li>실제 장치라면 <b>압력계를 언제든 읽을 수 있습니다.</b> 이 게임은 도전을 위해 일부러 가려 둔 것입니다.</li>
+    <li>물체가 <b>눌려서 낮아지고 옆으로 부풀거나, 갈라져 조각나는 모습</b>은 이해를 돕기 위해 단순하게 그린 것입니다. 실제 물체는 재질에 따라 눌리는 정도와 부서지는 모양이 이 그림과 다르며, 균열의 모양도 실제 파단면과 같지 않습니다.</li>
   </ol>
   <h3>그림이 정확한 곳</h3>
   <p>두 피스톤의 굵기 비는 실제 장치와 같게 그렸습니다. 세로 축척만 화면에 맞춰 줄였습니다.</p>
@@ -225,6 +226,6 @@
 
 <script src="../sims.js"></script>
 <script src="../shared/nav.js" data-base=".." data-current="press"></script>
-<script src="sim.js"></script>
+<script src="sim.js?v=20260801c"></script>
 </body>
 </html>
