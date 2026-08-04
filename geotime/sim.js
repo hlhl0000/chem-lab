@@ -1027,102 +1027,153 @@ function dirStateFor(dYaw, dPitch) {
 }
 
 /* ================================================================
-   셰이더 — §3 3-B 그대로. 모델 변환이 없어 법선 역전치가 필요 없다(확정).
-   ================================================================ */
-const VERT_SRC = `
-attribute vec3 a_pos, a_nrm, a_rel;
-attribute vec2 a_ext;
-uniform mat4 u_vp;
-uniform vec3 u_col; uniform float u_mode, u_sway, u_time;
-uniform vec2 u_orbit;
-uniform vec3 u_light; uniform float u_amb, u_dif;
-uniform vec3 u_eye; uniform vec2 u_fogRange;
-varying vec3 v_col; varying float v_fog;
-
-vec3 rotZv(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x * c - v.y * s, v.x * s + v.y * c, v.z); }
-vec3 rotYv(vec3 v, float a) { float c = cos(a), s = sin(a); return vec3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c); }
-
-void main() {
-  float phase = a_ext.x, shade = a_ext.y;
-  vec3 p, n;
-  if (u_mode > 1.5) {
-    /* 유영 — 앵커를 중심으로 수평 원 궤도 */
-    vec3 A = a_pos - a_rel;
-    float phi = u_time * u_orbit.y + phase;
-    vec3 O = A + vec3(u_orbit.x * cos(phi), 0.35 * sin(2.0 * phi + phase), u_orbit.x * sin(phi));
-    float psi = -phi + 1.5707963;
-    vec3 rel = a_rel;
-    rel.z += 0.10 * a_rel.x * sin(3.0 * phi);
-    p = O + rotYv(rel, psi);
-    n = rotYv(a_nrm, psi);
-  } else if (u_mode > 0.5) {
-    /* 고착 흔들림 */
-    vec3 A = a_pos - a_rel;
-    float theta = u_sway * sin(u_time * 0.9 + phase) * clamp(a_rel.y / 1.5, 0.0, 1.0);
-    p = A + rotZv(a_rel, theta);
-    n = rotZv(a_nrm, theta);
-  } else {
-    p = a_pos; n = a_nrm;
-  }
-  float k = u_amb + u_dif * max(dot(n, normalize(-u_light)), 0.0);
-  v_col = u_col * clamp(k * shade, 0.78, 1.20);
-  float d = distance(p, u_eye);
-  v_fog = clamp((d - u_fogRange.x) / (u_fogRange.y - u_fogRange.x), 0.0, 1.0);
-  gl_Position = u_vp * vec4(p, 1.0);
-}`;
-
-const FRAG_SRC = `precision mediump float;
-varying vec3 v_col; varying float v_fog;
-uniform vec3 u_fogCol; uniform float u_alpha;
-void main(){ gl_FragColor = vec4(mix(v_col, u_fogCol, v_fog), u_alpha); }`;
-
-/* ================================================================
-   WebGL 초기화 — null 이면 즉시 폴백(§3 3-H · 매뉴얼 4부 ⑯)
+   three.js 렌더러 — 코어(r147)만 쓴다(examples/jsm은 ES 모듈이라 못 씀). 그리는 "방식"만
+   three.js로 교체한다 — 씬 데이터(buildEra)·확정 문자열·2D 폴백은 한 글자도 바꾸지 않는다.
+   THREE 전역이 없거나 WebGLRenderer 생성이 throw하면 usingFallback으로 넘어간다(§3-H 방어선).
    ================================================================ */
 const gcv = $("gl");
-let gl = null, prog = null, U = {}, A = {};
 let usingFallback = false;
+let renderer = null, camera = null;
+const uTime = { value: 0 };   // sway·orbit·물결·갓레이 셰이더가 함께 쓰는 시간 uniform
 
-function compile(ty, src) {
-  const s = gl.createShader(ty); gl.shaderSource(s, src); gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); return null; }
-  return s;
-}
+/* 데이터 색(GEO.env·PALETTE)은 표시(sRGB) 값이므로 조명 계산 전에 선형으로 바꾼다 —
+   출력에서 renderer가 다시 sRGB로 인코딩한다. hex 리터럴을 쓰지 않는다(§5). */
+function colFromArr(a) { const c = new THREE.Color(); c.setRGB(a[0], a[1], a[2]); return c.convertSRGBToLinear(); }
+function whiteC() { return new THREE.Color(1, 1, 1); }
+
 function initGL() {
-  gl = gcv.getContext("webgl", { antialias: true, alpha: false }) || gcv.getContext("experimental-webgl");
-  if (!gl) return false;
-  const vs = compile(gl.VERTEX_SHADER, VERT_SRC), fs = compile(gl.FRAGMENT_SHADER, FRAG_SRC);
-  if (!vs || !fs) return false;
-  prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); return false; }
-  gl.useProgram(prog);
-  A.pos = gl.getAttribLocation(prog, "a_pos");
-  A.nrm = gl.getAttribLocation(prog, "a_nrm");
-  A.rel = gl.getAttribLocation(prog, "a_rel");
-  A.ext = gl.getAttribLocation(prog, "a_ext");
-  for (const n of ["u_vp", "u_col", "u_mode", "u_sway", "u_orbit", "u_time", "u_light", "u_amb", "u_dif",
-    "u_fogCol", "u_fogRange", "u_eye", "u_alpha"]) U[n] = gl.getUniformLocation(prog, n);
-  gl.enable(gl.DEPTH_TEST);
+  if (typeof THREE === "undefined") return false;
+  try { renderer = new THREE.WebGLRenderer({ canvas: gcv, antialias: true, alpha: false }); }
+  catch (e) { console.error(e); renderer = null; }
+  if (!renderer) return false;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); // 화질 위해 2까지 — 강등 없음
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  camera = new THREE.PerspectiveCamera(55, 1, 0.1, 130); // fovY=55 확정값(수평 67.4°가 여기서 나온다)
   return true;
 }
 
-/* ================================================================
-   시대별 GPU 버퍼 — buildEra() 의 결과를 그대로 올린다(F-1: 수치 변형 없음)
-   ================================================================ */
-function makeBuf(target, arr) { const b = gl.createBuffer(); gl.bindBuffer(target, b); gl.bufferData(target, arr, gl.STATIC_DRAW); return b; }
-function uploadChunk(chunk) {
-  return {
-    posBuf: makeBuf(gl.ARRAY_BUFFER, chunk.positions),
-    nrmBuf: makeBuf(gl.ARRAY_BUFFER, chunk.normals),
-    relBuf: makeBuf(gl.ARRAY_BUFFER, chunk.rel),
-    extBuf: makeBuf(gl.ARRAY_BUFFER, chunk.ext),
-    idxBuf: makeBuf(gl.ELEMENT_ARRAY_BUFFER, chunk.indices),
-    count: chunk.indices.length
+/* ---- 생물 재질(PBR) + 정점 변위(sway/orbit) + 프레넬 림라이트 ----
+   원래 정점 셰이더(§3 3-B)의 운동식을 MeshStandardMaterial에 onBeforeCompile로 주입한다.
+   부착=흔들림(mode 1) / 유영=궤도 헤엄(mode 2)의 구분(관찰 포인트 ③)을 그대로 보존한다.
+   림라이트는 어두운 물속에서 생물 외곽을 base color의 밝은 틴트로 발광시켜, 색각과 무관한
+   명도·외곽 채널을 하나 더 준다(Q2 확정). GLSL은 모든 생물이 동일 → 프로그램 1개 공유,
+   운동값(u_mode/u_sway/u_orbit)만 재질별 uniform으로 달라진다. */
+function makeCreatureMaterial(colorArr, hard, mode, sway, orbit) {
+  const mat = new THREE.MeshStandardMaterial({
+    color: colFromArr(colorArr),
+    roughness: hard ? 0.42 : 0.8,
+    metalness: hard ? 0.12 : 0.02
+  });
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.u_time = uTime;
+    shader.uniforms.u_mode = { value: mode || 0 };
+    shader.uniforms.u_sway = { value: sway || 0 };
+    shader.uniforms.u_orbit = { value: new THREE.Vector2(orbit ? orbit[0] : 0, orbit ? orbit[1] : 0) };
+    shader.uniforms.u_rim = { value: hard ? 0.95 : 1.25 };
+    shader.vertexShader =
+      "attribute vec3 aRel;\nattribute vec2 aExt;\n" +
+      "uniform float u_time, u_mode, u_sway;\nuniform vec2 u_orbit;\nvarying float vShade;\n" +
+      "vec3 gRotZ(vec3 v,float a){float c=cos(a),s=sin(a);return vec3(v.x*c-v.y*s,v.x*s+v.y*c,v.z);}\n" +
+      "vec3 gRotY(vec3 v,float a){float c=cos(a),s=sin(a);return vec3(v.x*c+v.z*s,v.y,-v.x*s+v.z*c);}\n" +
+      shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace("#include <beginnormal_vertex>", [
+      "float gPhase = aExt.x; vShade = aExt.y;",
+      "vec3 gP; vec3 gN;",
+      "if (u_mode > 1.5) {",                              // 유영 — 앵커 중심 수평 원 궤도
+      "  vec3 gA = position - aRel;",
+      "  float phi = u_time * u_orbit.y + gPhase;",
+      "  vec3 gO = gA + vec3(u_orbit.x*cos(phi), 0.35*sin(2.0*phi+gPhase), u_orbit.x*sin(phi));",
+      "  float psi = -phi + 1.5707963;",
+      "  vec3 rel = aRel; rel.z += 0.10*aRel.x*sin(3.0*phi);",
+      "  gP = gO + gRotY(rel, psi); gN = gRotY(normal, psi);",
+      "} else if (u_mode > 0.5) {",                       // 고착 흔들림
+      "  vec3 gA = position - aRel;",
+      "  float theta = u_sway*sin(u_time*0.9+gPhase)*clamp(aRel.y/1.5,0.0,1.0);",
+      "  gP = gA + gRotZ(aRel, theta); gN = gRotZ(normal, theta);",
+      "} else { gP = position; gN = normal; }",
+      "vec3 objectNormal = gN;",
+      "#ifdef USE_TANGENT",
+      "vec3 objectTangent = vec3( tangent.xyz );",
+      "#endif"
+    ].join("\n"));
+    shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "vec3 transformed = gP;");
+    shader.fragmentShader = "uniform float u_rim;\nvarying float vShade;\n" + shader.fragmentShader;
+    shader.fragmentShader = shader.fragmentShader.replace("#include <emissivemap_fragment>",
+      "#include <emissivemap_fragment>\n" +
+      "float gFres = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.4);\n" +
+      "totalEmissiveRadiance += diffuseColor.rgb * (u_rim * gFres + 0.06);\n" +   // 외곽 발광 + 바닥 자기발광
+      "totalEmissiveRadiance *= clamp(vShade, 0.82, 1.28);");
   };
+  return mat;
 }
-/* 종별 흔들림·궤도 진폭 — draw call 당 uniform 하나뿐이라 개체별로는 못 준다(§3 3-B 표).
-   개체별 변주는 a_ext.x(phase)만으로 만든다. 값 자체는 애니메이션 연출이며 §6 어떤 검사도
-   재지 않는다 — 반환 보고 ⑤에 이 사실을 적는다. */
+
+/* 반투명 수면 — 밝은 물빛 + 잔물결(정점 y sin 합) */
+function makeSeaMaterial(env) {
+  const mat = new THREE.MeshStandardMaterial({
+    color: colFromArr(env.waterColor).lerp(whiteC(), 0.28),
+    roughness: 0.14, metalness: 0.0, transparent: true, opacity: 0.5,
+    depthWrite: false, side: THREE.DoubleSide
+  });
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.u_time = uTime;
+    shader.vertexShader = "uniform float u_time;\n" + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>",
+      "vec3 transformed = vec3( position );\n" +
+      "transformed.y += 0.16*sin(position.x*0.5 + u_time*1.1) + 0.12*sin(position.z*0.7 + u_time*0.9);");
+  };
+  return mat;
+}
+
+/* BufferGeometry — buildEra()의 배열을 그대로 올린다(F-1: 수치 변형 없음) */
+function geomFromChunk(chunk) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(chunk.positions, 3));
+  g.setAttribute("normal", new THREE.BufferAttribute(chunk.normals, 3));
+  if (chunk.rel) g.setAttribute("aRel", new THREE.BufferAttribute(chunk.rel, 3));
+  if (chunk.ext) g.setAttribute("aExt", new THREE.BufferAttribute(chunk.ext, 2));
+  g.setIndex(new THREE.BufferAttribute(chunk.indices, 1));
+  return g;
+}
+
+/* 갓레이(빛기둥) — 수면에서 비스듬히 내려오는 additive 반투명 빛 몇 줄(수중 분위기의 핵심).
+   콘의 세로 방향으로 알파를 부드럽게 떨어뜨려(위=수면 밝고 아래로 사라짐) 딱딱한 원뿔이 아니라
+   퍼지는 빛기둥으로 보이게 한다. 과하지 않게 6줄, 낮은 opacity. */
+function addGodrays(scene, env) {
+  const tint = colFromArr(env.waterColor).lerp(whiteC(), 0.72);
+  const H = 26;
+  // 얇은 원기둥을 옆에서 보면 additive 경로 길이가 중심에서 가장 길어 "가운데 밝고 가장자리
+  // 부드러운" 빛기둥이 자연스럽게 나온다. 세로 알파를 위·아래로 떨어뜨려 바닥 원반이 안 생기게.
+  const mat = new THREE.MeshBasicMaterial({
+    color: tint, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending,
+    depthWrite: false, side: THREE.DoubleSide, fog: true
+  });
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = "varying float vGY;\n" +
+      shader.vertexShader.replace("#include <begin_vertex>",
+        "#include <begin_vertex>\nvGY = (position.y + " + (H / 2).toFixed(1) + ") / " + H.toFixed(1) + ";");
+    shader.fragmentShader = "varying float vGY;\n" +
+      shader.fragmentShader.replace("#include <output_fragment>",
+        "gl_FragColor.a *= smoothstep(0.02, 0.5, vGY) * (1.0 - smoothstep(0.82, 1.0, vGY));\n#include <output_fragment>");
+  };
+  for (let i = 0; i < 5; i++) {
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 1.0, H, 8, 1, true), mat);
+    beam.position.set(16 + i * 22 + (i % 2 ? 5 : -4), 9, -9 + (i * 11) % 26 - 7);
+    beam.rotation.z = 0.16 * (i % 2 ? 1 : -1);
+    beam.rotation.x = 0.08;
+    beam.renderOrder = 8;
+    scene.add(beam);
+  }
+}
+
+/* ================================================================
+   시대별 three.js 씬 — buildEra() 의 결과를 그대로 BufferGeometry에 올린다(F-1: 수치 변형 없음)
+   ================================================================ */
+/* 종별 흔들림·궤도 진폭 — onBeforeCompile로 재질별 uniform이 되어 개체 phase(aExt.x)와 함께
+   부착=흔들림 / 유영=헤엄을 만든다. 값 자체는 애니메이션 연출이며 §6 어떤 검사도 재지 않는다. */
 function swayOf(sp) { return 0.16; }
 function orbitOf(sp) { const r = Math.max(0.9, Math.min(3.2, sp.sizeM * 0.7 + 0.6)); const w = 0.20 + 0.9 / (sp.sizeM + 1.2); return [r, w]; }
 
@@ -1133,14 +1184,54 @@ let firstFrameMs = null, allErasMs = null, buildStartMs = null;
 function buildEraGPU(era) {
   const raw = buildEra(era);
   const speciesList = GEO.species[era];
-  const species = raw.species.map((s, i) => ({
-    gpu: uploadChunk(s), color: PALETTE[s.color], mode: s.mode,
-    sway: swayOf(speciesList[i]), orbit: orbitOf(speciesList[i])
-  }));
-  const terrain = { gpu: uploadChunk(raw.terrain), color: GEO.env[era].floorColor };
-  const sea = { gpu: uploadChunk(raw.sea), color: GEO.env[era].waterColor };
-  const coast = { gpu: uploadChunk(raw.coast), color: PALETTE[raw.coast.color], placements: raw.coast.coastalPlacements };
-  ERA_GPU[era] = { species, terrain, sea, coast, raw };
+  const env = GEO.env[era];
+  const scene = new THREE.Scene();
+  scene.background = colFromArr(env.waterColor).multiplyScalar(0.55); // 사실적 어두운 물빛(rim으로 시인성 확보)
+  scene.fog = new THREE.Fog(colFromArr(env.waterColor), env.fogStart, env.fogEnd); // 수심 큐 — 원래 u_fogRange 그대로
+
+  /* 조명 — 사실적 수중 + 생물 시인성 */
+  scene.add(new THREE.HemisphereLight(colFromArr(env.waterColor).lerp(whiteC(), 0.5), colFromArr(env.floorColor), 0.65));
+  const sun = new THREE.DirectionalLight(new THREE.Color(1.0, 0.95, 0.88), 2.4); // 따뜻한 흰빛 주광
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.near = 0.5; sun.shadow.camera.far = 72;
+  sun.shadow.camera.left = -18; sun.shadow.camera.right = 18;
+  sun.shadow.camera.top = 18; sun.shadow.camera.bottom = -18;
+  sun.shadow.bias = -0.0008;
+  const sunTarget = new THREE.Object3D(); scene.add(sunTarget); sun.target = sunTarget;
+  scene.add(sun);
+  // 위-앞-옆에서 비스듬히 스치는 각도 — 스트로마톨라이트 층·삼엽충 마디에 층 그림자가 지게(M2 시각 증거)
+  const sunDir = new THREE.Vector3(0.35, 1.0, 0.28).normalize();
+  const spot = new THREE.PointLight(new THREE.Color(1.0, 0.97, 0.92), 0.5, 28, 2.0); // 관찰 대상 은근한 집중 조명
+  scene.add(spot);
+  addGodrays(scene, env);
+
+  /* 해저+화산 — PBR, 그림자 받음/드리움 */
+  const terrainMesh = new THREE.Mesh(geomFromChunk(raw.terrain),
+    new THREE.MeshStandardMaterial({ color: colFromArr(env.floorColor), roughness: 0.95, metalness: 0.0 }));
+  terrainMesh.castShadow = true; terrainMesh.receiveShadow = true;
+  scene.add(terrainMesh);
+
+  /* 육상 실루엣 — 단색(--p-mint), 약한 자기발광으로 안개 안쪽 거리에서도 하늘띠·능선이 보이게 */
+  const coastCol = colFromArr(PALETTE[raw.coast.color]);
+  const coastMesh = new THREE.Mesh(geomFromChunk(raw.coast),
+    new THREE.MeshStandardMaterial({ color: coastCol, roughness: 1.0, metalness: 0.0, emissive: coastCol, emissiveIntensity: 0.22 }));
+  scene.add(coastMesh);
+
+  /* 종별 병합 메시 — 부착/유영 운동 보존 */
+  raw.species.forEach((s, i) => {
+    const sp = speciesList[i];
+    const mesh = new THREE.Mesh(geomFromChunk(s), makeCreatureMaterial(PALETTE[s.color], sp.hard, s.mode, swayOf(sp), orbitOf(sp)));
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    scene.add(mesh);
+  });
+
+  /* 수면 판 — 반투명, 마지막에(깊이 기록 X) */
+  const seaMesh = new THREE.Mesh(geomFromChunk(raw.sea), makeSeaMaterial(env));
+  seaMesh.renderOrder = 20;
+  scene.add(seaMesh);
+
+  ERA_GPU[era] = { scene, sun, sunTarget, sunDir, spot, coast: { placements: raw.coast.coastalPlacements }, raw };
   ERA_READY[era] = true;
 }
 
@@ -1379,65 +1470,45 @@ function updateDirIndicator(era, tl, frame) {
 }
 
 /* ================================================================
-   렌더 — 그리기 순서: clear → 하늘/먼물 → 육상 실루엣 → 지형 → 개체 → 수면(반투명, 마지막)
+   렌더 — three.js 씬 그래프(그리기 순서는 재질 renderOrder/투명도로: 불투명→수면 반투명 마지막).
+   조명·그림자·안개는 각 시대 씬에 들어 있고, 카메라만 매 프레임 레일 프레임으로 옮긴다.
    ================================================================ */
-function setCommonUniforms(era) {
-  const e = GEO.env[era];
-  gl.uniform3f(U.u_light, e.lightDir[0], e.lightDir[1], e.lightDir[2]);
-  gl.uniform1f(U.u_amb, e.ambient); gl.uniform1f(U.u_dif, e.diffuse);
-  gl.uniform3f(U.u_fogCol, e.waterColor[0], e.waterColor[1], e.waterColor[2]);
-  const fogEndMul = state.perf.fogCut ? 0.75 : 1.0;
-  gl.uniform2f(U.u_fogRange, e.fogStart, e.fogEnd * fogEndMul);
-}
-function drawChunk(chunk, vp, eye, mode, sway, orbit, alpha, animate) {
-  gl.uniformMatrix4fv(U.u_vp, false, vp);
-  gl.uniform3f(U.u_col, chunk.color[0], chunk.color[1], chunk.color[2]);
-  gl.uniform1f(U.u_mode, mode || 0);
-  gl.uniform1f(U.u_sway, sway || 0);
-  gl.uniform2f(U.u_orbit, orbit ? orbit[0] : 0, orbit ? orbit[1] : 0);
-  gl.uniform1f(U.u_time, animate ? clock.simTime : clock.frozenTime);
-  gl.uniform3f(U.u_eye, eye[0], eye[1], eye[2]);
-  gl.uniform1f(U.u_alpha, alpha === undefined ? 1.0 : alpha);
-  const g = chunk.gpu;
-  gl.bindBuffer(gl.ARRAY_BUFFER, g.posBuf); gl.vertexAttribPointer(A.pos, 3, gl.FLOAT, false, 0, 0); gl.enableVertexAttribArray(A.pos);
-  gl.bindBuffer(gl.ARRAY_BUFFER, g.nrmBuf); gl.vertexAttribPointer(A.nrm, 3, gl.FLOAT, false, 0, 0); gl.enableVertexAttribArray(A.nrm);
-  gl.bindBuffer(gl.ARRAY_BUFFER, g.relBuf); gl.vertexAttribPointer(A.rel, 3, gl.FLOAT, false, 0, 0); gl.enableVertexAttribArray(A.rel);
-  gl.bindBuffer(gl.ARRAY_BUFFER, g.extBuf); gl.vertexAttribPointer(A.ext, 2, gl.FLOAT, false, 0, 0); gl.enableVertexAttribArray(A.ext);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.idxBuf);
-  gl.drawElements(gl.TRIANGLES, g.count, gl.UNSIGNED_SHORT, 0);
-}
-function drawEraScene(era, eye, vp, animate) {
-  const gpu = ERA_GPU[era]; if (!gpu) return;
-  setCommonUniforms(era);
-  drawChunk(gpu.coast, vp, eye, 0, 0, null, 1.0, animate);
-  drawChunk(gpu.terrain, vp, eye, 0, 0, null, 1.0, animate);
-  for (const sp of gpu.species) drawChunk(sp, vp, eye, sp.mode, sp.sway, sp.orbit, 1.0, animate);
-  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
-  drawChunk(gpu.sea, vp, eye, 0, 0, null, 0.55, animate);
-  gl.depthMask(true); gl.disable(gl.BLEND);
-}
-
 const clock = { simTime: 0, frozenTime: 0, lastTs: 0 };
 
-function computeViewMatrix(frame, yawDeg, pitchDeg) {
+/* 원래 computeViewMatrix와 같은 규칙(frame.dir 기준 절대 yaw/pitch + 사용자 오프셋)으로
+   three.js 카메라를 배치한다 — 시야 보장(검사 31~36)은 데이터로 검증되고, 이 카메라 규칙을
+   그대로 지키므로 화면도 그 시야를 그대로 담는다. 반환값은 최종 시선 방향(태양 focus 계산용). */
+function placeCamera(frame, yawDeg, pitchDeg) {
   const yawBase = Math.atan2(frame.dir[2], frame.dir[0]);
   const pitchBase = Math.asin(Math.max(-1, Math.min(1, frame.dir[1])));
   const yaw = yawBase + yawDeg * Math.PI / 180;
   const pitch = pitchBase + pitchDeg * Math.PI / 180;
   const dir = dirFromYawPitch(yaw, pitch);
-  return mat4LookAt(frame.eye, V.add(frame.eye, dir), [0, 1, 0]);
+  camera.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(frame.eye[0] + dir[0], frame.eye[1] + dir[1], frame.eye[2] + dir[2]);
+  return dir;
+}
+/* 태양(그림자)·집중광을 시선 앞 관찰 지점으로 옮겨 그림자 절두체가 늘 보이는 곳을 덮게 한다. */
+function updateSun(gpu, fx, fy, fz) {
+  gpu.sunTarget.position.set(fx, fy, fz);
+  gpu.sun.position.set(fx + gpu.sunDir.x * 34, fy + gpu.sunDir.y * 34, fz + gpu.sunDir.z * 34);
+  if (gpu.spot) gpu.spot.position.set(fx, fy + 6, fz + 2);
 }
 
 function drawFrame(dtSec) {
-  if (usingFallback || !gl) return;
-  const dpr = state.perf.dprLow ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+  if (usingFallback || !renderer) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2); // 강등 없음 — 최대 화질
   const cssW = gcv.clientWidth || 320, cssH = parseFloat(gcv.style.height) || 300;
-  const w = Math.max(1, Math.round(cssW * dpr)), h = Math.max(1, Math.round(cssH * dpr));
-  if (gcv.width !== w || gcv.height !== h) { gcv.width = w; gcv.height = h; }
+  if (renderer.getPixelRatio() !== dpr) renderer.setPixelRatio(dpr);
+  const sz = renderer.getSize(new THREE.Vector2());
+  if (Math.round(sz.x) !== Math.round(cssW) || Math.round(sz.y) !== Math.round(cssH)) renderer.setSize(cssW, cssH, false);
+  uTime.value = clock.simTime;
 
   if (state.mode === "single") {
     const era = currentEra();
-    if (!ERA_GPU[era]) return;
+    const gpu = ERA_GPU[era];
+    if (!gpu) return;
     // 재작업 R3 — [관찰 시작]을 누르기 전에는 elapsed가 늘지 않는다. 그래도 첫 프레임은
     // timelineLookup(0) = "intro" 단계(정지점 A의 정지 프레임)라서 §3 3-E 첫 화면과 그대로 맞는다.
     if (!state.paused && state.started) state.elapsed += dtSec;
@@ -1446,74 +1517,57 @@ function drawFrame(dtSec) {
       state.unlockedUpTo = Math.max(state.unlockedUpTo, state.eraIdx + 1);
     }
     const frame = frameAtS(era, tl.s);
-    const view = computeViewMatrix(frame, state.userYawDeg, state.userPitchDeg);
-    const proj = mat4Perspective(55 * Math.PI / 180, gcv.width / gcv.height, 0.1, 130);
-    const vp = mat4Multiply(proj, view);
-    const e = GEO.env[era];
-    gl.viewport(0, 0, gcv.width, gcv.height);
-    gl.clearColor(e.waterColor[0], e.waterColor[1], e.waterColor[2], 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    drawEraScene(era, frame.eye, vp, true);
+    const dir = placeCamera(frame, state.userYawDeg, state.userPitchDeg);
+    camera.aspect = cssW / cssH; camera.fov = 55; camera.updateProjectionMatrix();
+    updateSun(gpu, frame.eye[0] + dir[0] * 8, frame.eye[1] + dir[1] * 8, frame.eye[2] + dir[2] * 8);
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, cssW, cssH);
+    renderer.render(gpu.scene, camera); // autoClear로 배경(물빛)·깊이 초기화 후 렌더
     updateDirIndicator(era, tl, frame);
     updateReadoutLive(era, tl);
   } else {
-    /* 세 시대 나란히 보기 — 같은 캔버스를 scissor 로 3분할 */
-    gl.enable(gl.SCISSOR_TEST);
-    gl.clearColor(0.03, 0.04, 0.06, 1.0);
-    gl.viewport(0, 0, gcv.width, gcv.height); gl.scissor(0, 0, gcv.width, gcv.height);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    const vertical = tripleIsVertical();
-    const n = 3, gap = 2 * (state.perf.dprLow ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+    /* 세 시대 나란히 보기 — 같은 캔버스를 scissor/viewport 로 3분할(§3 3-C ③) */
     if (!state.paused && state.started) state.elapsed += dtSec; // 재작업 R3
-    if (!state.paused) clock.simTime += dtSec;
+    renderer.setScissorTest(true);
+    renderer.setViewport(0, 0, cssW, cssH); renderer.setScissor(0, 0, cssW, cssH);
+    renderer.setClearColor(new THREE.Color(0.03, 0.04, 0.06), 1); renderer.clear(); // 칸 사이 여백은 어두운 무대
+    const vertical = tripleIsVertical();
+    const n = 3, gap = 2;
     for (let i = 0; i < n; i++) {
       const era = ERA_ORDER[i];
-      if (!ERA_GPU[era]) continue;
+      const gpu = ERA_GPU[era];
+      if (!gpu) continue;
       const shrink = era === "mesozoic" ? 0.8 : 1.0;
       let vx, vy, vw, vh;
       if (!vertical) {
-        const cellW = (gcv.width - gap * (n - 1)) / n;
-        vw = cellW * shrink; vh = gcv.height * shrink;
-        vx = i * (cellW + gap) + (cellW - vw) / 2; vy = (gcv.height - vh) / 2;
+        const cellW = (cssW - gap * (n - 1)) / n;
+        vw = cellW * shrink; vh = cssH * shrink;
+        vx = i * (cellW + gap) + (cellW - vw) / 2; vy = (cssH - vh) / 2;
       } else {
-        const cellH = (gcv.height - gap * (n - 1)) / n;
-        vh = cellH * shrink; vw = gcv.width * shrink;
-        vy = gcv.height - (i + 1) * cellH - i * gap + (cellH - vh) / 2; vx = (gcv.width - vw) / 2;
+        const cellH = (cssH - gap * (n - 1)) / n;
+        vh = cellH * shrink; vw = cssW * shrink;
+        vy = cssH - (i + 1) * cellH - i * gap + (cellH - vh) / 2; vx = (cssW - vw) / 2;
       }
-      gl.viewport(vx, vy, vw, vh); gl.scissor(vx, vy, vw, vh);
-      const e = GEO.env[era];
-      gl.clearColor(e.waterColor[0], e.waterColor[1], e.waterColor[2], 1.0);
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      renderer.setViewport(vx, vy, vw, vh); renderer.setScissor(vx, vy, vw, vh);
       const frame = stopFrame(era, 0);
-      const view = mat4LookAt(frame.eye, V.add(frame.eye, frame.dir), frame.up);
-      const proj = mat4Perspective(55 * Math.PI / 180, vw / vh, 0.1, 130);
-      const vp = mat4Multiply(proj, view);
-      const animate = !(state.perf.tripleFreeze && i !== state.activeTriplePanel);
-      drawEraScene(era, frame.eye, vp, animate);
+      camera.position.set(frame.eye[0], frame.eye[1], frame.eye[2]);
+      camera.up.set(frame.up[0], frame.up[1], frame.up[2]);
+      camera.lookAt(frame.eye[0] + frame.dir[0], frame.eye[1] + frame.dir[1], frame.eye[2] + frame.dir[2]);
+      camera.aspect = vw / vh; camera.fov = 55; camera.updateProjectionMatrix();
+      updateSun(gpu, frame.eye[0] + frame.dir[0] * 8, frame.eye[1] + frame.dir[1] * 8, frame.eye[2] + frame.dir[2] * 8);
+      renderer.render(gpu.scene, camera); // autoClear가 이 칸(scissor)만 그 시대 물빛으로 초기화
     }
-    gl.disable(gl.SCISSOR_TEST);
+    renderer.setScissorTest(false);
     updateReadoutTriple();
   }
 }
 
 /* ================================================================
-   성능 자동 강등 3단 — §3 3-G. 최근 60프레임 평균, 1회씩만 되돌리지 않는다.
+   성능 자동 강등 제거 — 사용자 확정 ①(성능 되는 기기에서 화질을 낮추지 않는다).
+   loop()가 이 함수를 계속 부르므로 시그니처는 유지하되 아무 것도 강등하지 않는다.
+   (WebGL 자체가 안 되는 기기용 2D 단면 폴백은 그대로 유지 — 치명 게이트 X-1 안전망.)
    ================================================================ */
-function trackPerf(frameMs) {
-  const f = state.perf.frames; f.push(frameMs); if (f.length > 60) f.shift();
-  if (f.length < 60) return;
-  const avg = f.reduce((a, b) => a + b, 0) / f.length;
-  if (state.perf.stage === 0 && avg > 40) {
-    state.perf.stage = 1; state.perf.dprLow = true;
-    showSlowNotice($("perfNote"), TEXT.degrade[0]); f.length = 0;
-  } else if (state.perf.stage === 1 && avg > 40) {
-    state.perf.stage = 2; state.perf.fogCut = true;
-    showSlowNotice($("perfNote"), TEXT.degrade[1]); f.length = 0;
-  } else if (state.perf.stage === 2 && state.mode === "triple" && avg > 40) {
-    state.perf.stage = 3; state.perf.tripleFreeze = true;
-    showSlowNotice($("perfNote"), TEXT.degrade[2]); f.length = 0;
-  }
-}
+function trackPerf(frameMs) { /* no-op: 화질 강등 없음 */ }
 
 /* ================================================================
    읽음/문구 갱신 — 확정 문구는 TEXT 에서만 읽는다(§5 금지 28)
