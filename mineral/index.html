@@ -10,13 +10,6 @@
   .page{padding:18px 0 40px}
   .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
   .head .sub{color:var(--t2); font-size:14px; margin:0}
-  .namebar{margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    padding:9px 12px; box-shadow:var(--shadow)}
-  .namebar label{font-size:13px; color:var(--t2)}
-  .namebar .hint{color:var(--t3); font-size:12px}
-  .namebar .seat{border:1px solid var(--line); border-radius:7px; padding:7px 9px;
-    font-size:16px; font-family:inherit; width:180px; color:var(--t1)}
 
   .mpick{display:grid; grid-template-columns:repeat(auto-fit,minmax(124px,1fr)); gap:7px; margin-top:14px}
   .mp{font-family:inherit; padding:9px 10px; border-radius:10px; border:1px solid var(--line);
@@ -30,8 +23,15 @@
 
   .cols{display:grid; grid-template-columns:minmax(0,1.25fr) minmax(290px,1fr); gap:14px; margin-top:14px}
   @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+  .stage{position:relative}
   .stage canvas{display:block; width:100%}
-  #glFallback{display:none; padding:22px 16px; font-size:13.5px; color:var(--t2); line-height:1.7}
+  .stagePair{position:relative}
+  .stagePair > div{position:absolute; inset:0; transition:opacity .18s linear}
+  /* position:static면 캔버스(내용 없이도 height 400px를 그대로 차지)가 이 안내문을 상자
+     바깥(overflow:hidden)으로 밀어내 화면에 전혀 보이지 않는 실측 결함이 있었다.
+     캔버스 위에 겹쳐 덮는 오버레이로 바꿔 항상 보이게 한다. */
+  #glFallback{display:none; position:absolute; inset:0; background:var(--stage-light); z-index:2;
+    padding:22px 16px; font-size:13.5px; color:var(--t2); line-height:1.7; overflow:auto}
 
   .ctl{margin-bottom:10px}
   .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
@@ -44,6 +44,25 @@
   .btns{display:flex; gap:7px; flex-wrap:wrap; margin-top:11px}
   .subcard{margin-top:14px}
 
+  #bondLegend{display:none; font-size:12px; color:var(--t2); margin-top:9px; line-height:1.8}
+  #bondLegend .bl-in, #bondLegend .bl-between{display:inline-block; width:22px; height:0; margin:0 5px 0 2px;
+    vertical-align:middle; border-top:2.4px solid var(--t1)}
+  #bondLegend .bl-between{border-top-style:dashed; border-top-width:1.4px}
+
+  .cmpToggleRow{display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--t1);
+    cursor:pointer; padding:2px 0}
+  .cmpCheck{width:18px; height:18px}
+  #cmpPanel{margin-top:10px}
+  .cmpSelRow{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:9px}
+  .cmpSelRow label{font-size:11.5px; color:var(--t3); display:block; margin-bottom:3px}
+  .cmpSel{width:100%; font-family:inherit; font-size:13px; padding:7px 8px; border-radius:7px;
+    border:1px solid var(--line); color:var(--t1); background:var(--panel)}
+  .presetChips{display:flex; flex-direction:column; gap:6px}
+  .chip{font-family:inherit; text-align:left; padding:7px 10px; border-radius:8px;
+    border:1px solid var(--line); background:var(--panel); color:var(--t2); cursor:pointer}
+  .chip b{display:block; font-size:12.5px; color:var(--t1)}
+  .chip span{display:block; font-size:11px; color:var(--t3); margin-top:1px}
+
   .pickempty{font-size:13px; color:var(--t3); padding:14px 2px; line-height:1.7}
   .pickhead{display:flex; align-items:center; gap:8px; font-size:15px; color:var(--t1); margin-bottom:8px}
   .pickhead .dot{width:16px; height:16px; border-radius:50%; border:1px solid rgba(0,0,0,.28); flex:none}
@@ -52,20 +71,18 @@
   .picktab td{text-align:left; color:var(--t2); padding:6px 0}
   .picknote{font-size:12.5px; color:var(--t2); margin-top:9px; line-height:1.7;
     background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:9px 11px}
+  .cmpPickGrid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  @media(max-width:520px){ .cmpPickGrid{grid-template-columns:1fr} }
 
   details.adv{margin-top:10px; background:#f8fafc; border:1px solid var(--line);
     border-radius:8px; padding:9px 11px}
   details.adv summary{cursor:pointer; font-size:12.5px; font-weight:700; color:var(--d-violet)}
   details.adv .body{font-size:12.5px; color:var(--t2); line-height:1.7; margin-top:7px}
 
-  details.sheet{margin-top:16px; background:var(--panel); border:1px solid var(--line);
-    border-radius:var(--radius); padding:14px; box-shadow:var(--shadow)}
-  details.sheet summary{cursor:pointer; font-weight:700; font-size:14.5px; color:var(--t1)}
-  details.sheet ol{padding-left:20px; font-size:14px; color:var(--t2)}
-  details.sheet li{margin:9px 0}
-  details.sheet .tagq{display:inline-block; font-size:11.5px; font-weight:700; color:#fff;
-    background:var(--d-violet); border-radius:5px; padding:1px 6px; margin-right:5px}
-  .limits{font-size:12.5px; color:var(--t3); margin:12px 0 0; line-height:1.8}
+  .limits{font-size:12.5px; color:var(--t3); margin:16px 0 0; line-height:1.8;
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px; box-shadow:var(--shadow)}
+  .limits b.h{color:var(--t1); font-size:13.5px}
 </style>
 </head>
 <body>
@@ -75,12 +92,8 @@
 <div class="head">
   <h1>고체 — 겉모습에서 입자 배열까지</h1>
   <p class="sub">결정인지 아닌지는 <b>겉모습이 정하지 않는다.</b> 손에 든 크기에서 시작해
-     입자가 보일 때까지 <b>확대</b>해 보자. 규칙적으로 되풀이되면 결정, 아니면 비결정이다.</p>
-  <div class="namebar">
-    <label for="seat">좌석번호</label>
-    <input type="text" id="seat" class="seat" placeholder="예: 1-3-14">
-    <span class="hint">이 화면은 관찰용입니다. 관찰 결과는 활동지에 손으로 적으세요.</span>
-  </div>
+     배율을 올리면 표본이 <b>실시간으로 확대</b>되며 입자가 보일 때까지 이어진다.
+     규칙적으로 되풀이되면 결정, 아니면 비결정이다.</p>
 </div>
 
 <div class="mpick" id="mpick" role="group" aria-label="광물 선택"></div>
@@ -89,20 +102,23 @@
   <div>
     <div class="card">
       <h2 id="stageTitle">표본 관찰</h2>
-      <div class="stage stage--light" id="glWrap">
-        <canvas id="gl" aria-label="광물 표본을 돌려 가며 보는 3차원 그림. 광택·투명도·색으로 겉모습을 관찰합니다."></canvas>
-        <div id="glFallback">
-          <b>이 기기에서는 3D 그리기(WebGL)를 쓸 수 없습니다.</b><br>
-          확대해서 <b>입자 배열</b>을 보는 화면과 <b>입자 정보</b>는 그대로 쓸 수 있습니다.
-          확대 슬라이더를 오른쪽 끝까지 밀어 보세요.
+      <div class="stage stage--light stagePair" id="stagePair">
+        <div class="stage stage--light" id="glWrap">
+          <canvas id="gl" aria-label="광물 표본을 돌려 가며 보는 3차원 그림. 광택·투명도·색으로 겉모습을 관찰합니다."></canvas>
+          <div id="glFallback">
+            <b>이 기기에서는 3D 그리기(WebGL)를 쓸 수 없습니다.</b><br>
+            확대해서 <b>입자 배열</b>을 보는 화면과 <b>입자 정보</b>는 그대로 쓸 수 있습니다.
+            확대 슬라이더를 오른쪽 끝까지 밀어 보세요.
+          </div>
         </div>
-      </div>
-      <div class="stage stage--light" id="latWrap" style="display:none">
-        <canvas id="lat" aria-label="입자 배열을 확대한 그림. 입자를 누르면 그 입자의 종류와 이웃과의 결합이 표시됩니다."></canvas>
+        <div class="stage stage--light" id="latWrap">
+          <canvas id="lat" aria-label="입자 배열을 확대한 그림. 입자를 누르면 그 입자의 종류와 이웃과의 결합이 표시됩니다. 비교 모드에서는 두 표본이 나란히 나옵니다."></canvas>
+        </div>
       </div>
       <div class="btns">
         <button id="spinBtn">회전 멈추기</button>
       </div>
+      <div id="bondLegend"></div>
       <div class="info" id="mInfo"></div>
     </div>
   </div>
@@ -127,6 +143,21 @@
       </details>
     </div>
 
+    <div class="card subcard">
+      <h2>비교하기</h2>
+      <label class="cmpToggleRow" for="cmpToggle">
+        <input type="checkbox" id="cmpToggle" class="cmpCheck">
+        두 고체를 나란히 비교하기
+      </label>
+      <div id="cmpPanel" style="display:none">
+        <div class="cmpSelRow">
+          <div><label for="cmpLeftSel">왼쪽</label><select id="cmpLeftSel" class="cmpSel"></select></div>
+          <div><label for="cmpRightSel">오른쪽</label><select id="cmpRightSel" class="cmpSel"></select></div>
+        </div>
+        <div class="presetChips" id="presetChips"></div>
+      </div>
+    </div>
+
     <div class="card subcard" id="pickCard" style="display:none">
       <h2>누른 입자</h2>
       <div id="pick"></div>
@@ -134,6 +165,9 @@
   </div>
 </div>
 
+<!-- 보존 2026-08-04: 삭제 전 탐구 활동지 9문항 원문 (작업매뉴얼 2부 §11 v1.1 분기 —
+     "들어낸 문항은 삭제가 아니라 별도 보존을 권한다". 교사 시연용으로 문항을 들어내고
+     「이 모형의 가정과 한계」만 화면에 남긴다. 아래 원문은 개인정보를 포함하지 않는다.
 <details class="sheet" open>
   <summary>탐구 활동지</summary>
   <ol>
@@ -180,24 +214,30 @@
         실제 광물을 관찰할 때 이 화면으로는 알 수 없는 성질을 두 가지 쓰세요.
         (힌트: 굳기 / 조흔색 / 쪼개짐 / 무게감)</li>
   </ol>
-
-  <p class="limits">
-    <b>이 모형의 가정과 한계 — 반드시 함께 읽을 것</b><br>
-    ① 표본 그림은 <b>사진이 아니라 재질을 흉내 낸 3D 그림</b>입니다. 색·광택·투명도는 실제에 가깝게
-       맞췄지만, 굳기·조흔색·쪼개짐·무게감은 이 화면으로 알 수 없습니다.<br>
-    ② 입자 배열은 실제 3차원 구조를 <b>평면에 투영한 그림</b>이며 단위 세포가 아닙니다.
-       입자의 개수·크기 비도 보기 좋게 조정했습니다.<br>
-    ③ 격자 상수는 <b>문헌값</b>이고, 그 값으로 계산한 밀도가 문헌 밀도와
-       <b>0.3 % 이내</b>로 맞는 것을 확인했습니다(석영·암염·황철석·구리·얼음).<br>
-    ④ <b>황철석은 순수한 이온 결정이 아닙니다.</b> S₂²⁻ 안에는 공유 결합이 있어 실제로는
-       이온성과 공유성이 섞여 있습니다. 4분류 표에 넣을 때는 선생님과 확인하세요.<br>
-    ⑤ 흑요석은 조성이 순수한 SiO₂가 아니라 여러 산화물이 섞인 <b>화산 유리</b>입니다.
-       "규칙성이 없다"는 대비는 그대로 성립합니다.<br>
-    ⑥ 원자·이온 색은 <b>CPK 국제 표준</b>입니다. 실제 원자에 색이 있는 것은 아닙니다.<br>
-    ⑦ 단위 세포·배위수·격자 상수는 <b>교육과정 범위 밖</b>이며 <b>시험 범위가 아닙니다.</b>
-       화면에서 「심화」로 접어 두었습니다.
-  </p>
 </details>
+-->
+
+<p class="limits">
+  <b class="h">이 모형의 가정과 한계 — 반드시 함께 읽을 것</b><br>
+  ① 표본 그림은 <b>사진이 아니라 재질을 흉내 낸 3D 그림</b>입니다. 색·광택·투명도는 실제에 가깝게
+     맞췄지만, 굳기·조흔색·쪼개짐·무게감은 이 화면으로 알 수 없습니다.<br>
+  ② 입자 배열은 실제 3차원 구조를 <b>평면에 투영한 그림</b>이며 단위 세포가 아닙니다.
+     입자의 개수·크기 비도 보기 좋게 조정했습니다. 배율 숫자는 맨눈→입자로 가는
+     <b>개념적 척도</b>이며 광학 배율·실제 확대비와 정확히 같지 않습니다.<br>
+  ③ 격자 상수가 있는 8종 중 <b>7종</b>(석영·암염·황철석·구리·얼음·다이아몬드·철)은 그 값으로
+     계산한 밀도가 <b>문헌 밀도와 거의 일치</b>하는 것을 확인했습니다(흑요석은 비결정성이라
+     격자 상수가 없습니다). <b>드라이아이스는 따로 처리했습니다</b> — 격자 상수의 측정 온도가
+     출처에 밝혀져 있지 않아 대조할 단일 문헌 밀도가 없으므로, 통용되는 다른 온도의 밀도값과
+     섞지 않고 그 격자 상수로 계산한 값(1.64 g/cm³)을 그대로 썼습니다 — 자세한 수치는
+     「심화」를 펼쳐 보세요.<br>
+  ④ <b>황철석은 순수한 이온 결정이 아닙니다.</b> S₂²⁻ 안에는 공유 결합이 있어 실제로는
+     이온성과 공유성이 섞여 있습니다. 4분류 표에 넣을 때는 선생님과 확인하세요.<br>
+  ⑤ 흑요석은 조성이 순수한 SiO₂가 아니라 여러 산화물이 섞인 <b>화산 유리</b>입니다.
+     "규칙성이 없다"는 대비는 그대로 성립합니다.<br>
+  ⑥ 원자·이온 색은 <b>CPK 국제 표준</b>입니다. 실제 원자에 색이 있는 것은 아닙니다.<br>
+  ⑦ 단위 세포·배위수·격자 상수는 <b>교육과정 범위 밖</b>이며 <b>시험 범위가 아닙니다.</b>
+     화면에서 「심화」로 접어 두었습니다.
+</p>
 
 </div>
 
