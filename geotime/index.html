@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>지질 시대의 바다 — 선캄브리아·고생대·중생대 | 화학 탐구실</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색은 shared/style.css 토큰만 쓴다. 요소 선택자(button{}, input{})는 쓰지 않는다(매뉴얼 §12①) */
+  .page{padding:14px 0 40px}
+  .head h1{font-size:20px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:13.5px; margin:0}
+
+  .tabbar{margin-top:12px; display:flex; gap:7px; flex-wrap:wrap}
+  .tabbtn{font-family:inherit; font-size:13px; padding:9px 13px; border-radius:9px;
+    border:1px solid var(--line); background:var(--panel); color:var(--t2); cursor:pointer; font-weight:600}
+  .tabbtn[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .tabbtn:disabled{opacity:.5; cursor:not-allowed}
+  .tabhint{font-size:12px; color:var(--t3); margin:6px 0 0}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1.35fr) minmax(280px,1fr); gap:14px; margin-top:12px}
+  @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+
+  .stagecard{padding:10px}
+  .stage canvas{display:block; width:100%}
+  #glFallback{display:none; padding:20px 14px; font-size:13.5px; color:var(--t2); line-height:1.7}
+  #flat{display:none}
+
+  .triplecell{display:inline-block}
+  #tripleLabels{display:none; margin-top:6px; display:flex; justify-content:space-around;
+    font-size:12px; color:var(--t2); text-align:center}
+  /* 재작업 R4 — 세로 3분할일 때는 칸 이름도 세로로 쌓아 칸과 이름 순서를 맞춘다 */
+  #tripleLabels.vcol{flex-direction:column; align-items:center; gap:4px}
+  .triplesub{display:block; font-size:10.5px; color:var(--t3)}
+
+  .chipRow{display:flex; gap:7px; flex-wrap:wrap; margin-top:9px}
+  .chip{font-size:11.5px; font-weight:700; color:var(--t2); background:#f8fafc;
+    border:1px solid var(--line); border-radius:999px; padding:5px 10px}
+  .chip.on{color:#fff; background:var(--accent); border-color:var(--accent)}
+
+  .dirRow{min-height:16px; font-size:12.5px; font-weight:700; color:var(--d-amber); margin-top:6px}
+  .dragNote{font-size:11px; color:var(--t3); margin-top:4px}
+  .perfNote{font-size:10.5px; color:var(--t3); margin-top:2px}
+
+  .sidecard h2{font-size:14px; margin:0 0 8px; color:var(--t1); font-weight:700}
+  .nowline{font-size:15px; color:var(--t1)}
+  .envline{font-size:12.5px; color:var(--t2); margin-top:2px}
+  .stopline{font-size:12px; color:var(--t3); margin-top:4px; font-variant-numeric:tabular-nums}
+  .guideText{font-size:13px; color:var(--t2); line-height:1.6; margin-top:10px;
+    background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:9px 11px; min-height:38px}
+  .ctlbtns{display:flex; gap:7px; flex-wrap:wrap; margin-top:10px}
+  .teacherlink{margin-top:10px; display:block; background:none; border:none; padding:2px 0;
+    font-size:11px; color:var(--t3); cursor:pointer; text-decoration:underline}
+
+  .lenbar-wrap{margin-top:14px}
+  .lenbar{display:flex; width:100%; height:14px; border-radius:7px; border:1px solid var(--line)}
+  .lenseg{display:block; height:100%; background:var(--line)}
+  .lenseg:first-child{border-radius:6px 0 0 6px}
+  .lenseg:last-child{border-radius:0 6px 6px 0}
+  .lenseg[data-key="precambrian"]{background:var(--d-violet)}
+  .lenseg[data-key="paleozoic"]{background:var(--d-blue)}
+  .lenseg[data-key="mesozoic"]{background:var(--d-amber)}
+  .lenseg[data-key="cenozoic"]{background:var(--d-gray)}
+  .lenseg.cur{outline:2px solid var(--t1); outline-offset:-2px}
+  .lenlegend{margin-top:8px; display:flex; flex-direction:column; gap:4px}
+  .lenrow{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--t2)}
+  .lenrow.cur{font-weight:700; color:var(--t1)}
+  .lenrow[data-key="precambrian"] .lendot{background:var(--d-violet)}
+  .lenrow[data-key="paleozoic"] .lendot{background:var(--d-blue)}
+  .lenrow[data-key="mesozoic"] .lendot{background:var(--d-amber)}
+  .lenrow[data-key="cenozoic"] .lendot{background:var(--d-gray)}
+  .lendot{width:10px; height:10px; border-radius:50%; flex:none}
+  .lenfoot{font-size:10.5px; color:var(--t3); margin:8px 0 0}
+
+  .liestrip{margin-top:14px; font-size:12.5px; color:var(--t2); padding:10px 14px}
+
+  .startcard{margin-top:14px; padding:16px}
+  .startcard p{font-size:13.5px; color:var(--t2); line-height:1.75; margin:0 0 12px}
+
+  details.sheet{margin-top:16px; background:var(--panel); border:1px solid var(--line);
+    border-radius:var(--radius); padding:14px; box-shadow:var(--shadow)}
+  details.sheet summary{cursor:pointer; font-weight:700; font-size:14.5px; color:var(--t1)}
+  details.sheet ol{padding-left:20px; font-size:13.5px; color:var(--t2); line-height:1.7}
+  details.sheet li{margin:8px 0}
+  details.sheet .tagq{display:inline-block; font-size:11px; font-weight:700; color:#fff;
+    background:var(--d-violet); border-radius:5px; padding:1px 6px; margin-right:5px}
+  .limits{margin-top:16px; border-top:1px solid var(--line); padding-top:12px}
+  .limits p{font-size:13px; color:var(--t2); line-height:1.7}
+  .limitshead{font-weight:700; color:var(--t1); font-size:13.5px; margin:0 0 8px}
+</style>
+</head>
+<body>
+
+<div class="wrap page">
+
+<div class="head">
+  <h1 id="h1"></h1>
+  <p class="sub" id="subhead"></p>
+</div>
+
+<div class="tabbar" role="tablist" aria-label="시대 선택">
+  <button class="tabbtn" id="tabPre" aria-pressed="true"></button>
+  <button class="tabbtn" id="tabPaleo" aria-pressed="false" disabled></button>
+  <button class="tabbtn" id="tabMeso" aria-pressed="false" disabled></button>
+  <button class="tabbtn" id="tabTriple" aria-pressed="false" disabled></button>
+</div>
+<p class="tabhint" id="tabHint"></p>
+
+<div class="cols">
+  <div>
+    <div class="card stagecard">
+      <div class="stage stage--dark" id="stageWrap">
+        <canvas id="gl" tabindex="0"></canvas>
+        <div id="glFallback"></div>
+        <canvas id="flat"></canvas>
+      </div>
+      <div id="tripleLabels"></div>
+      <div class="chipRow" id="chipRow"></div>
+      <div class="dirRow" id="dirRow"></div>
+      <div class="dragNote" id="sceneLabelsLine"></div>
+      <div class="dragNote" id="dragNote"></div>
+      <div class="perfNote" id="perfNote" style="display:none"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card sidecard">
+      <h2>지금 보는 것</h2>
+      <div class="nowline"><b id="eraNow"></b></div>
+      <div class="envline" id="envLineTxt"></div>
+      <div class="stopline">정지점 <span id="stopNow"></span>·3 · 남은 시간 <span id="timeLeft"></span></div>
+      <div class="guideText" id="guideText"></div>
+      <div class="ctlbtns">
+        <button id="btnPause"></button>
+        <button id="btnRewind"></button>
+        <button id="btnRestart"></button>
+      </div>
+      <button class="teacherlink" id="teacherLink"></button>
+      <button id="btnFinishAll" style="display:none"></button>
+
+      <div class="lenbar-wrap">
+        <div class="lenbar" id="lenBar"></div>
+        <div class="lenlegend" id="lenLegend"></div>
+        <p class="lenfoot" id="lenFoot"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card liestrip" id="lieStrip"></div>
+
+<div class="card startcard" id="startCard">
+  <p id="startBody"></p>
+  <button class="primary" id="startBtn"></button>
+</div>
+
+<details class="sheet" id="sheet">
+  <summary id="sheetSummaryEl"></summary>
+  <ol id="worksheetList"></ol>
+  <div class="limits">
+    <p class="limitshead">이 모형의 가정과 한계</p>
+    <p id="limitsIntro"></p>
+    <ol id="assumptionsList"></ol>
+  </div>
+</details>
+
+</div>
+
+<div class="site-foot">화학 탐구실</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="geotime"></script>
+<script src="sim.js"></script>
+</body>
+</html>

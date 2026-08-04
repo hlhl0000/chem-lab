@@ -13,14 +13,24 @@
 
 const SIMS = [
   {
+    id: "geotime",
+    title: "지질 시대의 바다 — 선캄브리아·고생대·중생대",
+    cat: "통합과학",
+    path: "geotime/",
+    icon: "geotime",
+    ready: true,
+    desc: "정해진 길을 따라 세 시대의 바닷속을 1인칭으로 지나갑니다. 시선만 돌려 세 가지를 봅니다 — 생물이 얼마나 많은가, 몸에 단단한 부분이 있는가, 바닥에 붙어 있는가 헤엄치는가. 선캄브리아시대 바다의 바닥은 비어 있지 않습니다.",
+    tags: ["지질 시대","선캄브리아시대","고생대","중생대","화석","변화와 다양성","1인칭 관찰"]
+  },
+  {
     id: "mineral",
     title: "고체 — 겉모습에서 입자 배열까지",
     cat: "물질의 상태",
     path: "mineral/",
     icon: "mineral",
     ready: true,
-    desc: "석영·암염·황철석·구리·얼음·흑요석·다이아몬드·철·드라이아이스 9종을 손에 든 크기에서 입자 크기까지 실시간으로 확대합니다. 불투명한 황철석도 결정이고 유리질 흑요석은 비결정입니다 — 결정 여부는 겉모습이 아니라 배열이 정합니다. 두 고체를 나란히 놓고 비교하는 모드도 있습니다(예: 얼음 ↔ 드라이아이스, 구리 ↔ 철). 입자를 누르면 결합 종류와 전기 전도성이 나옵니다.",
-    tags: ["결정성","비결정성","이온 결정","금속 결정","분자 결정","공유 결정","전기 전도성","유리","분산력","승화"]
+    desc: "석영·암염·황철석·구리·얼음·흑요석을 손에 든 크기에서 입자 크기까지 연속으로 확대합니다. 불투명한 황철석도 결정이고 유리질 흑요석은 비결정입니다 — 결정 여부는 겉모습이 아니라 배열이 정합니다. 입자를 누르면 결합 종류와 전기 전도성이 나옵니다.",
+    tags: ["결정성","비결정성","이온 결정","금속 결정","분자 결정","공유 결정","전기 전도성","유리"]
   },
   {
     id: "liquid",
@@ -176,6 +186,14 @@ const SIMS = [
 
 /* 카드에 쓰이는 작은 아이콘들 (SVG) */
 const ICONS = {
+  geotime:`<rect x="6" y="10" width="52" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="4"/>
+         <path d="M6 25h52M6 39h52" stroke="currentColor" stroke-width="2.5" opacity=".45"/>
+         <path d="M27 17.5a5 5 0 1 0 5 5" fill="none" stroke="currentColor" stroke-width="3.4"
+         stroke-linecap="round"/><circle cx="41" cy="19" r="2.6"/>
+         <circle cx="16" cy="32" r="2.8"/><circle cx="26" cy="30" r="2.4"/>
+         <circle cx="35" cy="33" r="2.8"/><circle cx="45" cy="30" r="2.4"/>
+         <path d="M16 50v-6M24 50v-8M32 50v-5M40 50v-7M48 50v-6" stroke="currentColor"
+         stroke-width="3" stroke-linecap="round"/>`,
   mineral:`<path d="M32 5l24 15v24L32 59 8 44V20z" fill="none" stroke="currentColor"
            stroke-width="4" stroke-linejoin="round"/>
            <path d="M32 5v54M8 20l48 24M56 20L8 44" stroke="currentColor" stroke-width="2" opacity=".38"/>
