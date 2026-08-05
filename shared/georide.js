@@ -47,8 +47,8 @@ window.GeoRide = (function () {
       { c: "--p-violet", t: "보라 = 부드러움" },
       { c: "--p-mint", t: "초록 = 광합성 생물" }
     ],
-    lieCardFull: "이 화면의 생물과 바다는 사진이 아니라, 화석 증거를 바탕으로 한 추정을 컴퓨터로 그린 그림입니다. 색깔, 피부 무늬, 헤엄치는 모습, 물의 색은 화석에 남지 않으므로 대부분 만들어 넣은 것입니다. 여기에서 믿을 것은 「무엇이 얼마나 많은가 · 몸에 단단한 부분이 있는가 · 바닥에 붙어 있는가 헤엄치는가」 세 가지뿐입니다. 테두리 색은 사실이 아니라, 그 세 가지를 읽게 하려고 입혀 놓은 표시입니다.",
-    lieStripShort: "이 그림의 색·무늬·움직임은 추정입니다. 믿을 것은 관찰 포인트 세 가지입니다.",
+    lieCardFull: "이 화면의 생물과 바다는 사진이 아니라, 화석 증거를 바탕으로 한 추정을 컴퓨터로 그린 그림입니다. 색깔, 피부 무늬, 헤엄치는 모습, 물의 색은 화석에 남지 않으므로 대부분 만들어 넣은 것입니다. 여기에서 믿을 것은 「무엇이 얼마나 많은가 · 몸에 단단한 부분이 있는가 · 바닥에 붙어 있는가 헤엄치는가」 세 가지뿐입니다. 테두리 색은 사실이 아니라, 그 세 가지를 읽게 하려고 입혀 놓은 표시입니다. 생물의 크기도 교실에서 잘 보이도록 실제보다 크게 그렸습니다 — 작은 생물일수록 많이 키웠으므로, 생물끼리의 크기 차이도 실제보다 작아 보입니다.",
+    lieStripShort: "이 그림의 색·무늬·움직임은 추정이고, 크기는 보기 쉽게 키웠습니다. 믿을 것은 관찰 포인트 세 가지입니다.",
     startButton: "관찰 시작",
     introCard: {
       precambrian: "선캄브리아시대의 바다입니다. 세 가지만 보세요 — ① 생물이 얼마나 많은가 ② 몸에 단단한 부분이 있는가(테두리 색) ③ 바닥에 붙어 있는가, 헤엄치는가.",
@@ -156,7 +156,7 @@ window.GeoRide = (function () {
     /* 중생대 — 중간 수층을 헤엄치는 것이 지배한다 */
     mesozoic: [
       { id: "ammonite", model: "ammonite", name: "암모나이트", n: 30, animal: true, hard: true, loc: "swim", shape: "ammonite", body: 0xd8bd90, sizeM: 0.42, label: "암모나이트" },
-      { id: "longneck", model: "plesio", name: "목이 긴 파충류", n: 4, animal: true, hard: true, loc: "swim", shape: "plesiosaur", body: 0x4a5a48, sizeM: 3.0, hero: true },
+      { id: "longneck", model: "plesio", skinned: true, name: "목이 긴 파충류", n: 4, animal: true, hard: true, loc: "swim", shape: "plesiosaur", body: 0x4a5a48, sizeM: 3.0, hero: true },
       { id: "ichthyo", model: "ichthyo", name: "물고기 모양 파충류", n: 5, animal: true, hard: true, loc: "swim", shape: "ichthyo", body: 0x415465, sizeM: 2.2, hero: true },
       { id: "fish_mz", name: "헤엄치는 척추동물", n: 24, animal: true, hard: true, loc: "swim", shape: "fish", body: 0xa3b2ba, sizeM: 0.44, school: true },
       { id: "bottom_mz", name: "바닥 껍데기", n: 10, animal: true, hard: true, loc: "bottom", shape: "shell", body: 0xcbb890, sizeM: 0.4 },
@@ -172,6 +172,17 @@ window.GeoRide = (function () {
   const ERA_ORDER = ["precambrian", "paleozoic", "mesozoic", "cenozoic"];
   const ERA_KOR = { precambrian: "선캄브리아", paleozoic: "고생대", mesozoic: "중생대", cenozoic: "신생대" };
   const RIM = { photo: 0x34d399, hard: 0xfb923c, soft: 0xa78bfa };
+
+  /* ★ 표시 크기 — 교과 데이터(sizeM = 실제 크기)는 건드리지 않는다.
+     교실 TV에서 작은 생물이 안 보인다는 실사용 피드백에 대한 대응(사용자 확정).
+     압축 곡선 disp = sizeM^0.55 × 1.8 — «작은 것을 많이, 큰 것을 조금» 키운다.
+       조개 0.30 → 0.93m (3.1배) · 삼엽충 0.46 → 1.17m (2.5배)
+       부채산호 1.5 → 2.25m (1.5배) · 수장룡 3.00 → 3.29m (1.1배)
+     크기 «순서» 는 그대로 보존된다(단조 증가 함수다).
+     화면에는 「추정입니다」 카드로 과장 사실을 밝힌다(TEXT.lieCardFull).
+     ※ GEO.species[].sizeM 은 여전히 실제 크기다. 검증 스크립트가 그걸 본다. */
+  const SIZE_POW = 0.55, SIZE_MUL = 1.8;
+  function dispSizeM(sp) { return Math.pow(sp.sizeM, SIZE_POW) * SIZE_MUL; }
   function rimFor(sp) { return !sp.animal ? RIM.photo : (sp.hard ? RIM.hard : RIM.soft); }
   const GEO = { eras: ERAS, env: ENV, species: SPECIES, eraLengthPercent: ERA_LENGTH_PERCENT, text: TEXT, stops: STOPS_U };
 
@@ -326,9 +337,18 @@ window.GeoRide = (function () {
     m.onBeforeCompile = function (sh) {
       Object.assign(sh.uniforms, m.userData.u);
       sh.vertexShader = sh.vertexShader
-        .replace("#include <common>", "#include <common>\nvarying vec3 vGN;\nvarying vec3 vGP;")
-        .replace("#include <begin_vertex>",
+        .replace("#include <common>", "#include <common>\nvarying vec3 vGN;\nvarying vec3 vGP;");
+      /* ★ 골격 애니메이션이 붙은 메시는 <begin_vertex> 에서 값을 뽑으면 안 된다.
+         그 시점의 transformed·objectNormal 은 아직 «바인드 포즈» 다. 스키닝은 그 뒤
+         <skinning_vertex>·<skinnormal_vertex> 에서 일어난다. 헤엄치는 동안 테두리가
+         몸을 따라오게 하려면 <project_vertex> 직전에서 뽑아야 한다(실측 근거: three r147 셰이더 체인). */
+      if (opt.skinned) {
+        sh.vertexShader = sh.vertexShader.replace("#include <project_vertex>",
+          " vGP=(modelMatrix*vec4(transformed,1.0)).xyz;\n vGN=normalize(mat3(modelMatrix)*objectNormal);\n#include <project_vertex>");
+      } else {
+        sh.vertexShader = sh.vertexShader.replace("#include <begin_vertex>",
           "#include <begin_vertex>\n #ifdef USE_INSTANCING\n vGP=(modelMatrix*instanceMatrix*vec4(transformed,1.0)).xyz;\n vGN=normalize(mat3(modelMatrix)*mat3(instanceMatrix)*objectNormal);\n #else\n vGP=(modelMatrix*vec4(transformed,1.0)).xyz;\n vGN=normalize(mat3(modelMatrix)*objectNormal);\n #endif");
+      }
       sh.fragmentShader = sh.fragmentShader
         .replace("#include <common>",
           "#include <common>\nuniform vec3 uRim;uniform float uRimStr;uniform float uRimPow;uniform float uCaustI;uniform float uTime;\nvarying vec3 vGN;varying vec3 vGP;\n" + CAUSTIC_GLSL)
@@ -368,7 +388,9 @@ window.GeoRide = (function () {
           if (!o.isMesh || !o.geometry) return;
           parts.push({ geometry: o.geometry, material: o.material, pre: norm.clone().multiply(o.matrixWorld) });
         });
-        MODEL[k] = { parts, hNorm: size.y / maxDim, animations: gltf.animations || [], scene: root };
+        // norm 을 함께 보관한다 — 골격 애니메이션 개체는 인스턴스 행렬을 못 쓰므로
+        // 노드 계층(outer → normNode → 복제본)으로 같은 변환을 재현해야 한다.
+        MODEL[k] = { parts, hNorm: size.y / maxDim, animations: gltf.animations || [], scene: root, norm: norm };
         if (--left === 0) { modelsReady = true; done(); }
       }, err => { if (--left === 0) { modelsReady = true; done(); } });
     });
@@ -1007,11 +1029,12 @@ window.GeoRide = (function () {
       metal: sp.hard ? 0.22 : 0.05, side: transparent ? T.DoubleSide : T.FrontSide,
       rimStr: transparent ? 1.9 : (sp.hero ? 1.6 : 1.35), caustI,
       detail: detailKindFor(sp),
-      detScale: sp.hero ? 1.6 : (3.0 / Math.max(0.35, sp.sizeM)),
+      detScale: sp.hero ? 1.6 : (3.0 / Math.max(0.35, dispSizeM(sp))),
       detStr: transparent ? 0.25 : (sp.hard ? 0.95 : 0.7),
       envI: transparent ? 0.9 : (sp.hard ? 0.6 : 0.4)
     });
     disposal.mats.push(mat);
+    const DSZ = dispSizeM(sp);                     // 화면에 그릴 크기(§ 압축 곡선)
     const insts = []; const total = track.total;
     const schoolCenters = [];
     if (sp.school) for (let k = 0; k < 5; k++) schoolCenters.push({ u: 0.12 + rng() * 0.78, side: rng() < 0.5 ? -1 : 1, y: env.railY + (rng() - 0.4) * env.amp });
@@ -1026,19 +1049,55 @@ window.GeoRide = (function () {
       else { u = 0.03 + 0.94 * (i + rng() * 0.6) / sp.n; }
       const f = track.at(u * total); const side = sc ? sc.side : (rng() < 0.5 ? -1 : 1);
       if (sp.loc === "swim") {
-        const clear = 3.0 + sp.sizeM * 2.0 + (sp.hero ? 3.5 : 0);
+        const clear = 3.0 + DSZ * 2.0 + (sp.hero ? 3.5 : 0);
         lat = side * (clear + rng() * (sc ? 3.0 : 7.0));
         const band = sc ? sc.y : env.railY + (rng() - 0.35) * env.amp * 1.1;
-        vy = Math.min(-0.8, Math.max(env.seafloorY + 0.8, band + (sc ? (rng() - 0.5) * 1.6 : 0)));
-      } else { lat = side * ((sp.hero ? 4.2 : 1.5) + sp.sizeM * 0.6 + rng() * (sp.hero ? 5.0 : 9.5)); vy = env.seafloorY + 0.02; }
+        // 커진 만큼 해저에서 더 띄운다 — 안 그러면 큰 개체가 바닥을 뚫는다
+        vy = Math.min(-0.8, Math.max(env.seafloorY + 0.8 + DSZ * 0.35, band + (sc ? (rng() - 0.5) * 1.6 : 0)));
+      } else { lat = side * ((sp.hero ? 4.2 : 1.5) + DSZ * 0.6 + rng() * (sp.hero ? 5.0 : 9.5)); vy = env.seafloorY + 0.02; }
       const px = f.pos.x + f.side.x * lat, pz = f.pos.z + f.side.z * lat;
-      insts.push({ base: new T.Vector3(px, vy, pz), yaw: rng() * Math.PI * 2, scale: sp.sizeM * (0.82 + rng() * 0.4), phase: rng() * Math.PI * 2, speed: 0.4 + rng() * 0.8 });
+      insts.push({ base: new T.Vector3(px, vy, pz), yaw: rng() * Math.PI * 2, scale: DSZ * (0.82 + rng() * 0.4), phase: rng() * Math.PI * 2, speed: 0.4 + rng() * 0.8 });
     }
     const anim = (sp.loc === "swim") ? (sp.shape === "jelly" ? "jelly" : "swim") : (sp.shape === "frond" ? "sway" : "still");
     const d = new T.Object3D();
 
     // ★ 실제 3D 모델이 있으면 그것을 쓴다. 없으면 절차적 도형으로 되돌아간다(폴백).
     const M = sp.model && MODEL[sp.model];
+
+    /* ★ 골격 애니메이션 경로 (§8.29) — InstancedMesh 는 개체별 골격을 그리지 못한다.
+       개체 수가 적은 종만 SkinnedMesh 를 개별 복제해 AnimationMixer 로 돌린다.
+       수장룡 4마리에만 쓴다. 24마리짜리 물고기 떼에 쓰면 드로콜이 24배가 된다.
+       SkeletonUtils.clone 은 뼈 참조까지 복제한다 — 평범한 clone() 은 뼈를 공유해
+       네 마리가 «똑같이» 움직인다(대표적 함정). 파일이 없으면 아래 인스턴싱으로 폴백한다. */
+    if (M && sp.skinned && M.animations.length && T.SkeletonUtils) {
+      const group = new T.Group();
+      const skins = [];
+      const clip = M.animations[0];
+      const lift0 = (sp.loc === "swim") ? 0 : M.hNorm * 0.5;
+      insts.forEach(it => {
+        const outer = new T.Group();
+        const normNode = new T.Group(); normNode.applyMatrix4(M.norm);
+        const c = T.SkeletonUtils.clone(M.scene);
+        c.traverse(o => {
+          if (!o.isMesh && !o.isSkinnedMesh) return;
+          const pm = wrapModelMaterial(o.material, rim, {
+            rimStr: sp.hero ? 1.35 : 1.15, caustI, envI: sp.hard ? 0.55 : 0.4, skinned: true
+          });
+          o.material = pm; o.frustumCulled = false;
+          disposal.mats.push(pm);
+        });
+        normNode.add(c); outer.add(normNode); group.add(outer);
+        const mixer = new T.AnimationMixer(c);
+        const act = mixer.clipAction(clip); act.play();
+        // 네 마리가 같은 박자로 헤엄치면 기계처럼 보인다 — 시작 위상과 속도를 흩는다
+        act.time = rng() * (clip.duration || 1);
+        act.timeScale = 0.55 + rng() * 0.4;
+        skins.push({ outer, mixer });
+      });
+      disposal.mixers = (disposal.mixers || []).concat(skins.map(x => x.mixer));
+      return { node: group, skins, sp, insts, anim: "skin", lift: lift0 };
+    }
+
     if (M && M.parts.length) {
       const group = new T.Group();
       const meshes = [];
@@ -1196,7 +1255,7 @@ window.GeoRide = (function () {
     sps.forEach(sp => {
       const rt = !sp.animal ? "photo" : (sp.hard ? "hard" : "soft"); const nShow = Math.min(sp.n, 16);
       for (let i = 0; i < nShow; i++) {
-        const x = 24 + rng() * (W - 48); const y = sp.loc === "swim" ? (24 + rng() * (floorY - 60)) : (floorY - 4 - rng() * 6); const r = 5 + sp.sizeM * 5;
+        const x = 24 + rng() * (W - 48); const y = sp.loc === "swim" ? (24 + rng() * (floorY - 60)) : (floorY - 4 - rng() * 6); const r = 5 + dispSizeM(sp) * 5;
         c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fillStyle = "#" + new T.Color(sp.body).getHexString(); c.fill(); c.lineWidth = 2.4; c.strokeStyle = rimHex(rt); c.stroke();
       }
     });
@@ -1281,7 +1340,10 @@ window.GeoRide = (function () {
         if (o.material && o.material.map) o.material.map.dispose();
         if (o.material && !Array.isArray(o.material)) o.material.dispose();
       });
-      if (disposal) { disposal.mats.forEach(m => m.dispose()); }
+      if (disposal) {
+        disposal.mats.forEach(m => m.dispose());
+        if (disposal.mixers) disposal.mixers.forEach(mx => mx.stopAllAction());
+      }
       built.length = 0; vents = null; bubbles = null;
     }
 
@@ -1440,7 +1502,7 @@ window.GeoRide = (function () {
       $("timeLeft").textContent = Math.round((dist / track.total) * 100) + "%";
       if (soundOn) audio.update(vel, moving);
 
-      for (const b of built) animateSpecies(b, t);
+      for (const b of built) animateSpecies(b, t, dt);
       if (bubbles) animateBubbles(bubbles, dt);
       if (vents) animateVents(vents, dt, t);
 
@@ -1462,7 +1524,24 @@ window.GeoRide = (function () {
     if (b.pre) { for (let i = 0; i < ms.length; i++) { _tm.multiplyMatrices(_d.matrix, b.pre[i]); ms[i].setMatrixAt(k, _tm); } }
     else for (const mm of ms) mm.setMatrixAt(k, _d.matrix);
   }
-  function animateSpecies(b, t) {
+  function animateSpecies(b, t, dt) {
+    /* 골격 애니메이션 개체 — 인스턴스 행렬이 아니라 노드 변환을 직접 쓴다 */
+    if (b.anim === "skin") {
+      b.skins.forEach((sk, k) => {
+        const it = b.insts[k];
+        sk.mixer.update(dt);
+        const o = sk.outer;
+        o.position.copy(it.base);
+        o.position.x += Math.sin(t * it.speed + it.phase) * 0.55;
+        o.position.y += Math.sin(t * it.speed * 0.8 + it.phase) * 0.22;
+        o.rotation.set(
+          Math.sin(t * it.speed * 1.6 + it.phase) * 0.08,
+          it.yaw + Math.sin(t * it.speed * 0.6 + it.phase) * 0.3,
+          Math.sin(t * it.speed + it.phase) * 0.1);
+        o.scale.setScalar(it.scale);
+      });
+      return;
+    }
     if (b.anim === "still") return;
     const ms = b.meshes || [b.mesh];
     const lift = b.lift || 0;
