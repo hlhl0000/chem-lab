@@ -77,7 +77,8 @@ window.GeoRide = (function () {
     fallbackNotice: "이 기기에서는 3D 그리기(WebGL)를 쓸 수 없습니다. 대신 단면도로 같은 세 가지를 그대로 관찰하세요 — ① 생물이 얼마나 많은가 ② 몸에 단단한 부분이 있는가(테두리 색) ③ 바닥에 붙어 있는가 헤엄치는가.",
     continueButton: "계속 가기", pauseButton: "일시정지", restartButton: "처음부터",
     handsOn: "탑승 바 숨기기", handsOff: "탑승 바 보이기",
-    soundOn: "소리 끄기", soundOff: "소리 켜기"
+    soundOn: "소리 끄기", soundOff: "소리 켜기",
+    qualityHigh: "화질: 높음", qualityMed: "화질: 보통(그림자 끔)"
   };
 
   /* ======================================================================
@@ -93,7 +94,7 @@ window.GeoRide = (function () {
       seafloorY: -11.5, railY: -8.0, amp: 2.6,
       water: 0x1d4a44, deep: 0x08201e, floor: 0x353524,
       fogDensity: 0.052, sun: 0xf6ffe4, sunI: 0.9, sunbeam: 1.9, caustic: 0.42,
-      lightDir: [0.08, -1.0, 0.05], surfaceBright: 0.85, grade: [0.95, 1.06, 0.99],
+      lightDir: [0.40, -0.90, 0.16], surfaceBright: 0.85, grade: [0.95, 1.06, 0.99],
       exposure: 0.84, ambient: 0.30, sat: 1.24,
       vents: 6, bubbles: true, harshSun: true,
       turf: { n: 2600, color: 0x54732f, size: 0.85 },
@@ -104,7 +105,7 @@ window.GeoRide = (function () {
       seafloorY: -15, railY: -11.0, amp: 3.2,
       water: 0x0f6a86, deep: 0x073847, floor: 0x9c9670,
       fogDensity: 0.030, sun: 0xdcf6ff, sunI: 0.9, sunbeam: 1.05, caustic: 0.4,
-      lightDir: [0.20, -0.95, 0.22], surfaceBright: 0.6, grade: [0.96, 1.02, 1.06],
+      lightDir: [0.46, -0.86, 0.22], surfaceBright: 0.6, grade: [0.96, 1.02, 1.06],
       exposure: 0.9, ambient: 0.38, sat: 1.26,
       vents: 0, bubbles: false, harshSun: false,
       turf: { n: 3200, color: 0x6f8a2e, size: 0.75 },
@@ -115,7 +116,7 @@ window.GeoRide = (function () {
       seafloorY: -18, railY: -13.0, amp: 4.0,
       water: 0x14496b, deep: 0x051726, floor: 0x4e5145,
       fogDensity: 0.036, sun: 0xbcdcf5, sunI: 0.62, sunbeam: 0.62, caustic: 0.2,
-      lightDir: [0.10, -0.98, 0.16], surfaceBright: 0.34, grade: [0.94, 0.99, 1.09],
+      lightDir: [0.42, -0.89, 0.18], surfaceBright: 0.34, grade: [0.94, 0.99, 1.09],
       exposure: 0.8, ambient: 0.27, sat: 1.2,
       vents: 0, bubbles: false, harshSun: false,
       turf: { n: 1800, color: 0x3f5c46, size: 0.65 },
@@ -135,13 +136,13 @@ window.GeoRide = (function () {
       { id: "stromatolite", name: "스트로마톨라이트", n: 7, animal: false, hard: null, loc: "attached", shape: "stromatolite", body: 0x8a7550, sizeM: 2.4, hero: true, clusterAt: 1 },
       { id: "matpatch", name: "미생물 매트", n: 40, animal: false, hard: null, loc: "attached", shape: "mat", body: 0x55702f, sizeM: 1.4 },
       { id: "algae_pc", name: "조류", n: 18, animal: false, hard: null, loc: "attached", shape: "frond", body: 0x3b6b3c, sizeM: 1.0 },
-      { id: "edia_disc", name: "원반 모양 부드러운 생물", n: 18, animal: true, hard: false, loc: "bottom", shape: "ediaDisc", body: 0x9a8a76, sizeM: 0.75 },
-      { id: "edia_frond", name: "깃털 모양 부드러운 생물", n: 16, animal: true, hard: false, loc: "attached", shape: "ediaFrond", body: 0x8d7f92, sizeM: 1.3 },
+      { id: "edia_disc", model: "ediacaran", modelPart: 0, name: "원반 모양 부드러운 생물", n: 18, animal: true, hard: false, loc: "bottom", shape: "ediaDisc", body: 0x9a8a76, sizeM: 0.75 },
+      { id: "edia_frond", model: "ediacaran", modelPart: 1, name: "깃털 모양 부드러운 생물", n: 16, animal: true, hard: false, loc: "attached", shape: "ediaFrond", body: 0x8d7f92, sizeM: 1.3 },
       { id: "jelly_pc", name: "해파리 모양", n: 3, animal: true, hard: false, loc: "swim", shape: "jelly", body: 0xb8cfe0, sizeM: 0.40 }
     ],
     /* 고생대 — 단단한 껍데기가 등장하고 바닥이 암초로 빽빽해진다 */
     paleozoic: [
-      { id: "trilobite", name: "삼엽충", n: 18, animal: true, hard: true, loc: "bottom", shape: "trilobite", body: 0x7d5f3c, sizeM: 0.46, label: "삼엽충" },
+      { id: "trilobite", model: "trilobite", name: "삼엽충", n: 18, animal: true, hard: true, loc: "bottom", shape: "trilobite", body: 0x7d5f3c, sizeM: 0.46, label: "삼엽충" },
       { id: "anomalo", name: "큰 마디 절지동물", n: 3, animal: true, hard: true, loc: "swim", shape: "anomalo", body: 0x2f6a93, sizeM: 1.5, hero: true },
       { id: "bivalve", name: "조개 모양", n: 20, animal: true, hard: true, loc: "bottom", shape: "shell", body: 0xd6c194, sizeM: 0.30 },
       { id: "squidshell", name: "껍데기 오징어", n: 8, animal: true, hard: true, loc: "swim", shape: "orthocone", body: 0xcaa96f, sizeM: 0.7 },
@@ -154,9 +155,9 @@ window.GeoRide = (function () {
     ],
     /* 중생대 — 중간 수층을 헤엄치는 것이 지배한다 */
     mesozoic: [
-      { id: "ammonite", name: "암모나이트", n: 30, animal: true, hard: true, loc: "swim", shape: "ammonite", body: 0xd8bd90, sizeM: 0.42, label: "암모나이트" },
-      { id: "longneck", name: "목이 긴 파충류", n: 4, animal: true, hard: true, loc: "swim", shape: "plesiosaur", body: 0x4a5a48, sizeM: 3.0, hero: true },
-      { id: "ichthyo", name: "물고기 모양 파충류", n: 5, animal: true, hard: true, loc: "swim", shape: "ichthyo", body: 0x415465, sizeM: 2.2, hero: true },
+      { id: "ammonite", model: "ammonite", name: "암모나이트", n: 30, animal: true, hard: true, loc: "swim", shape: "ammonite", body: 0xd8bd90, sizeM: 0.42, label: "암모나이트" },
+      { id: "longneck", model: "plesio", name: "목이 긴 파충류", n: 4, animal: true, hard: true, loc: "swim", shape: "plesiosaur", body: 0x4a5a48, sizeM: 3.0, hero: true },
+      { id: "ichthyo", model: "ichthyo", name: "물고기 모양 파충류", n: 5, animal: true, hard: true, loc: "swim", shape: "ichthyo", body: 0x415465, sizeM: 2.2, hero: true },
       { id: "fish_mz", name: "헤엄치는 척추동물", n: 24, animal: true, hard: true, loc: "swim", shape: "fish", body: 0xa3b2ba, sizeM: 0.44, school: true },
       { id: "bottom_mz", name: "바닥 껍데기", n: 10, animal: true, hard: true, loc: "bottom", shape: "shell", body: 0xcbb890, sizeM: 0.4 },
       { id: "coral_mz", name: "판 모양 산호", n: 24, animal: true, hard: true, loc: "attached", shape: "plateCoral", body: 0xa89a72, sizeM: 0.9 },
@@ -181,8 +182,197 @@ window.GeoRide = (function () {
     [104, 0.20, 6], [117, -0.52, 5], [130, -0.78, 0], [143, -0.25, -4],
     [156, 0.46, -5], [169, 0.66, -1], [182, 0.10, 3], [195, 0.45, 2]
   ];
+  const SHAKE = 0.006;    // 흔들림 진폭(라디안). 0 이면 완전히 끔
+  const BANK_MAX = 0.34;  // 뱅킹 상한 약 19°
   const G_EFF = 2.2;      // 물속 유효 중력(부력·저항 반영) — 속도 변화를 완만하게
   const V_MIN = 2.7;      // 최저 속도 m/s (전체 주행 약 60~70초)
+
+  /* ======================================================================
+     A1. 절차적 디테일 텍스처 — 노멀맵 + 러프니스(알파 채널)
+     ----------------------------------------------------------------------
+     외부 파일을 못 받으므로(더블클릭·오프라인 요구) 캔버스에 높이장을 그린 뒤
+     소벨 기울기로 노멀맵을 만든다. 알파에 높이를 남겨 러프니스 변조에 쓴다.
+     종류당 1장만 만들어 공유한다.
+     ====================================================================== */
+  const _tex = {};
+  function valueNoise(seed) {
+    const G = 64, rnd = makeRng(seed), g = new Float32Array(G * G);
+    for (let i = 0; i < G * G; i++) g[i] = rnd();
+    const sm = t => t * t * (3 - 2 * t);
+    return function (x, y) {
+      x = ((x % G) + G) % G; y = ((y % G) + G) % G;
+      const x0 = Math.floor(x), y0 = Math.floor(y), fx = sm(x - x0), fy = sm(y - y0);
+      const x1 = (x0 + 1) % G, y1 = (y0 + 1) % G;
+      const a = g[y0 * G + x0], b = g[y0 * G + x1], c = g[y1 * G + x0], d = g[y1 * G + x1];
+      return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+    };
+  }
+  function makeDetailTexture(kind) {
+    if (_tex[kind]) return _tex[kind];
+    const S = 256, cv = document.createElement("canvas"); cv.width = cv.height = S;
+    const c = cv.getContext("2d");
+    const h = new Float32Array(S * S);
+    const n1 = valueNoise(kind.length * 37 + 11), n2 = valueNoise(kind.length * 91 + 5);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const u = x / S * 64, v = y / S * 64;
+      let val = 0;
+      if (kind === "scale") {          // 비늘·껍데기 — 어긋나게 겹친 둥근 판
+        const R = 12, row = Math.floor(y / (R * 0.75)), ox = (row % 2) * R * 0.5;
+        const cx = Math.round((x - ox) / R) * R + ox, cy = row * R * 0.75;
+        const d = Math.hypot(x - cx, y - cy) / R;
+        val = Math.pow(Math.max(0, 1 - d * 1.5), 0.6) * 0.75 + n1(u * 1.6, v * 1.6) * 0.25;
+      } else if (kind === "skin") {    // 부드러운 피부 — 완만한 결절
+        val = n1(u * 0.6, v * 0.6) * 0.55 + n2(u * 2.2, v * 2.2) * 0.3 + n1(u * 6, v * 6) * 0.15;
+      } else {                          // rock — 거친 바위·층·산호
+        val = n1(u * 0.5, v * 0.5) * 0.4 + n2(u * 1.7, v * 1.7) * 0.3 + n1(u * 5, v * 5) * 0.2 + n2(u * 13, v * 13) * 0.1;
+        val = Math.pow(val, 1.25);
+      }
+      h[y * S + x] = val;
+    }
+    const out = c.createImageData(S, S);
+    const H = (x, y) => h[(((y % S) + S) % S) * S + (((x % S) + S) % S)];
+    const STR = kind === "scale" ? 5.0 : (kind === "rock" ? 4.2 : 2.6);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const dx = (H(x + 1, y) - H(x - 1, y)) * STR, dy = (H(x, y + 1) - H(x, y - 1)) * STR;
+      const l = Math.hypot(dx, dy, 1); const i = (y * S + x) * 4;
+      out.data[i] = (-dx / l * 0.5 + 0.5) * 255;
+      out.data[i + 1] = (-dy / l * 0.5 + 0.5) * 255;
+      out.data[i + 2] = (1 / l * 0.5 + 0.5) * 255;
+      out.data[i + 3] = H(x, y) * 255;   // 러프니스 변조용 높이
+    }
+    c.putImageData(out, 0, 0);
+    const t = new T.CanvasTexture(cv);
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 4;
+    _tex[kind] = t; return t;
+  }
+  function detailKindFor(sp) {
+    if (["stromatolite", "coral", "plateCoral", "seaFan", "tubeSponge", "mat"].indexOf(sp.shape) >= 0) return "rock";
+    return sp.animal ? (sp.hard ? "scale" : "skin") : "skin";
+  }
+
+  /* A2. IBL — 수중 환경을 등장방형 캔버스로 그려 PMREM 으로 굽는다.
+     수면 쪽은 밝고 아래는 어둡다. 젖은 표면의 반사·광택이 살아난다. */
+  function makeEnvTexture(env) {
+    const W = 256, Hh = 128, cv = document.createElement("canvas"); cv.width = W; cv.height = Hh;
+    const c = cv.getContext("2d");
+    const sunC = new T.Color(env.sun), watC = new T.Color(env.water), dpC = new T.Color(env.deep);
+    const g = c.createLinearGradient(0, 0, 0, Hh);
+    g.addColorStop(0.00, "#" + sunC.clone().lerp(new T.Color(0xffffff), 0.35).getHexString());
+    g.addColorStop(0.30, "#" + watC.clone().lerp(sunC, 0.55).getHexString());
+    g.addColorStop(0.52, "#" + watC.getHexString());
+    g.addColorStop(1.00, "#" + dpC.getHexString());
+    c.fillStyle = g; c.fillRect(0, 0, W, Hh);
+    const rng = makeRng(4711);
+    for (let i = 0; i < 26; i++) {   // 수면 쪽 밝은 얼룩(빛이 들어오는 창)
+      const x = rng() * W, y = rng() * Hh * 0.34, r = 8 + rng() * 26;
+      const rg = c.createRadialGradient(x, y, 0, x, y, r);
+      rg.addColorStop(0, "rgba(255,255,255,0.5)"); rg.addColorStop(1, "rgba(255,255,255,0)");
+      c.fillStyle = rg; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    }
+    const t = new T.CanvasTexture(cv);
+    t.mapping = T.EquirectangularReflectionMapping; t.encoding = T.sRGBEncoding;
+    return t;
+  }
+
+  /* ======================================================================
+     실제 3D 모델(GLB) — base64 로 내장되어 있다(vendor/models.js).
+     GLTFLoader.parse() 는 네트워크를 쓰지 않으므로 file:// 더블클릭에서도 열린다.
+     ----------------------------------------------------------------------
+     모델은 「몸」만 쓰고, 관찰 포인트 ②(단단함)를 읽히는 발광 테두리는 우리 셰이더로
+     다시 입힌다. 그래야 사진 같은 질감과 교육용 색 코드가 동시에 성립한다.
+     ====================================================================== */
+  const MODEL = {};       // key → { geos:[{geometry,material}], anims, scene }
+  let modelsReady = false;
+
+  /* 정수(정규화)·인터리브 속성을 float 로 편다.
+     이 처리를 빼고 행렬을 곱하면 정수 배열에 실수를 쓰게 되어 지오메트리가 뭉개진다. */
+  function deQuantize(g) {
+    for (const name of Object.keys(g.attributes)) {
+      const a = g.attributes[name];
+      if (!a || (a.array instanceof Float32Array && !a.isInterleavedBufferAttribute)) continue;
+      const n = a.count, k = a.itemSize, out = new Float32Array(n * k);
+      for (let i = 0; i < n; i++) {
+        if (k > 0) out[i * k] = a.getX(i);
+        if (k > 1) out[i * k + 1] = a.getY(i);
+        if (k > 2) out[i * k + 2] = a.getZ(i);
+        if (k > 3) out[i * k + 3] = a.getW(i);
+      }
+      g.setAttribute(name, new T.BufferAttribute(out, k));
+    }
+  }
+
+  function b64ToBuf(b64) {
+    const bin = atob(b64), n = bin.length, u = new Uint8Array(n);
+    for (let i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
+    return u.buffer;
+  }
+
+  /* 모델 조각 하나를 우리 재질로 감싼다 — 원본 텍스처 + 프레넬 테두리 + 코스틱스 */
+  function wrapModelMaterial(srcMat, rimHex, opt) {
+    opt = opt || {};
+    const m = new T.MeshStandardMaterial({
+      map: srcMat && srcMat.map ? srcMat.map : null,
+      color: srcMat && srcMat.color ? srcMat.color.clone() : new T.Color(0xffffff),
+      vertexColors: !!(srcMat && srcMat.vertexColors),
+      normalMap: srcMat && srcMat.normalMap ? srcMat.normalMap : null,
+      roughness: srcMat && srcMat.roughness != null ? Math.min(0.95, srcMat.roughness + 0.1) : 0.8,
+      metalness: 0.0, side: T.FrontSide
+    });
+    m.envMapIntensity = opt.envI != null ? opt.envI : 0.5;
+    m.userData.u = {
+      uRim: { value: COL(rimHex) }, uRimStr: { value: opt.rimStr != null ? opt.rimStr : 1.15 },
+      uRimPow: { value: 2.4 }, uCaustI: { value: opt.caustI || 0 }, uTime: UNI.time
+    };
+    m.onBeforeCompile = function (sh) {
+      Object.assign(sh.uniforms, m.userData.u);
+      sh.vertexShader = sh.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vGN;\nvarying vec3 vGP;")
+        .replace("#include <begin_vertex>",
+          "#include <begin_vertex>\n #ifdef USE_INSTANCING\n vGP=(modelMatrix*instanceMatrix*vec4(transformed,1.0)).xyz;\n vGN=normalize(mat3(modelMatrix)*mat3(instanceMatrix)*objectNormal);\n #else\n vGP=(modelMatrix*vec4(transformed,1.0)).xyz;\n vGN=normalize(mat3(modelMatrix)*objectNormal);\n #endif");
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <common>",
+          "#include <common>\nuniform vec3 uRim;uniform float uRimStr;uniform float uRimPow;uniform float uCaustI;uniform float uTime;\nvarying vec3 vGN;varying vec3 vGP;\n" + CAUSTIC_GLSL)
+        .replace("#include <dithering_fragment>",
+          "#include <dithering_fragment>\n vec3 Vd=normalize(cameraPosition-vGP);\n float rf=pow(1.0-clamp(dot(normalize(vGN),Vd),0.0,1.0),uRimPow);\n gl_FragColor.rgb+=uRim*rf*uRimStr;\n float up=clamp(vGN.y,0.0,1.0);\n if(uCaustI>0.001){ float ca=caustic(vGP.xz*0.09,uTime*0.35); gl_FragColor.rgb+=vec3(0.72,0.88,0.82)*ca*up*uCaustI; }");
+    };
+    return m;
+  }
+
+  /* 모델을 미리 파싱해 둔다(시대 전환 때마다 다시 파싱하지 않게) */
+  function preloadModels(done) {
+    if (!window.GEO_MODELS || !T.GLTFLoader) { modelsReady = false; done(); return; }
+    const loader = new T.GLTFLoader();
+    const keys = Object.keys(window.GEO_MODELS);
+    let left = keys.length;
+    if (!left) { done(); return; }
+    keys.forEach(k => {
+      let buf;
+      try { buf = b64ToBuf(window.GEO_MODELS[k]); }
+      catch (e) { if (--left === 0) { modelsReady = true; done(); } return; }
+      loader.parse(buf, "", gltf => {
+        // ★ 지오메트리 배열은 절대 수정하지 않는다.
+        //   인터리브 버퍼를 여러 파트가 공유하는 모델이 있어(실측: 어룡 4파트 공유),
+        //   파트마다 행렬을 곱하면 변환이 중첩돼 형상이 뭉개진다.
+        //   대신 노드의 월드 행렬과 정규화 행렬을 인스턴스 행렬에 합성한다.
+        const root = gltf.scene;
+        root.updateMatrixWorld(true);
+        const box = new T.Box3().setFromObject(root);
+        const size = new T.Vector3(); box.getSize(size);
+        const ctr = new T.Vector3(); box.getCenter(ctr);
+        const maxDim = Math.max(size.x, size.y, size.z) || 1;
+        // 가운데 정렬 후 최대 치수를 1 로 (배치할 때 sizeM 을 곱한다)
+        const norm = new T.Matrix4().makeScale(1 / maxDim, 1 / maxDim, 1 / maxDim)
+          .multiply(new T.Matrix4().makeTranslation(-ctr.x, -ctr.y, -ctr.z));
+        const parts = [];
+        root.traverse(o => {
+          if (!o.isMesh || !o.geometry) return;
+          parts.push({ geometry: o.geometry, material: o.material, pre: norm.clone().multiply(o.matrixWorld) });
+        });
+        MODEL[k] = { parts, hNorm: size.y / maxDim, animations: gltf.animations || [], scene: root };
+        if (--left === 0) { modelsReady = true; done(); }
+      }, err => { if (--left === 0) { modelsReady = true; done(); } });
+    });
+  }
 
   /* ===== 코스틱스 GLSL ===== */
   const CAUSTIC_GLSL = `
@@ -208,10 +398,15 @@ window.GeoRide = (function () {
       transparent: !!opt.transparent, opacity: opt.opacity != null ? opt.opacity : 1.0,
       side: opt.side || T.FrontSide, emissive: COL(bodyHex).multiplyScalar(0.06)
     });
+    m.envMapIntensity = opt.envI != null ? opt.envI : 0.75;
+    const det = makeDetailTexture(opt.detail || "skin");
     m.userData.u = {
       uRim: { value: COL(rimHex) }, uRimStr: { value: opt.rimStr != null ? opt.rimStr : 1.3 },
       uRimPow: { value: opt.rimPow != null ? opt.rimPow : 2.2 },
-      uCaustI: { value: opt.caustI != null ? opt.caustI : 0.0 }, uTime: UNI.time
+      uCaustI: { value: opt.caustI != null ? opt.caustI : 0.0 }, uTime: UNI.time,
+      uDet: { value: det },
+      uDetScale: { value: opt.detScale != null ? opt.detScale : 3.2 },   // 1 m 당 반복 수
+      uDetStr: { value: opt.detStr != null ? opt.detStr : 0.85 }
     };
     m.onBeforeCompile = function (sh) {
       Object.assign(sh.uniforms, m.userData.u);
@@ -221,7 +416,19 @@ window.GeoRide = (function () {
           "#include <begin_vertex>\n #ifdef USE_INSTANCING\n vGP=(modelMatrix*instanceMatrix*vec4(transformed,1.0)).xyz;\n vGN=normalize(mat3(modelMatrix)*mat3(instanceMatrix)*objectNormal);\n #else\n vGP=(modelMatrix*vec4(transformed,1.0)).xyz;\n vGN=normalize(mat3(modelMatrix)*objectNormal);\n #endif");
       sh.fragmentShader = sh.fragmentShader
         .replace("#include <common>",
-          "#include <common>\nuniform vec3 uRim;uniform float uRimStr;uniform float uRimPow;uniform float uCaustI;uniform float uTime;\nvarying vec3 vGN;varying vec3 vGP;\n" + CAUSTIC_GLSL)
+          "#include <common>\nuniform vec3 uRim;uniform float uRimStr;uniform float uRimPow;uniform float uCaustI;uniform float uTime;\n" +
+          "uniform sampler2D uDet;uniform float uDetScale;uniform float uDetStr;\n" +
+          "varying vec3 vGN;varying vec3 vGP;\nvec4 gDet;\n" + CAUSTIC_GLSL)
+        // ① 삼중평면(triplanar) 샘플 — 병합 지오메트리라 UV 가 없으므로 월드 좌표로 투영한다
+        .replace("#include <color_fragment>",
+          "#include <color_fragment>\n {\n vec3 bl=abs(normalize(vGN)); bl/= (bl.x+bl.y+bl.z+1e-4);\n" +
+          " gDet = texture2D(uDet, vGP.zy*uDetScale)*bl.x + texture2D(uDet, vGP.xz*uDetScale)*bl.y + texture2D(uDet, vGP.xy*uDetScale)*bl.z;\n }")
+        // ② 러프니스 변조 — 균일한 광택을 깨뜨린다
+        .replace("#include <roughnessmap_fragment>",
+          "#include <roughnessmap_fragment>\n roughnessFactor = clamp(roughnessFactor*(0.72+0.62*gDet.a), 0.06, 1.0);")
+        // ③ 노멀 섭동 — 표면 요철
+        .replace("#include <normal_fragment_begin>",
+          "#include <normal_fragment_begin>\n normal = normalize(normal + (gDet.xyz*2.0-1.0)*uDetStr);")
         .replace("#include <dithering_fragment>",
           "#include <dithering_fragment>\n vec3 Vd=normalize(cameraPosition-vGP);\n float rf=pow(1.0-clamp(dot(normalize(vGN),Vd),0.0,1.0),uRimPow);\n gl_FragColor.rgb+=uRim*rf*uRimStr;\n float up=clamp(vGN.y,0.0,1.0);\n if(uCaustI>0.001){ float ca=caustic(vGP.xz*0.09,uTime*0.35); gl_FragColor.rgb+=vec3(0.72,0.88,0.82)*ca*up*uCaustI; }");
     };
@@ -525,9 +732,9 @@ window.GeoRide = (function () {
   function buildTrackMesh(track, env) {
     const grp = new T.Group();
     const GAUGE = 0.60;
-    const railMat = new T.MeshStandardMaterial({ color: COL(0xb9c6cf), roughness: 0.32, metalness: 0.9 });
-    const tieMat = new T.MeshStandardMaterial({ color: COL(0x4a3f33), roughness: 0.92, metalness: 0.02 });
-    const colMat = new T.MeshStandardMaterial({ color: COL(0x394049), roughness: 0.6, metalness: 0.5 });
+    const railMat = new T.MeshStandardMaterial({ color: COL(0xb9c6cf), roughness: 0.44, metalness: 0.72, envMapIntensity: 0.5 });
+    const tieMat = new T.MeshStandardMaterial({ color: COL(0x4a3f33), roughness: 0.9, metalness: 0.02, normalMap: makeDetailTexture('rock'), normalScale: new T.Vector2(0.8,0.8), envMapIntensity: 0.5 });
+    const colMat = new T.MeshStandardMaterial({ color: COL(0x394049), roughness: 0.62, metalness: 0.45, envMapIntensity: 0.45 });
     // 레일 2줄
     for (const s of [-1, 1]) {
       const pts = [];
@@ -658,7 +865,9 @@ window.GeoRide = (function () {
     }
     geo.computeVertexNormals();
     const tex = makeSandTexture(env);
-    const mat = new T.MeshStandardMaterial({ color: 0xffffff, map: tex, roughness: 1.0, metalness: 0.0 });
+    const nrm = makeDetailTexture("rock"); nrm.repeat.copy(tex.repeat); nrm.wrapS = nrm.wrapT = T.RepeatWrapping;
+    const mat = new T.MeshStandardMaterial({ color: 0xffffff, map: tex, normalMap: nrm,
+      normalScale: new T.Vector2(1.1, 1.1), roughness: 0.95, metalness: 0.0, envMapIntensity: 0.5 });
     mat.userData.u = { uTime: UNI.time, uCaustI: { value: env.caustic } };
     mat.onBeforeCompile = function (sh) {
       Object.assign(sh.uniforms, mat.userData.u);
@@ -796,7 +1005,11 @@ window.GeoRide = (function () {
     const mat = creatureMaterial(sp.body, rim, {
       transparent, opacity: transparent ? 0.5 : 1.0, rough: sp.animal ? 0.55 : 0.85,
       metal: sp.hard ? 0.22 : 0.05, side: transparent ? T.DoubleSide : T.FrontSide,
-      rimStr: transparent ? 1.9 : (sp.hero ? 1.6 : 1.35), caustI
+      rimStr: transparent ? 1.9 : (sp.hero ? 1.6 : 1.35), caustI,
+      detail: detailKindFor(sp),
+      detScale: sp.hero ? 1.6 : (3.0 / Math.max(0.35, sp.sizeM)),
+      detStr: transparent ? 0.25 : (sp.hard ? 0.95 : 0.7),
+      envI: transparent ? 0.9 : (sp.hard ? 0.6 : 0.4)
     });
     disposal.mats.push(mat);
     const insts = []; const total = track.total;
@@ -821,12 +1034,41 @@ window.GeoRide = (function () {
       const px = f.pos.x + f.side.x * lat, pz = f.pos.z + f.side.z * lat;
       insts.push({ base: new T.Vector3(px, vy, pz), yaw: rng() * Math.PI * 2, scale: sp.sizeM * (0.82 + rng() * 0.4), phase: rng() * Math.PI * 2, speed: 0.4 + rng() * 0.8 });
     }
-    const mesh = new T.InstancedMesh(geom, mat, sp.n); mesh.frustumCulled = false;
+    const anim = (sp.loc === "swim") ? (sp.shape === "jelly" ? "jelly" : "swim") : (sp.shape === "frond" ? "sway" : "still");
     const d = new T.Object3D();
+
+    // ★ 실제 3D 모델이 있으면 그것을 쓴다. 없으면 절차적 도형으로 되돌아간다(폴백).
+    const M = sp.model && MODEL[sp.model];
+    if (M && M.parts.length) {
+      const group = new T.Group();
+      const meshes = [];
+      let parts = M.parts;
+      if (sp.modelPart != null && parts.length > 1) parts = [parts[sp.modelPart % parts.length]];
+      // 바닥에 놓는 것은 모델 높이의 절반만큼 띄워 지면에 닿게 한다
+      const lift = (sp.loc === "swim") ? 0 : M.hNorm * 0.5;
+      for (const part of parts) {
+        const pm = wrapModelMaterial(part.material, rim, {
+          rimStr: sp.hero ? 1.35 : 1.15, caustI, envI: sp.hard ? 0.55 : 0.4
+        });
+        disposal.mats.push(pm);
+        const im = new T.InstancedMesh(part.geometry, pm, sp.n);
+        im.frustumCulled = false;
+        meshes.push(im); group.add(im);
+      }
+      const tmp = new T.Matrix4();
+      insts.forEach((it, k) => {
+        d.position.copy(it.base); d.position.y += lift * it.scale;
+        d.rotation.set(0, it.yaw, 0); d.scale.setScalar(it.scale); d.updateMatrix();
+        meshes.forEach((im, pi) => { tmp.multiplyMatrices(d.matrix, parts[pi].pre); im.setMatrixAt(k, tmp); });
+      });
+      meshes.forEach(im => im.instanceMatrix.needsUpdate = true);
+      return { node: group, meshes, sp, insts, anim, lift, pre: parts.map(p => p.pre) };
+    }
+
+    const mesh = new T.InstancedMesh(geom, mat, sp.n); mesh.frustumCulled = false;
     insts.forEach((it, k) => { d.position.copy(it.base); d.rotation.set(0, it.yaw, 0); d.scale.setScalar(it.scale); d.updateMatrix(); mesh.setMatrixAt(k, d.matrix); });
     mesh.instanceMatrix.needsUpdate = true;
-    const anim = (sp.loc === "swim") ? (sp.shape === "jelly" ? "jelly" : "swim") : (sp.shape === "frond" ? "sway" : "still");
-    return { node: mesh, mesh, sp, insts, anim };
+    return { node: mesh, meshes: [mesh], sp, insts, anim, lift: 0 };
   }
 
   /* ======================================================================
@@ -965,7 +1207,20 @@ window.GeoRide = (function () {
      메인
      ====================================================================== */
   function start(firstEra) {
-    firstEra = firstEra || "precambrian";
+    // 모델을 먼저 파싱한 뒤 시작한다(없으면 절차적 도형으로 그대로 진행)
+    preloadModels(() => boot(firstEra || "precambrian"));
+  }
+
+  function renderCredits() {
+    const host = document.getElementById("modelCredits");
+    if (!host || !window.GEO_MODEL_CREDITS) return;
+    host.innerHTML = "3D 모델 출처 — " + window.GEO_MODEL_CREDITS.map(c =>
+      `${c.ko}: <a href="${c.url}" target="_blank" rel="noopener">${c.title}</a> by ${c.author} (${c.license})`
+    ).join(" · ");
+  }
+
+  function boot(firstEra) {
+    renderCredits();
     const $ = id => document.getElementById(id);
     $("h1").textContent = TEXT.title + " — 1인칭 라이드";
     $("subhead").textContent = TEXT.subheadRide;
@@ -988,6 +1243,8 @@ window.GeoRide = (function () {
     const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputEncoding = T.LinearEncoding; renderer.toneMapping = T.NoToneMapping; renderer.autoClear = false;
+    // A3 그림자 — 교사용 PC(내장 그래픽) 예산. 라이더 주변만 덮는 이동식 그림자 카메라.
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
 
     const scene = new T.Scene();
     const camera = new T.PerspectiveCamera(66, 1, 0.05, 500); scene.add(camera);
@@ -997,7 +1254,17 @@ window.GeoRide = (function () {
 
     const camLight = new T.PointLight(0xdff2ec, 0.3, 11, 2.2); camera.add(camLight);
     const hemi = new T.HemisphereLight(0xffffff, 0x404040, 0.8); scene.add(hemi);
-    const sun = new T.DirectionalLight(0xffffff, 1.0); scene.add(sun);
+    const sun = new T.DirectionalLight(0xffffff, 1.0); scene.add(sun); scene.add(sun.target);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -26; sun.shadow.camera.right = 26;
+    sun.shadow.camera.top = 26; sun.shadow.camera.bottom = -26;
+    sun.shadow.camera.near = 1; sun.shadow.camera.far = 95;
+    sun.shadow.bias = -0.0007; sun.shadow.normalBias = 0.035;
+    // A2 IBL — PMREM 로 굽는다(시대마다 1회)
+    const pmrem = new T.PMREMGenerator(renderer); pmrem.compileEquirectangularShader();
+    let envRT = null;
+    let quality = "high";   // high | med  — 교사가 버튼으로 전환
 
     let eraRoot = null, env = null, track = null, eraKey = null, disposal = null, vents = null, bubbles = null;
     let sIndex = 0, dist = 0, vel = V_MIN, mode = "idle", paused = false, yaw = 0, pitch = 0, roll = 0, shake = 0;
@@ -1032,17 +1299,30 @@ window.GeoRide = (function () {
       composer.comp.mat.uniforms.uGrade.value.set(env.grade[0], env.grade[1], env.grade[2]);
       composer.comp.mat.uniforms.uExposure.value = env.exposure;
       composer.comp.mat.uniforms.uSat.value = env.sat;
+      // A2 — 이 시대의 수중 환경광을 굽는다
+      if (envRT) envRT.dispose();
+      const envSrc = makeEnvTexture(env);
+      envRT = pmrem.fromEquirectangular(envSrc);
+      scene.environment = envRT.texture;
+      envSrc.dispose();
 
       track = makeTrack(env);
       eraRoot.add(buildWaterSurface(env));
       eraRoot.add(buildGodrays(env));
-      eraRoot.add(buildSeafloor(env));
+      const floorMesh = buildSeafloor(env); floorMesh.receiveShadow = true; eraRoot.add(floorMesh);
       eraRoot.add(buildMarineSnow(env));
-      eraRoot.add(buildTrackMesh(track, env));
-      const turf = buildTurf(env, track); if (turf) eraRoot.add(turf);
+      const trackMesh = buildTrackMesh(track, env);
+      trackMesh.traverse(o => { if (o.isMesh || o.isInstancedMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      eraRoot.add(trackMesh);
+      const turf = buildTurf(env, track); if (turf) { turf.receiveShadow = true; eraRoot.add(turf); }
       if (env.vents > 0) { vents = buildVents(env, track, env.vents); eraRoot.add(vents.group); }
       if (env.bubbles) { bubbles = buildBubbles(env, track); eraRoot.add(bubbles); }
-      SPECIES[key].forEach((sp, i) => { const b = buildSpecies(sp, env, track, 5000 + seedBase * 131 + i * 17, disposal); built.push(b); eraRoot.add(b.node); });
+      SPECIES[key].forEach((sp, i) => {
+        const b = buildSpecies(sp, env, track, 5000 + seedBase * 131 + i * 17, disposal);
+        b.node.castShadow = true; b.node.receiveShadow = true;
+        built.push(b); eraRoot.add(b.node);
+      });
+      applyQuality();
 
       $("eraNow").textContent = env.introLabel;
       $("envLineTxt").textContent = env.envLine;
@@ -1052,6 +1332,12 @@ window.GeoRide = (function () {
       $("stopNow").textContent = "–"; $("btnPause").textContent = TEXT.pauseButton;
     }
 
+    function applyQuality() {
+      const high = quality === "high";
+      renderer.shadowMap.enabled = high;
+      sun.castShadow = high;
+      if (eraRoot) eraRoot.traverse(o => { if (o.material) o.material.needsUpdate = true; });
+    }
     function switchEra(key) {
       buildEra(key);
       setGuide(TEXT.introCard[key]);
@@ -1088,6 +1374,11 @@ window.GeoRide = (function () {
     $("btnHands").onclick = () => { rig.group.visible = !rig.group.visible; $("btnHands").textContent = rig.group.visible ? TEXT.handsOn : TEXT.handsOff; };
     const bs = $("btnSound");
     if (bs) bs.onclick = () => { soundOn = !soundOn; bs.textContent = soundOn ? TEXT.soundOn : TEXT.soundOff; if (soundOn) audio.start(); else audio.setEnabled(false); };
+    const bq = $("btnQuality");
+    if (bq) {
+      bq.textContent = TEXT.qualityHigh;
+      bq.onclick = () => { quality = (quality === "high") ? "med" : "high"; bq.textContent = quality === "high" ? TEXT.qualityHigh : TEXT.qualityMed; applyQuality(); };
+    }
     $("btnPause").textContent = TEXT.pauseButton; $("btnHands").textContent = TEXT.handsOn;
     if (bs) bs.textContent = TEXT.soundOn;
     hideContinue();
@@ -1119,13 +1410,15 @@ window.GeoRide = (function () {
       }
       const f = track.at(dist);
       // 뱅킹 — tanθ = v²κ/g
-      const targetRoll = Math.max(-0.62, Math.min(0.62, Math.atan(vel * vel * f.curv / (G_EFF * 5.5))));
-      roll += (targetRoll - roll) * Math.min(1, dt * 3.2);
+      const targetRoll = Math.max(-BANK_MAX, Math.min(BANK_MAX, Math.atan(vel * vel * f.curv / (G_EFF * 7.5))));
+      roll += (targetRoll - roll) * Math.min(1, dt * 2.2);
       // 흔들림 — 속도에 비례
-      const sAmp = moving ? Math.min(1, (vel - 1.2) / 5) * 0.022 : 0;
+      const sAmp = moving ? Math.min(1, (vel - 1.2) / 5) * SHAKE : 0;
       shake += dt;
-      const sx = Math.sin(shake * 37.0) * sAmp + Math.sin(shake * 23.3) * sAmp * 0.6;
-      const sy = Math.cos(shake * 41.0) * sAmp + Math.sin(shake * 19.7) * sAmp * 0.5;
+      // 회전 흔들림은 아주 작게(멀미 방지), 대신 위치 바운스로 승차감을 낸다
+      const sx = Math.sin(shake * 2.7) * sAmp * 0.35 + Math.sin(shake * 1.6) * sAmp * 0.22;
+      const sy = Math.cos(shake * 3.1) * sAmp * 0.30 + Math.sin(shake * 1.9) * sAmp * 0.18;
+      const bob = (Math.sin(shake * 5.2) * 0.5 + Math.sin(shake * 3.3) * 0.5) * sAmp * 1.1;
 
       // 카메라: 트랙 기저 → 롤 → 사용자 시선
       const up = f.up.clone().applyAxisAngle(f.tan, roll);
@@ -1134,10 +1427,16 @@ window.GeoRide = (function () {
       qTrack.setFromRotationMatrix(mBasis);
       eUser.set(pitch + sy, yaw + sx, 0, "YXZ"); qUser.setFromEuler(eUser);
       camera.quaternion.copy(qTrack).multiply(qUser);
-      camera.position.copy(f.pos).addScaledVector(up, 1.02);
+      camera.position.copy(f.pos).addScaledVector(up, 1.02 + bob);
       camera.fov = 66 + Math.min(12, Math.max(0, (vel - 2.2)) * 1.9);       // 속도감
       camera.updateProjectionMatrix();
 
+      // A3 — 그림자 카메라를 라이더 주변으로 옮긴다(전 구간을 덮으면 해상도가 무너진다)
+      if (quality === "high") {
+        const L = new T.Vector3(env.lightDir[0], env.lightDir[1], env.lightDir[2]).normalize();
+        sun.position.copy(camera.position).addScaledVector(L, -42);
+        sun.target.position.copy(camera.position); sun.target.updateMatrixWorld();
+      }
       $("timeLeft").textContent = Math.round((dist / track.total) * 100) + "%";
       if (soundOn) audio.update(vel, moving);
 
@@ -1157,30 +1456,37 @@ window.GeoRide = (function () {
 
   /* ===== 애니메이션 ===== */
   const _d = new T.Object3D();
+  const _tm = new T.Matrix4();
+  function setInst(b, ms, k) {
+    _d.updateMatrix();
+    if (b.pre) { for (let i = 0; i < ms.length; i++) { _tm.multiplyMatrices(_d.matrix, b.pre[i]); ms[i].setMatrixAt(k, _tm); } }
+    else for (const mm of ms) mm.setMatrixAt(k, _d.matrix);
+  }
   function animateSpecies(b, t) {
     if (b.anim === "still") return;
-    const m = b.mesh;
+    const ms = b.meshes || [b.mesh];
+    const lift = b.lift || 0;
     b.insts.forEach((it, k) => {
-      _d.position.copy(it.base); let ry = it.yaw; const sy = it.scale;
+      _d.position.copy(it.base); _d.position.y += lift * it.scale; let ry = it.yaw; const sy = it.scale;
       if (b.anim === "swim") {
         _d.position.x += Math.sin(t * it.speed + it.phase) * 0.55;
         _d.position.y += Math.sin(t * it.speed * 0.8 + it.phase) * 0.22;
         ry = it.yaw + Math.sin(t * it.speed * 0.6 + it.phase) * 0.3;
         _d.rotation.set(Math.sin(t * it.speed * 1.6 + it.phase) * 0.08, ry, Math.sin(t * it.speed + it.phase) * 0.1);
-        _d.scale.setScalar(sy); _d.updateMatrix(); m.setMatrixAt(k, _d.matrix); return;
+        _d.scale.setScalar(sy); setInst(b, ms, k); return;
       }
       if (b.anim === "jelly") {
         const p = 1 + Math.sin(t * 1.6 + it.phase) * 0.14;
         _d.position.y += Math.sin(t * 0.6 + it.phase) * 0.34;
-        _d.scale.set(sy * p, sy * (2 - p), sy * p); _d.rotation.set(0, ry, 0); _d.updateMatrix(); m.setMatrixAt(k, _d.matrix); return;
+        _d.scale.set(sy * p, sy * (2 - p), sy * p); _d.rotation.set(0, ry, 0); setInst(b, ms, k); return;
       }
       if (b.anim === "sway") {
         _d.rotation.set(Math.sin(t * 0.8 + it.phase) * 0.3, ry, Math.cos(t * 0.6 + it.phase) * 0.18);
-        _d.scale.setScalar(sy); _d.updateMatrix(); m.setMatrixAt(k, _d.matrix); return;
+        _d.scale.setScalar(sy); setInst(b, ms, k); return;
       }
-      _d.rotation.set(0, ry, 0); _d.scale.setScalar(sy); _d.updateMatrix(); m.setMatrixAt(k, _d.matrix);
+      _d.rotation.set(0, ry, 0); _d.scale.setScalar(sy); setInst(b, ms, k);
     });
-    m.instanceMatrix.needsUpdate = true;
+    for (const mm of ms) mm.instanceMatrix.needsUpdate = true;
   }
   function animateBubbles(p, dt) {
     const a = p.geometry.attributes.position.array; const u = p.userData;
