@@ -133,36 +133,36 @@ window.GeoRide = (function () {
     /* 선캄브리아 — 물속은 거의 비어 있고(유영 3), 바닥에는 있다(M13).
        동물은 전부 「부드러운 몸」= 보라 테두리. 단단한 것이 하나도 없다. */
     precambrian: [
-      { id: "stromatolite", name: "스트로마톨라이트", n: 7, animal: false, hard: null, loc: "attached", shape: "stromatolite", body: 0x8a7550, sizeM: 2.4, hero: true, clusterAt: 1 },
+      { id: "stromatolite", model: "stromatolite", name: "스트로마톨라이트", n: 7, animal: false, hard: null, loc: "attached", shape: "stromatolite", body: 0x8a7550, sizeM: 2.4, hero: true, clusterAt: 1 },
       { id: "matpatch", name: "미생물 매트", n: 40, animal: false, hard: null, loc: "attached", shape: "mat", body: 0x55702f, sizeM: 1.4 },
-      { id: "algae_pc", name: "조류", n: 18, animal: false, hard: null, loc: "attached", shape: "frond", body: 0x3b6b3c, sizeM: 1.0 },
+      { id: "algae_pc", modelScale: 1.3, model: "algae", name: "조류", n: 18, animal: false, hard: null, loc: "attached", shape: "frond", body: 0x3b6b3c, sizeM: 1.0 },
       { id: "edia_disc", model: "ediacaran", modelPart: 0, name: "원반 모양 부드러운 생물", n: 18, animal: true, hard: false, loc: "bottom", shape: "ediaDisc", body: 0x9a8a76, sizeM: 0.75 },
       { id: "edia_frond", model: "ediacaran", modelPart: 1, name: "깃털 모양 부드러운 생물", n: 16, animal: true, hard: false, loc: "attached", shape: "ediaFrond", body: 0x8d7f92, sizeM: 1.3 },
-      { id: "jelly_pc", name: "해파리 모양", n: 3, animal: true, hard: false, loc: "swim", shape: "jelly", body: 0xb8cfe0, sizeM: 0.40 }
+      { id: "jelly_pc", model: "jelly", name: "해파리 모양", n: 3, animal: true, hard: false, loc: "swim", shape: "jelly", body: 0xb8cfe0, sizeM: 0.40 }
     ],
     /* 고생대 — 단단한 껍데기가 등장하고 바닥이 암초로 빽빽해진다 */
     paleozoic: [
       { id: "trilobite", model: "trilobite", name: "삼엽충", n: 18, animal: true, hard: true, loc: "bottom", shape: "trilobite", body: 0x7d5f3c, sizeM: 0.46, label: "삼엽충" },
-      { id: "anomalo", name: "큰 마디 절지동물", n: 3, animal: true, hard: true, loc: "swim", shape: "anomalo", body: 0x2f6a93, sizeM: 1.5, hero: true },
-      { id: "bivalve", name: "조개 모양", n: 20, animal: true, hard: true, loc: "bottom", shape: "shell", body: 0xd6c194, sizeM: 0.30 },
-      { id: "squidshell", name: "껍데기 오징어", n: 8, animal: true, hard: true, loc: "swim", shape: "orthocone", body: 0xcaa96f, sizeM: 0.7 },
-      { id: "platecoral", name: "판 모양 산호", n: 42, animal: true, hard: true, loc: "attached", shape: "plateCoral", body: 0xd6b96a, sizeM: 1.0 },
-      { id: "seafan", name: "부채 모양 군체", n: 46, animal: true, hard: true, loc: "attached", shape: "seaFan", body: 0x2b3a33, sizeM: 1.5 },
-      { id: "sponge", name: "관 모양 해면", n: 38, animal: true, hard: true, loc: "attached", shape: "tubeSponge", body: 0xbfa15c, sizeM: 0.8 },
-      { id: "armorfish", name: "갑옷을 두른 물고기", n: 20, animal: true, hard: true, loc: "swim", shape: "armorFish", body: 0xc0a173, sizeM: 0.55, school: true },
-      { id: "jelly_pz", name: "해파리", n: 4, animal: true, hard: false, loc: "swim", shape: "jelly", body: 0xb8cfe0, sizeM: 0.32 },
-      { id: "algae_pz", name: "해조류", n: 40, animal: false, hard: null, loc: "attached", shape: "frond", body: 0x5d8a2c, sizeM: 1.1 }
+      { id: "anomalo", model: "anomalo", name: "큰 마디 절지동물", n: 3, animal: true, hard: true, loc: "swim", shape: "anomalo", body: 0x2f6a93, sizeM: 1.5, hero: true },
+      { id: "bivalve", model: "shellA", name: "조개 모양", n: 20, animal: true, hard: true, loc: "bottom", shape: "shell", body: 0xd6c194, sizeM: 0.30 },
+      { id: "squidshell", model: "orthocone", name: "껍데기 오징어", n: 8, animal: true, hard: true, loc: "swim", shape: "orthocone", body: 0xcaa96f, sizeM: 0.7 },
+      { id: "platecoral", modelScale: 1.7, model: "tablecoral", name: "판 모양 산호", n: 42, animal: true, hard: true, loc: "attached", shape: "plateCoral", body: 0xd6b96a, sizeM: 1.0 },
+      { id: "seafan", modelScale: 1.7, model: "seafan", name: "부채 모양 군체", n: 46, animal: true, hard: true, loc: "attached", shape: "seaFan", body: 0x2b3a33, sizeM: 1.5 },
+      { id: "sponge", modelScale: 1.5, model: "tubesponge", name: "관 모양 해면", n: 38, animal: true, hard: true, loc: "attached", shape: "tubeSponge", body: 0xbfa15c, sizeM: 0.8 },
+      { id: "armorfish", model: "armorfish", name: "갑옷을 두른 물고기", n: 20, animal: true, hard: true, loc: "swim", shape: "armorFish", body: 0xc0a173, sizeM: 0.55, school: true },
+      { id: "jelly_pz", model: "jelly", name: "해파리", n: 4, animal: true, hard: false, loc: "swim", shape: "jelly", body: 0xb8cfe0, sizeM: 0.32 },
+      { id: "algae_pz", modelScale: 1.3, model: "kelp", name: "해조류", n: 40, animal: false, hard: null, loc: "attached", shape: "frond", body: 0x5d8a2c, sizeM: 1.1 }
     ],
     /* 중생대 — 중간 수층을 헤엄치는 것이 지배한다 */
     mesozoic: [
       { id: "ammonite", model: "ammonite", name: "암모나이트", n: 30, animal: true, hard: true, loc: "swim", shape: "ammonite", body: 0xd8bd90, sizeM: 0.42, label: "암모나이트" },
       { id: "longneck", model: "plesio", skinned: true, name: "목이 긴 파충류", n: 4, animal: true, hard: true, loc: "swim", shape: "plesiosaur", body: 0x4a5a48, sizeM: 3.0, hero: true },
       { id: "ichthyo", model: "ichthyo", name: "물고기 모양 파충류", n: 5, animal: true, hard: true, loc: "swim", shape: "ichthyo", body: 0x415465, sizeM: 2.2, hero: true },
-      { id: "fish_mz", name: "헤엄치는 척추동물", n: 24, animal: true, hard: true, loc: "swim", shape: "fish", body: 0xa3b2ba, sizeM: 0.44, school: true },
-      { id: "bottom_mz", name: "바닥 껍데기", n: 10, animal: true, hard: true, loc: "bottom", shape: "shell", body: 0xcbb890, sizeM: 0.4 },
-      { id: "coral_mz", name: "판 모양 산호", n: 24, animal: true, hard: true, loc: "attached", shape: "plateCoral", body: 0xa89a72, sizeM: 0.9 },
-      { id: "jelly_mz", name: "해파리", n: 5, animal: true, hard: false, loc: "swim", shape: "jelly", body: 0xb8cfe0, sizeM: 0.32 },
-      { id: "algae_mz", name: "해조류", n: 24, animal: false, hard: null, loc: "attached", shape: "frond", body: 0x35603d, sizeM: 0.9 }
+      { id: "fish_mz", model: "fish", skinned: true, name: "헤엄치는 척추동물", n: 24, animal: true, hard: true, loc: "swim", shape: "fish", body: 0xa3b2ba, sizeM: 0.44, school: true },
+      { id: "bottom_mz", model: "shellB", name: "바닥 껍데기", n: 10, animal: true, hard: true, loc: "bottom", shape: "shell", body: 0xcbb890, sizeM: 0.4 },
+      { id: "coral_mz", modelScale: 1.7, model: "tablecoral", name: "판 모양 산호", n: 24, animal: true, hard: true, loc: "attached", shape: "plateCoral", body: 0xa89a72, sizeM: 0.9 },
+      { id: "jelly_mz", model: "jelly", name: "해파리", n: 5, animal: true, hard: false, loc: "swim", shape: "jelly", body: 0xb8cfe0, sizeM: 0.32 },
+      { id: "algae_mz", modelScale: 1.3, model: "algae", name: "해조류", n: 24, animal: false, hard: null, loc: "attached", shape: "frond", body: 0x35603d, sizeM: 0.9 }
     ]
   };
 
@@ -182,7 +182,7 @@ window.GeoRide = (function () {
      화면에는 「추정입니다」 카드로 과장 사실을 밝힌다(TEXT.lieCardFull).
      ※ GEO.species[].sizeM 은 여전히 실제 크기다. 검증 스크립트가 그걸 본다. */
   const SIZE_POW = 0.55, SIZE_MUL = 1.8;
-  function dispSizeM(sp) { return Math.pow(sp.sizeM, SIZE_POW) * SIZE_MUL; }
+  function dispSizeM(sp) { return Math.pow(sp.sizeM, SIZE_POW) * SIZE_MUL * (sp.modelScale || 1); }
   function rimFor(sp) { return !sp.animal ? RIM.photo : (sp.hard ? RIM.hard : RIM.soft); }
   const GEO = { eras: ERAS, env: ENV, species: SPECIES, eraLengthPercent: ERA_LENGTH_PERCENT, text: TEXT, stops: STOPS_U };
 
@@ -386,6 +386,7 @@ window.GeoRide = (function () {
         const parts = [];
         root.traverse(o => {
           if (!o.isMesh || !o.geometry) return;
+          if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
           parts.push({ geometry: o.geometry, material: o.material, pre: norm.clone().multiply(o.matrixWorld) });
         });
         // norm 을 함께 보관한다 — 골격 애니메이션 개체는 인스턴스 행렬을 못 쓰므로
@@ -865,6 +866,18 @@ window.GeoRide = (function () {
   }
 
   function makeSandTexture(env) {
+    /* 실사 지면 사진이 있으면 그것을 쓴다. 없으면 아래 절차적 캔버스로 되돌아간다(폴백). */
+    const G = window.GEO_TEXTURES;
+    if (G && G.seafloor) {
+      const img = new Image();
+      const tex = new T.Texture(img);
+      img.onload = function () { tex.needsUpdate = true; };
+      img.src = "data:image/jpeg;base64," + G.seafloor;   // 외부 파일 0 · file:// 에서도 열린다
+      tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.repeat.set(13, 13);
+      tex.anisotropy = 8; tex.encoding = T.sRGBEncoding;
+      tex.userData.photo = G.seafloorMeanRGB || [100, 102, 104];
+      return tex;
+    }
     const cv = document.createElement("canvas"); cv.width = cv.height = 256; const c = cv.getContext("2d");
     c.fillStyle = "#" + new T.Color(env.floor).getHexString(); c.fillRect(0, 0, 256, 256);
     const rng = makeRng(8080);
@@ -878,6 +891,34 @@ window.GeoRide = (function () {
     return tex;
   }
 
+  /* 해저 바위 — 「생물이 얼마나 많은가」 집계를 오염시키면 안 되므로 SPECIES 밖에 둔다(원칙 9).
+     모델이 없으면 아무것도 만들지 않는다(폴백: 그냥 맨 해저). */
+  function buildRocks(env, track, disposal) {
+    const M = MODEL.rock;
+    if (!M || !M.parts.length) return null;
+    const rng = makeRng(9137), N = 34, total = track.total;
+    const grp = new T.Group(), d = new T.Object3D(), tmp = new T.Matrix4();
+    const meshes = M.parts.map(part => {
+      const pm = wrapModelMaterial(part.material, 0x8899a0, { rimStr: 0.10, caustI: env.caustic * 0.8, envI: 0.45 });
+      disposal.mats.push(pm);
+      const im = new T.InstancedMesh(part.geometry, pm, N);
+      im.frustumCulled = false; im.receiveShadow = true; grp.add(im); return im;
+    });
+    for (let i = 0; i < N; i++) {
+      const u = 0.02 + 0.96 * (i + rng() * 0.7) / N;
+      const f = track.at(u * total), side = rng() < 0.5 ? -1 : 1;
+      const lat = side * (2.2 + rng() * 13.0);
+      const sc = 1.1 + rng() * 2.6;
+      d.position.set(f.pos.x + f.side.x * lat, env.seafloorY - 0.25 * sc, f.pos.z + f.side.z * lat);
+      d.rotation.set((rng() - 0.5) * 0.16, rng() * Math.PI * 2, (rng() - 0.5) * 0.16);
+      d.scale.set(sc, sc * (0.6 + rng() * 0.5), sc);
+      d.updateMatrix();
+      meshes.forEach((im, pi) => { tmp.multiplyMatrices(d.matrix, M.parts[pi].pre); im.setMatrixAt(i, tmp); });
+    }
+    meshes.forEach(im => im.instanceMatrix.needsUpdate = true);
+    return grp;
+  }
+
   function buildSeafloor(env) {
     const geo = new T.PlaneGeometry(420, 420, 170, 170); geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position; const rng = makeRng(4242);
@@ -888,7 +929,21 @@ window.GeoRide = (function () {
     geo.computeVertexNormals();
     const tex = makeSandTexture(env);
     const nrm = makeDetailTexture("rock"); nrm.repeat.copy(tex.repeat); nrm.wrapS = nrm.wrapT = T.RepeatWrapping;
-    const mat = new T.MeshStandardMaterial({ color: 0xffffff, map: tex, normalMap: nrm,
+    /* 사진 텍스처를 시대색으로 되물들인다 — 결과 평균이 env.floor 가 되도록 계수를 구한다.
+       예: 고생대 해저 #9c9670 ÷ 사진 평균 회색 → 약 2.6배. 시대 팔레트를 지키면서 사진의
+       요철·입자만 얻는다. 색을 바꾸면 이 계수도 자동으로 따라간다. */
+    let tint = 0xffffff;
+    if (tex.userData && tex.userData.photo) {
+      const s2l = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+      const f = new T.Color(env.floor), pm = tex.userData.photo;
+      const fl = [f.r, f.g, f.b].map(v => s2l(v * 255));     // env.floor 를 선형으로
+      const pl = pm.map(s2l);
+      tint = new T.Color(
+        Math.min(4, fl[0] / Math.max(1e-4, pl[0])),
+        Math.min(4, fl[1] / Math.max(1e-4, pl[1])),
+        Math.min(4, fl[2] / Math.max(1e-4, pl[2])));
+    }
+    const mat = new T.MeshStandardMaterial({ color: tint, map: tex, normalMap: nrm,
       normalScale: new T.Vector2(1.1, 1.1), roughness: 0.95, metalness: 0.0, envMapIntensity: 0.5 });
     mat.userData.u = { uTime: UNI.time, uCaustI: { value: env.caustic } };
     mat.onBeforeCompile = function (sh) {
@@ -1372,6 +1427,7 @@ window.GeoRide = (function () {
       eraRoot.add(buildWaterSurface(env));
       eraRoot.add(buildGodrays(env));
       const floorMesh = buildSeafloor(env); floorMesh.receiveShadow = true; eraRoot.add(floorMesh);
+      const rocks = buildRocks(env, track, disposal); if (rocks) eraRoot.add(rocks);
       eraRoot.add(buildMarineSnow(env));
       const trackMesh = buildTrackMesh(track, env);
       trackMesh.traverse(o => { if (o.isMesh || o.isInstancedMesh) { o.castShadow = true; o.receiveShadow = true; } });
