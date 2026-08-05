@@ -333,7 +333,7 @@ window.GeoRide = (function () {
         .replace("#include <common>",
           "#include <common>\nuniform vec3 uRim;uniform float uRimStr;uniform float uRimPow;uniform float uCaustI;uniform float uTime;\nvarying vec3 vGN;varying vec3 vGP;\n" + CAUSTIC_GLSL)
         .replace("#include <dithering_fragment>",
-          "#include <dithering_fragment>\n vec3 Vd=normalize(cameraPosition-vGP);\n float rf=pow(1.0-clamp(dot(normalize(vGN),Vd),0.0,1.0),uRimPow);\n gl_FragColor.rgb+=uRim*rf*uRimStr;\n float up=clamp(vGN.y,0.0,1.0);\n if(uCaustI>0.001){ float ca=caustic(vGP.xz*0.09,uTime*0.35); gl_FragColor.rgb+=vec3(0.72,0.88,0.82)*ca*up*uCaustI; }");
+          "#include <dithering_fragment>\n vec3 Vd=normalize(cameraPosition-vGP);\n float rf=pow(1.0-clamp(dot(normalize(vGN),Vd),0.0,1.0),uRimPow);\n float rt=clamp(rf*uRimStr*0.90,0.0,1.0);\n gl_FragColor.rgb=mix(gl_FragColor.rgb,uRim*0.90,rt)+uRim*rf*0.35;\n float up=clamp(vGN.y,0.0,1.0);\n if(uCaustI>0.001){ float ca=caustic(vGP.xz*0.09,uTime*0.35); gl_FragColor.rgb+=vec3(0.72,0.88,0.82)*ca*up*uCaustI; }");
     };
     return m;
   }
@@ -430,7 +430,7 @@ window.GeoRide = (function () {
         .replace("#include <normal_fragment_begin>",
           "#include <normal_fragment_begin>\n normal = normalize(normal + (gDet.xyz*2.0-1.0)*uDetStr);")
         .replace("#include <dithering_fragment>",
-          "#include <dithering_fragment>\n vec3 Vd=normalize(cameraPosition-vGP);\n float rf=pow(1.0-clamp(dot(normalize(vGN),Vd),0.0,1.0),uRimPow);\n gl_FragColor.rgb+=uRim*rf*uRimStr;\n float up=clamp(vGN.y,0.0,1.0);\n if(uCaustI>0.001){ float ca=caustic(vGP.xz*0.09,uTime*0.35); gl_FragColor.rgb+=vec3(0.72,0.88,0.82)*ca*up*uCaustI; }");
+          "#include <dithering_fragment>\n vec3 Vd=normalize(cameraPosition-vGP);\n float rf=pow(1.0-clamp(dot(normalize(vGN),Vd),0.0,1.0),uRimPow);\n float rt=clamp(rf*uRimStr*0.90,0.0,1.0);\n gl_FragColor.rgb=mix(gl_FragColor.rgb,uRim*0.90,rt)+uRim*rf*0.35;\n float up=clamp(vGN.y,0.0,1.0);\n if(uCaustI>0.001){ float ca=caustic(vGP.xz*0.09,uTime*0.35); gl_FragColor.rgb+=vec3(0.72,0.88,0.82)*ca*up*uCaustI; }");
     };
     return m;
   }
