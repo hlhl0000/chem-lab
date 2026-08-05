@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>지질 시대의 바다 — 1인칭 라이드 | 화학 탐구실</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  .page{padding:14px 0 40px}
+  .head h1{font-size:20px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:13.5px; margin:0}
+
+  .eraTabs{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px}
+  .erabtn{font-family:inherit; font-size:14px; font-weight:700; padding:10px 18px; border-radius:10px;
+    border:1px solid var(--line); background:var(--panel); color:var(--t2); cursor:pointer}
+  .erabtn[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr); gap:14px; margin-top:12px}
+  @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+
+  .stagecard{padding:10px}
+  .stage{background:#06100e}
+  .stage canvas{display:block; width:100%; touch-action:none; cursor:grab}
+  .stage canvas:active{cursor:grabbing}
+  #glFallback{display:none; padding:16px 14px; font-size:13.5px; color:var(--t2); line-height:1.7}
+  #flat{display:none}
+
+  .chipRow{display:flex; gap:7px; flex-wrap:wrap; margin-top:9px}
+  .chip{font-size:11.5px; font-weight:700; color:var(--t2); background:#f8fafc;
+    border:1px solid var(--line); border-radius:999px; padding:5px 10px}
+  .rimLegend{display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; font-size:11.5px; color:var(--t2)}
+  .rimitem{display:flex; align-items:center; gap:6px}
+  .rimdot{width:11px; height:11px; border-radius:50%; flex:none; box-shadow:0 0 6px rgba(0,0,0,.3)}
+
+  .sidecard h2{font-size:14px; margin:0 0 8px; color:var(--t1); font-weight:700}
+  .nowline{font-size:15px; color:var(--t1)}
+  .envline{font-size:12.5px; color:var(--t2); margin-top:2px}
+  .stopline{font-size:12px; color:var(--t3); margin-top:4px; font-variant-numeric:tabular-nums}
+  .guideText{font-size:13px; color:var(--t2); line-height:1.6; margin-top:10px;
+    background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:9px 11px; min-height:52px}
+  .ctlbtns{display:flex; gap:7px; flex-wrap:wrap; margin-top:10px}
+
+  .lenbar-wrap{margin-top:14px}
+  .lenbar{display:flex; width:100%; height:14px; border-radius:7px; overflow:hidden; border:1px solid var(--line)}
+  .lenseg{display:block; height:100%}
+  .lenseg.cur{outline:2px solid var(--t1); outline-offset:-2px}
+  .lenlegend{margin-top:8px; display:flex; flex-direction:column; gap:4px}
+  .lenrow{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--t2)}
+  .lenrow.cur{font-weight:700; color:var(--t1)}
+  .lendot{width:10px; height:10px; border-radius:50%; flex:none}
+  .lenfoot{font-size:10.5px; color:var(--t3); margin:8px 0 0}
+
+  .liestrip{margin-top:14px; font-size:12.5px; color:var(--t2); padding:10px 14px}
+  .startcard{margin-top:14px; padding:16px}
+  .startcard p{font-size:13.5px; color:var(--t2); line-height:1.75; margin:0 0 12px}
+</style>
+</head>
+<body>
+
+<div class="wrap page">
+
+<div class="head">
+  <h1 id="h1"></h1>
+  <p class="sub" id="subhead"></p>
+</div>
+
+<div class="eraTabs" id="eraTabs" role="tablist" aria-label="시대 선택"></div>
+
+<div class="cols">
+  <div>
+    <div class="card stagecard">
+      <div class="stage stage--dark" id="stageWrap">
+        <canvas id="gl" tabindex="0"></canvas>
+        <div id="glFallback"></div>
+        <canvas id="flat"></canvas>
+      </div>
+      <div class="chipRow" id="chipRow"></div>
+      <div class="rimLegend" id="rimLegend"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card sidecard">
+      <h2>지금 보는 것</h2>
+      <div class="nowline"><b id="eraNow"></b></div>
+      <div class="envline" id="envLineTxt"></div>
+      <div class="stopline">정지점 <span id="stopNow">–</span>·<span id="stopTotal">3</span> · 진행 <span id="timeLeft">0%</span></div>
+      <div class="guideText" id="guideText"></div>
+      <div class="ctlbtns">
+        <button class="primary" id="btnContinue"></button>
+        <button id="btnPause"></button>
+        <button id="btnRestart">처음부터</button>
+        <button id="btnHands"></button>
+      </div>
+
+      <div class="lenbar-wrap">
+        <div class="lenbar" id="lenBar"></div>
+        <div class="lenlegend" id="lenLegend"></div>
+        <p class="lenfoot" id="lenFoot"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card liestrip" id="lieStrip"></div>
+
+<div class="card startcard" id="startCard">
+  <p id="startBody"></p>
+  <button class="primary" id="startBtn"></button>
+</div>
+
+</div>
+
+<div class="site-foot">화학 탐구실</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="geotime-ride"></script>
+<script src="../vendor/three.min.js"></script>
+<script src="../shared/georide.js"></script>
+<script src="sim.js"></script>
+</body>
+</html>
