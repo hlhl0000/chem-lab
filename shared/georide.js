@@ -133,7 +133,9 @@ window.GeoRide = (function () {
     /* 선캄브리아 — 물속은 거의 비어 있고(유영 3), 바닥에는 있다(M13).
        동물은 전부 「부드러운 몸」= 보라 테두리. 단단한 것이 하나도 없다. */
     precambrian: [
-      { id: "stromatolite", focusable: true, name: "스트로마톨라이트", n: 7, animal: false, hard: null, loc: "attached", shape: "stromatolite", body: 0x8a7550, sizeM: 2.4, hero: true, clusterAt: 1 },
+      { id: "stromatolite", focusable: true, name: "스트로마톨라이트", n: 7, animal: false, hard: null, loc: "attached", shape: "stromatolite", body: 0x8a7550, sizeM: 1.0, modelScale: 1.35, hero: true, clusterAt: 1,
+        modelVariants: ["stromDomal", "stromColumnar", "stromCushion", "stromJuvenile"],
+        variantRel: [1.00, 0.77, 1.02, 0.46] },
       { id: "matpatch", name: "미생물 매트", n: 40, animal: false, hard: null, loc: "attached", shape: "mat", body: 0x55702f, sizeM: 1.4 },
       { id: "algae_pc", modelScale: 1.3, model: "algae", name: "조류", n: 18, animal: false, hard: null, loc: "attached", shape: "frond", body: 0x3b6b3c, sizeM: 1.0 },
       { id: "edia_disc", focusable: true, model: "ediacaran", modelPart: 0, name: "원반 모양 부드러운 생물", n: 18, animal: true, hard: false, loc: "bottom", shape: "ediaDisc", body: 0x9a8a76, sizeM: 0.75 },
@@ -324,7 +326,7 @@ window.GeoRide = (function () {
     const m = new T.MeshStandardMaterial({
       map: srcMat && srcMat.map ? srcMat.map : null,
       color: srcMat && srcMat.color ? srcMat.color.clone() : new T.Color(0xffffff),
-      vertexColors: !!(srcMat && srcMat.vertexColors),
+      vertexColors: !!(srcMat && srcMat.vertexColors) || !!opt.vcol,
       normalMap: srcMat && srcMat.normalMap ? srcMat.normalMap : null,
       roughness: srcMat && srcMat.roughness != null ? Math.min(0.95, srcMat.roughness + 0.1) : 0.8,
       metalness: 0.0, side: T.FrontSide
@@ -387,7 +389,8 @@ window.GeoRide = (function () {
         root.traverse(o => {
           if (!o.isMesh || !o.geometry) return;
           if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
-          parts.push({ geometry: o.geometry, material: o.material, pre: norm.clone().multiply(o.matrixWorld) });
+          parts.push({ geometry: o.geometry, material: o.material, pre: norm.clone().multiply(o.matrixWorld),
+            vcol: !!o.geometry.attributes.color });
         });
         // norm 을 함께 보관한다 — 골격 애니메이션 개체는 인스턴스 행렬을 못 쓰므로
         // 노드 계층(outer → normNode → 복제본)으로 같은 변환을 재현해야 한다.
@@ -1117,6 +1120,39 @@ window.GeoRide = (function () {
     const d = new T.Object3D();
 
     // ★ 실제 3D 모델이 있으면 그것을 쓴다. 없으면 절차적 도형으로 되돌아간다(폴백).
+    /* ★ 개체별 모델 변형 — 한 종 안에서 여러 형태를 섞는다(스트로마톨라이트 4형태). */
+    if (sp.modelVariants) {
+      const keys = sp.modelVariants.filter(k => MODEL[k] && MODEL[k].parts.length);
+      if (keys.length) {
+        const group = new T.Group(), meshes = [], tmpV = new T.Matrix4();
+        const buckets = keys.map(() => []);
+        insts.forEach((it, k) => buckets[k % keys.length].push(it));
+        keys.forEach((mk, ki) => {
+          const MM = MODEL[mk], list = buckets[ki];
+          if (!list.length) return;
+          const rel = (sp.variantRel && sp.variantRel[sp.modelVariants.indexOf(mk)]) || 1;
+          const lift2 = (sp.loc === "swim") ? 0 : MM.hNorm * 0.5;
+          MM.parts.forEach((part, pi) => {
+            const pm = wrapModelMaterial(part.material, rim, {
+              rimStr: sp.hero ? 1.35 : 1.15, caustI, envI: sp.hard ? 0.55 : 0.4, vcol: part.vcol
+            });
+            disposal.mats.push(pm);
+            const im = new T.InstancedMesh(part.geometry, pm, list.length);
+            im.frustumCulled = false; im.receiveShadow = true;
+            list.forEach((it, k2) => {
+              const sc2 = it.scale * rel;              // 형태별 실제 크기 비율을 지킨다
+              d.position.copy(it.base); d.position.y += lift2 * sc2;
+              d.rotation.set(0, it.yaw, 0); d.scale.setScalar(sc2); d.updateMatrix();
+              tmpV.multiplyMatrices(d.matrix, part.pre); im.setMatrixAt(k2, tmpV);
+            });
+            im.instanceMatrix.needsUpdate = true;
+            meshes.push(im); group.add(im);
+          });
+        });
+        return { node: group, meshes, sp, insts, anim: "still", lift: 0 };
+      }
+    }
+
     const M = sp.model && MODEL[sp.model];
 
     /* ★ 골격 애니메이션 경로 (§8.29) — InstancedMesh 는 개체별 골격을 그리지 못한다.
@@ -1136,7 +1172,8 @@ window.GeoRide = (function () {
         c.traverse(o => {
           if (!o.isMesh && !o.isSkinnedMesh) return;
           const pm = wrapModelMaterial(o.material, rim, {
-            rimStr: sp.hero ? 1.35 : 1.15, caustI, envI: sp.hard ? 0.55 : 0.4, skinned: true
+            rimStr: sp.hero ? 1.35 : 1.15, caustI, envI: sp.hard ? 0.55 : 0.4, skinned: true,
+            vcol: !!(o.geometry && o.geometry.attributes.color)
           });
           o.material = pm; o.frustumCulled = false;
           disposal.mats.push(pm);
@@ -1162,7 +1199,7 @@ window.GeoRide = (function () {
       const lift = (sp.loc === "swim") ? 0 : M.hNorm * 0.5;
       for (const part of parts) {
         const pm = wrapModelMaterial(part.material, rim, {
-          rimStr: sp.hero ? 1.35 : 1.15, caustI, envI: sp.hard ? 0.55 : 0.4
+          rimStr: sp.hero ? 1.35 : 1.15, caustI, envI: sp.hard ? 0.55 : 0.4, vcol: part.vcol
         });
         disposal.mats.push(pm);
         const im = new T.InstancedMesh(part.geometry, pm, sp.n);
@@ -1329,7 +1366,9 @@ window.GeoRide = (function () {
     const host = document.getElementById("modelCredits");
     if (!host || !window.GEO_MODEL_CREDITS) return;
     host.innerHTML = "3D 모델 출처 — " + window.GEO_MODEL_CREDITS.map(c =>
-      `${c.ko}: <a href="${c.url}" target="_blank" rel="noopener">${c.title}</a> by ${c.author} (${c.license})`
+      c.url
+        ? `${c.ko}: <a href="${c.url}" target="_blank" rel="noopener">${c.title}</a> by ${c.author} (${c.license})`
+        : `${c.ko}: ${c.title} by ${c.author} (${c.license})`
     ).join(" · ");
   }
 
