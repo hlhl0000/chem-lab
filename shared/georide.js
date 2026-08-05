@@ -133,31 +133,31 @@ window.GeoRide = (function () {
     /* 선캄브리아 — 물속은 거의 비어 있고(유영 3), 바닥에는 있다(M13).
        동물은 전부 「부드러운 몸」= 보라 테두리. 단단한 것이 하나도 없다. */
     precambrian: [
-      { id: "stromatolite", model: "stromatolite", name: "스트로마톨라이트", n: 7, animal: false, hard: null, loc: "attached", shape: "stromatolite", body: 0x8a7550, sizeM: 2.4, hero: true, clusterAt: 1 },
+      { id: "stromatolite", focusable: true, name: "스트로마톨라이트", n: 7, animal: false, hard: null, loc: "attached", shape: "stromatolite", body: 0x8a7550, sizeM: 2.4, hero: true, clusterAt: 1 },
       { id: "matpatch", name: "미생물 매트", n: 40, animal: false, hard: null, loc: "attached", shape: "mat", body: 0x55702f, sizeM: 1.4 },
       { id: "algae_pc", modelScale: 1.3, model: "algae", name: "조류", n: 18, animal: false, hard: null, loc: "attached", shape: "frond", body: 0x3b6b3c, sizeM: 1.0 },
-      { id: "edia_disc", model: "ediacaran", modelPart: 0, name: "원반 모양 부드러운 생물", n: 18, animal: true, hard: false, loc: "bottom", shape: "ediaDisc", body: 0x9a8a76, sizeM: 0.75 },
-      { id: "edia_frond", model: "ediacaran", modelPart: 1, name: "깃털 모양 부드러운 생물", n: 16, animal: true, hard: false, loc: "attached", shape: "ediaFrond", body: 0x8d7f92, sizeM: 1.3 },
+      { id: "edia_disc", focusable: true, model: "ediacaran", modelPart: 0, name: "원반 모양 부드러운 생물", n: 18, animal: true, hard: false, loc: "bottom", shape: "ediaDisc", body: 0x9a8a76, sizeM: 0.75 },
+      { id: "edia_frond", focusable: true, model: "ediacaran", modelPart: 1, name: "깃털 모양 부드러운 생물", n: 16, animal: true, hard: false, loc: "attached", shape: "ediaFrond", body: 0x8d7f92, sizeM: 1.3 },
       { id: "jelly_pc", model: "jelly", name: "해파리 모양", n: 3, animal: true, hard: false, loc: "swim", shape: "jelly", body: 0xb8cfe0, sizeM: 0.40 }
     ],
     /* 고생대 — 단단한 껍데기가 등장하고 바닥이 암초로 빽빽해진다 */
     paleozoic: [
-      { id: "trilobite", model: "trilobite", name: "삼엽충", n: 18, animal: true, hard: true, loc: "bottom", shape: "trilobite", body: 0x7d5f3c, sizeM: 0.46, label: "삼엽충" },
-      { id: "anomalo", model: "anomalo", name: "큰 마디 절지동물", n: 3, animal: true, hard: true, loc: "swim", shape: "anomalo", body: 0x2f6a93, sizeM: 1.5, hero: true },
+      { id: "trilobite", focusable: true, model: "trilobite", name: "삼엽충", n: 18, animal: true, hard: true, loc: "bottom", shape: "trilobite", body: 0x7d5f3c, sizeM: 0.46, label: "삼엽충" },
+      { id: "anomalo", focusable: true, model: "anomalo", name: "큰 마디 절지동물", n: 3, animal: true, hard: true, loc: "swim", shape: "anomalo", body: 0x2f6a93, sizeM: 1.5, hero: true },
       { id: "bivalve", model: "shellA", name: "조개 모양", n: 20, animal: true, hard: true, loc: "bottom", shape: "shell", body: 0xd6c194, sizeM: 0.30 },
-      { id: "squidshell", model: "orthocone", name: "껍데기 오징어", n: 8, animal: true, hard: true, loc: "swim", shape: "orthocone", body: 0xcaa96f, sizeM: 0.7 },
+      { id: "squidshell", focusable: true, model: "orthocone", name: "껍데기 오징어", n: 8, animal: true, hard: true, loc: "swim", shape: "orthocone", body: 0xcaa96f, sizeM: 0.7 },
       { id: "platecoral", modelScale: 1.7, model: "tablecoral", name: "판 모양 산호", n: 42, animal: true, hard: true, loc: "attached", shape: "plateCoral", body: 0xd6b96a, sizeM: 1.0 },
       { id: "seafan", modelScale: 1.7, model: "seafan", name: "부채 모양 군체", n: 46, animal: true, hard: true, loc: "attached", shape: "seaFan", body: 0x2b3a33, sizeM: 1.5 },
       { id: "sponge", modelScale: 1.5, model: "tubesponge", name: "관 모양 해면", n: 38, animal: true, hard: true, loc: "attached", shape: "tubeSponge", body: 0xbfa15c, sizeM: 0.8 },
-      { id: "armorfish", model: "armorfish", name: "갑옷을 두른 물고기", n: 20, animal: true, hard: true, loc: "swim", shape: "armorFish", body: 0xc0a173, sizeM: 0.55, school: true },
+      { id: "armorfish", focusable: true, model: "armorfish", name: "갑옷을 두른 물고기", n: 20, animal: true, hard: true, loc: "swim", shape: "armorFish", body: 0xc0a173, sizeM: 0.55, school: true },
       { id: "jelly_pz", model: "jelly", name: "해파리", n: 4, animal: true, hard: false, loc: "swim", shape: "jelly", body: 0xb8cfe0, sizeM: 0.32 },
       { id: "algae_pz", modelScale: 1.3, model: "kelp", name: "해조류", n: 40, animal: false, hard: null, loc: "attached", shape: "frond", body: 0x5d8a2c, sizeM: 1.1 }
     ],
     /* 중생대 — 중간 수층을 헤엄치는 것이 지배한다 */
     mesozoic: [
-      { id: "ammonite", model: "ammonite", name: "암모나이트", n: 30, animal: true, hard: true, loc: "swim", shape: "ammonite", body: 0xd8bd90, sizeM: 0.42, label: "암모나이트" },
-      { id: "longneck", model: "plesio", skinned: true, name: "목이 긴 파충류", n: 4, animal: true, hard: true, loc: "swim", shape: "plesiosaur", body: 0x4a5a48, sizeM: 3.0, hero: true },
-      { id: "ichthyo", model: "ichthyo", name: "물고기 모양 파충류", n: 5, animal: true, hard: true, loc: "swim", shape: "ichthyo", body: 0x415465, sizeM: 2.2, hero: true },
+      { id: "ammonite", focusable: true, model: "ammonite", name: "암모나이트", n: 30, animal: true, hard: true, loc: "swim", shape: "ammonite", body: 0xd8bd90, sizeM: 0.42, label: "암모나이트" },
+      { id: "longneck", focusable: true, model: "plesio", skinned: true, name: "목이 긴 파충류", n: 4, animal: true, hard: true, loc: "swim", shape: "plesiosaur", body: 0x4a5a48, sizeM: 3.0, hero: true },
+      { id: "ichthyo", focusable: true, model: "ichthyo", name: "물고기 모양 파충류", n: 5, animal: true, hard: true, loc: "swim", shape: "ichthyo", body: 0x415465, sizeM: 2.2, hero: true },
       { id: "fish_mz", model: "fish", skinned: true, name: "헤엄치는 척추동물", n: 24, animal: true, hard: true, loc: "swim", shape: "fish", body: 0xa3b2ba, sizeM: 0.44, school: true },
       { id: "bottom_mz", model: "shellB", name: "바닥 껍데기", n: 10, animal: true, hard: true, loc: "bottom", shape: "shell", body: 0xcbb890, sizeM: 0.4 },
       { id: "coral_mz", modelScale: 1.7, model: "tablecoral", name: "판 모양 산호", n: 24, animal: true, hard: true, loc: "attached", shape: "plateCoral", body: 0xa89a72, sizeM: 0.9 },
@@ -1383,6 +1383,8 @@ window.GeoRide = (function () {
     let eraRoot = null, env = null, track = null, eraKey = null, disposal = null, vents = null, bubbles = null;
     let sIndex = 0, dist = 0, vel = V_MIN, mode = "idle", paused = false, yaw = 0, pitch = 0, roll = 0, shake = 0;
     const built = [];
+    const raycaster = new T.Raycaster();
+    let focus = null;   // { sp, target:Vector3, savedMode }
 
     function disposeEra() {
       if (!eraRoot) return;
@@ -1438,6 +1440,7 @@ window.GeoRide = (function () {
       SPECIES[key].forEach((sp, i) => {
         const b = buildSpecies(sp, env, track, 5000 + seedBase * 131 + i * 17, disposal);
         b.node.castShadow = true; b.node.receiveShadow = true;
+        if (b.node) b.node.userData.sref = b;   // 클릭 확대용 역참조
         built.push(b); eraRoot.add(b.node);
       });
       applyQuality();
@@ -1459,19 +1462,99 @@ window.GeoRide = (function () {
     function switchEra(key) {
       buildEra(key);
       setGuide(TEXT.introCard[key]);
+      focus = null; var _fc = document.getElementById("focusCard"); if (_fc) _fc.style.display = "none";
       if (mode !== "idle") { mode = "ride"; hideContinue(); }
     }
 
-    // 시선
-    let dragging = false, lx = 0, ly = 0;
+    // 시선 + 클릭 확대
+    let dragging = false, lx = 0, ly = 0, moved = 0;
     const ptc = e => { const t = e.touches ? e.touches[0] : e; return { x: t.clientX, y: t.clientY }; };
-    const look = p => { yaw -= (p.x - lx) * 0.005; pitch -= (p.y - ly) * 0.005; pitch = Math.max(-1.25, Math.min(1.25, pitch)); lx = p.x; ly = p.y; };
-    canvas.addEventListener("mousedown", e => { dragging = true; const p = ptc(e); lx = p.x; ly = p.y; });
-    window.addEventListener("mousemove", e => { if (dragging) look(ptc(e)); });
-    window.addEventListener("mouseup", () => dragging = false);
-    canvas.addEventListener("touchstart", e => { dragging = true; const p = ptc(e); lx = p.x; ly = p.y; }, { passive: true });
-    canvas.addEventListener("touchmove", e => { if (dragging) { look(ptc(e)); e.preventDefault(); } }, { passive: false });
-    window.addEventListener("touchend", () => dragging = false);
+    const look = p => { if (mode === "focus") { lx = p.x; ly = p.y; return; } yaw -= (p.x - lx) * 0.005; pitch -= (p.y - ly) * 0.005; pitch = Math.max(-1.25, Math.min(1.25, pitch)); lx = p.x; ly = p.y; };
+    canvas.addEventListener("mousedown", e => { dragging = true; const p = ptc(e); lx = p.x; ly = p.y; moved = 0; });
+    window.addEventListener("mousemove", e => { if (dragging) { const q = ptc(e); moved += Math.abs(q.x - lx) + Math.abs(q.y - ly); look(q); } });
+    window.addEventListener("mouseup", e => { if (dragging && moved < 6) tryPick(ptc(e)); dragging = false; });
+    canvas.addEventListener("touchstart", e => { dragging = true; const p = ptc(e); lx = p.x; ly = p.y; moved = 0; }, { passive: true });
+    canvas.addEventListener("touchmove", e => { if (dragging) { const q = ptc(e); moved += Math.abs(q.x - lx) + Math.abs(q.y - ly); look(q); e.preventDefault(); } }, { passive: false });
+    window.addEventListener("touchend", e => { if (dragging && moved < 8) { const t = e.changedTouches && e.changedTouches[0]; if (t) tryPick({ x: t.clientX, y: t.clientY }); } dragging = false; });
+
+    /* ── 클릭 확대 · 정보 카드 (교과 핵심만: 이름 · 시대 · 관찰 포인트 3배지) ──
+       위치이동 없이 시선만 좁혀 확대(§ 카메라 포커스 분기). 라이드는 멈춘다. */
+    if (wrap.style.position !== "absolute" && wrap.style.position !== "fixed") wrap.style.position = "relative";
+    const infoCard = document.createElement("div");
+    infoCard.id = "focusCard";
+    infoCard.style.cssText = "position:absolute;left:14px;bottom:14px;max-width:300px;z-index:6;display:none;" +
+      "background:rgba(10,22,28,.86);border:1px solid rgba(140,200,215,.35);border-radius:12px;" +
+      "padding:12px 14px 13px;color:#eaf6f7;font-size:14px;line-height:1.5;backdrop-filter:blur(3px);" +
+      "box-shadow:0 6px 22px rgba(0,0,0,.4)";
+    wrap.appendChild(infoCard);
+    const focusHint = document.createElement("div");
+    focusHint.textContent = "🔍 생물을 클릭하면 확대되어 설명이 보입니다";
+    focusHint.style.cssText = "position:absolute;left:14px;bottom:14px;z-index:5;background:rgba(10,22,28,.66);" +
+      "color:#cfe;font-size:12px;padding:5px 10px;border-radius:8px;pointer-events:none";
+    wrap.appendChild(focusHint);
+
+    function hardBadge(sp) {
+      if (!sp.animal) return { t: "광합성 생물", c: "#34d399" };
+      if (sp.hard) return { t: "몸에 단단한 부분이 있다", c: "#fb923c" };
+      return { t: "부드러운 몸", c: "#a78bfa" };
+    }
+    function locBadge(sp) {
+      const t = sp.loc === "swim" ? "헤엄친다 (유영)" : sp.loc === "bottom" ? "바닥에서 산다" : "바닥에 붙어 산다 (고착)";
+      return { t, c: "#7dd3fc" };
+    }
+    function fillCard(sp) {
+      const hb = hardBadge(sp), lb = locBadge(sp);
+      const row = (c, t) => '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">' +
+        '<span style="width:11px;height:11px;border-radius:50%;flex:none;background:' + c + ';box-shadow:0 0 6px ' + c + '99"></span>' + t + '</div>';
+      infoCard.innerHTML =
+        '<button id="fcClose" aria-label="닫기" style="position:absolute;top:8px;right:9px;width:26px;height:26px;border:0;border-radius:7px;background:rgba(255,255,255,.12);color:#eaf6f7;font-size:15px;cursor:pointer;line-height:1">✕</button>' +
+        '<div style="font-size:16px;font-weight:700;padding-right:26px">' + sp.name + '</div>' +
+        '<div style="font-size:12px;color:#9fd4dc;margin-top:2px">' + TEXT.tabs[eraKey] + '의 바다</div>' +
+        '<div style="margin-top:8px;font-size:12px;color:#9fd4dc">관찰 포인트</div>' +
+        row("#cbd5e1", "이 바다에 약 " + sp.n + "마리") +
+        row(hb.c, hb.t) +
+        row(lb.c, lb.t);
+      const cb = infoCard.querySelector("#fcClose");
+      if (cb) cb.onclick = ev => { ev.stopPropagation(); closeFocus(); };
+    }
+    function openFocus(sp, wp) {
+      const prev = (mode === "focus" && focus) ? focus.savedMode : mode;
+      focus = { sp: sp, target: wp, savedMode: prev };
+      mode = "focus";
+      focusHint.style.display = "none";
+      fillCard(sp);
+      infoCard.style.display = "";
+    }
+    function closeFocus() {
+      const back = (focus && focus.savedMode) || "ride";
+      focus = null;
+      infoCard.style.display = "none";
+      mode = (back === "idle" || back === "focus") ? "ride" : back;
+    }
+    function tryPick(pt) {
+      if (mode === "idle") return;
+      const r = canvas.getBoundingClientRect();
+      const nx = ((pt.x - r.left) / r.width) * 2 - 1;
+      const ny = -((pt.y - r.top) / r.height) * 2 + 1;
+      raycaster.setFromCamera({ x: nx, y: ny }, camera);
+      const hits = raycaster.intersectObject(eraRoot, true);
+      for (const h of hits) {
+        if (h.distance > 75) break;
+        let o = h.object, ref = null;
+        while (o) { if (o.userData && o.userData.sref) { ref = o.userData.sref; break; } o = o.parent; }
+        if (ref && ref.sp && ref.sp.focusable) { openFocus(ref.sp, h.point.clone()); return; }
+      }
+      if (mode === "focus") closeFocus();   // 빈 곳 클릭 → 닫기
+    }
+    if (window.__RIDE_DEBUG) window.__RIDE = { pick: tryPick, get mode() { return mode; }, get card() { return infoCard.style.display !== "none"; },
+      scan: function () { var r = canvas.getBoundingClientRect(), tot = 0, sref = 0, foc = 0, names = {};
+        for (var gy = 0.20; gy <= 0.92; gy += 0.02) for (var gx = 0.08; gx <= 0.92; gx += 0.02) {
+          var nx = (gx) * 2 - 1, ny = -(gy) * 2 + 1; raycaster.setFromCamera({ x: nx, y: ny }, camera);
+          var hs = raycaster.intersectObject(eraRoot, true); if (hs.length) tot++;
+          for (var i = 0; i < hs.length; i++) { if (hs[i].distance > 75) break; var o2 = hs[i].object, rf = null;
+            while (o2) { if (o2.userData && o2.userData.sref) { rf = o2.userData.sref; break; } o2 = o2.parent; }
+            if (rf) { sref++; if (rf.sp.focusable) { foc++; names[rf.sp.id] = (names[rf.sp.id]||0)+1; } break; } } }
+        return { tot: tot, sref: sref, foc: foc, names: names, mode: mode }; } };
     canvas.setAttribute("tabindex", "0");
     window.addEventListener("keydown", e => {
       const k = e.key;
@@ -1511,6 +1594,7 @@ window.GeoRide = (function () {
 
     const clock = new T.Clock(); let raf = null;
     const mBasis = new T.Matrix4(), qTrack = new T.Quaternion(), qUser = new T.Quaternion(), eUser = new T.Euler();
+    const _fm = new T.Matrix4(), _fq = new T.Quaternion();
     function frame() {
       const dt = Math.min(0.12, clock.getDelta()); const t = clock.elapsedTime; UNI.time.value = t;
       const moving = (mode === "ride" && !paused);
@@ -1544,9 +1628,18 @@ window.GeoRide = (function () {
       mBasis.makeBasis(side, up, f.tan.clone().negate());  // three 카메라는 -Z 를 본다
       qTrack.setFromRotationMatrix(mBasis);
       eUser.set(pitch + sy, yaw + sx, 0, "YXZ"); qUser.setFromEuler(eUser);
-      camera.quaternion.copy(qTrack).multiply(qUser);
       camera.position.copy(f.pos).addScaledVector(up, 1.02 + bob);
-      camera.fov = 66 + Math.min(12, Math.max(0, (vel - 2.2)) * 1.9);       // 속도감
+      if (mode === "focus" && focus) {
+        // ★ 위치는 그대로 두고 «시선만» 대상으로 돌리고 화면을 좁혀(줌) 확대한다(사용자 확정).
+        _fm.lookAt(camera.position, focus.target, up);
+        _fq.setFromRotationMatrix(_fm);
+        camera.quaternion.slerp(_fq, Math.min(1, dt * 6));
+        camera.fov += (32 - camera.fov) * Math.min(1, dt * 6);
+      } else {
+        camera.quaternion.copy(qTrack).multiply(qUser);
+        const baseFov = 66 + Math.min(12, Math.max(0, (vel - 2.2)) * 1.9);   // 속도감
+        camera.fov += (baseFov - camera.fov) * Math.min(1, dt * 8);          // 줌 복귀도 부드럽게
+      }
       camera.updateProjectionMatrix();
 
       // A3 — 그림자 카메라를 라이더 주변으로 옮긴다(전 구간을 덮으면 해상도가 무너진다)
