@@ -73,6 +73,16 @@ const SIMS = [
     tags: ["빅뱅","쿼크","핵융합","원자의 형성","물질과 규칙성"]
   },
   {
+    id: "spectrum",
+    title: "별빛 스펙트럼 — 흡수선과 방출선으로 원소 찾기",
+    cat: "통합과학",
+    path: "spectrum/",
+    icon: "spectrum",
+    ready: true,
+    desc: "별빛을 프리즘에 통과시켜 연속·흡수·방출 세 스펙트럼이 각각 어떤 조건에서 생기는지 직접 만들어 봅니다. 같은 기체를 저온으로 두면 어두운 선이, 고온으로 두면 같은 자리에 밝은 선이 나옵니다. 별의 온도를 아무리 바꿔도 선의 위치는 움직이지 않습니다. 미지의 별 두 개에서 원소를 찾아내는 데까지 갑니다.",
+    tags: ["연속 스펙트럼","흡수 스펙트럼","방출 스펙트럼","흡수선","방출선","수소","헬륨","나트륨","원소의 생성"]
+  },
+  {
     id: "titration",
     title: "산-염기 적정",
     cat: "산과 염기",
@@ -180,6 +190,10 @@ const ICONS = {
             <circle cx="32" cy="10" r="3"/><circle cx="54" cy="32" r="2.5"/>
             <circle cx="32" cy="54" r="3"/><circle cx="10" cy="32" r="2.5"/>
             <circle cx="47" cy="17" r="2"/><circle cx="17" cy="47" r="2"/>`,
+  spectrum:`<path d="M24 10L44 44H4z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+          <path d="M2 24h10" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+          <rect x="46" y="14" width="14" height="36" rx="2" fill="none" stroke="currentColor" stroke-width="3"/>
+          <path d="M46 22h14M46 31h14M46 41h14" stroke="currentColor" stroke-width="3"/>`,
   crystal:`<path d="M32 6l22 14v24L32 58 10 44V20z" fill="none" stroke="currentColor"
            stroke-width="4" stroke-linejoin="round"/><path d="M32 6v52M10 20l44 24M54 20L10 44"
            stroke="currentColor" stroke-width="2.5" opacity=".45"/>`

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>별빛 스펙트럼 — 화학 탐구실</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+/* 이 페이지 전용 서식.
+   공통 토큰(shared/style.css 의 전역 변수)을 페이지에서 다시 선언하지 않는다 — 색은 토큰만 쓴다.
+   요소 선택자(button·input·select·a)를 쓰지 않는다 — 공통 터치 규칙을 덮어쓰지 않기 위해서다. */
+
+.pg-head{ margin:18px 0 4px }
+.pg-title{ font-size:21px; margin:0 0 4px; color:var(--t1) }
+.pg-sub{ font-size:13.5px; color:var(--t2); margin:0 0 14px }
+
+/* ---- 탭 ---- */
+.tabs{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px }
+.tab{ font-family:inherit; font-size:14px; font-weight:600; min-height:44px; padding:8px 18px;
+      border-radius:9px; border:1px solid var(--line); background:#fff; color:var(--t2); cursor:pointer }
+.tab.is-on{ background:#eef2ff; border-color:#c7d2fe; color:var(--d-blue) }
+.tab-desc{ font-size:13px; color:var(--t2); margin:0 0 14px }
+
+/* ---- 2단 격자 (1024px 미만에서 1단) ---- */
+.cols{ display:grid; grid-template-columns:minmax(0,1.45fr) minmax(0,1fr); gap:14px; align-items:start }
+@media (max-width:1023px){ .cols{ grid-template-columns:1fr } }
+.side{ display:grid; gap:12px }
+.stack{ display:grid; gap:12px }
+/* 「관찰 지시」는 2단에서는 무대 아래(좌측 열)에 그대로 두고,
+   1단에서는 조절 변인 다음으로 내린다 — 무대와 조절 변인 사이에 끼면 조작부가 화면 밖으로 밀린다.
+   1단에서 .stack 을 display:contents 로 풀어 세 카드를 같은 격자에 놓고 order 로 세운다. */
+@media (max-width:1023px){
+  .stack{ display:contents }
+  .stage-card{ order:1 }
+  .side{ order:2 }
+  .prompt-card{ order:3 }
+}
+
+/* ---- 무대 ---- */
+.stage-line{ font-size:12.5px; color:var(--t2); margin:8px 0 0 }
+
+/* ---- 조절 변인 ---- */
+.ctl{ display:grid; gap:12px }
+.ctl-row{ display:grid; gap:6px }
+.rowhead{ display:flex; justify-content:space-between; align-items:baseline; gap:10px }
+.rowlabel{ font-size:12.5px; font-weight:600; color:var(--t2) }
+.rowval{ font-size:14px; font-weight:600; color:var(--t1); font-variant-numeric:tabular-nums }
+.checkrow{ display:flex; align-items:center; gap:10px; min-height:44px; font-size:13.5px;
+           color:var(--t2); cursor:pointer }
+.btnrow{ display:flex; gap:8px; flex-wrap:wrap }
+.gbtn,.sbtn,.btn,.ebtn{ font-family:inherit; font-size:13.5px; font-weight:600; min-height:44px;
+      padding:8px 14px; border-radius:9px; border:1px solid var(--line);
+      background:#fff; color:var(--t2); cursor:pointer }
+.gbtn.is-on,.sbtn.is-on,.ebtn.is-on{ background:#f1f5f9; border-color:var(--d-gray); color:var(--t1) }
+.gbtn .dot{ display:inline-block; width:11px; height:11px; border-radius:50%;
+            margin-right:7px; vertical-align:-1px; border:1px solid rgba(0,0,0,.25) }
+.btn[disabled]{ opacity:.45; cursor:default }
+
+/* ---- 별 표면 온도 슬라이더 ----
+   공통 .rng-temp 는 기체 온도계 관습(왼쪽 파랑 → 오른쪽 빨강)이라 별 표면 온도에서는 반대다.
+   shared/style.css 는 고치지 않고 이 페이지에서만 역전 그라디언트를 준다.
+   ⚠ 의사 요소 선택자에는 input[type=range] 접두어가 반드시 붙어야 공통 규칙을 이긴다. */
+input[type=range].rng-star::-webkit-slider-runnable-track{background:linear-gradient(90deg,#dc2626 0%,#f8fafc 45%,#93c5fd 100%)}
+input[type=range].rng-star::-moz-range-track{background:linear-gradient(90deg,#dc2626 0%,#f8fafc 45%,#93c5fd 100%)}
+input[type=range].rng-star::-webkit-slider-thumb{background:#1d4ed8}
+input[type=range].rng-star::-moz-range-thumb{background:#1d4ed8}
+
+/* ---- 기체 정보 · 데이터 시트 ---- */
+.gi-name{ font-size:15px; font-weight:700; color:var(--t1) }
+.gi-note{ font-size:12.5px; color:var(--t2); margin-top:4px }
+.sheet-row{ padding:8px 0; border-top:1px solid var(--line) }
+.sheet-row:first-child{ border-top:0 }
+.sym{ display:inline-block; min-width:34px; padding:2px 7px; border-radius:6px; font-size:12.5px;
+      font-weight:700; text-align:center; color:var(--stage-dark) }
+.sheet-name{ font-size:13px; font-weight:600; color:var(--t1); margin-left:7px }
+.chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px }
+.chip{ font-size:11.5px; padding:3px 7px; border-radius:6px; background:var(--stage-dark);
+       color:var(--p-silver);
+       font-variant-numeric:tabular-nums; display:flex; align-items:center; gap:5px }
+.chip .bar{ display:inline-block; width:4px; height:12px; border-radius:1px }
+
+/* ---- 관찰 지시 ---- */
+.prompts{ margin:0; padding-left:20px; font-size:13px; color:var(--t2) }
+.prompts li{ margin:3px 0 }
+
+/* ---- 분석창 ---- */
+.analyzer{ margin-top:14px }
+.an-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:8px }
+.an-mode{ font-size:17px; font-weight:700; color:var(--t1) }
+.an-desc{ font-size:12.5px; color:var(--t2) }
+.rulerwrap{ margin-top:2px }
+.rulerwrap canvas{ display:block; width:100% }
+.an-foot{ display:flex; gap:10px; flex-wrap:wrap; align-items:stretch; margin-top:10px }
+.an-foot .readout{ flex:1 1 150px }
+.an-note{ font-size:12px; color:var(--t3); margin:8px 0 0 }
+
+/* ---- 별 판별 탭 ---- */
+.starrow{ margin-bottom:10px }
+.starlab{ font-size:13px; font-weight:700; color:var(--t1); margin:0 0 4px }
+.fprow{ display:grid; gap:8px; margin-top:6px }
+.fpitem{ display:grid; grid-template-columns:110px minmax(0,1fr); gap:10px; align-items:center }
+.fp-note{ font-size:11.5px; color:var(--t3); margin:3px 0 0 }
+@media (max-width:600px){ .fpitem{ grid-template-columns:1fr } }
+.tblwrap{ margin-top:12px }
+.wrapup{ font-size:13px; color:var(--t2); margin-top:12px; line-height:1.65 }
+.rotate-hint{ font-size:12.5px; color:var(--d-amber); margin:6px 0 0 }
+
+/* ---- 가정과 한계 ---- */
+.limits{ margin-top:16px }
+.limits ol{ margin:8px 0 0; padding-left:22px; font-size:13px; color:var(--t2) }
+.limits li{ margin:6px 0 }
+.story{ margin-top:0 }
+.story ul{ margin:8px 0 0; padding-left:20px; font-size:12.5px; color:var(--t2) }
+.sumline{ font-size:13px; font-weight:600; color:var(--t2); cursor:pointer }
+.hid{ display:none }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+  <div class="pg-head">
+    <h1 class="pg-title">별빛 스펙트럼 분석기</h1>
+    <p class="pg-sub">별빛을 프리즘에 통과시켜, 연속·흡수·방출 세 가지 스펙트럼이 각각 어떤 조건에서 생기는지 직접 만들어 봅니다.</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab is-on" id="tab-obs" data-tab="obs">관찰</button>
+    <button class="tab" id="tab-star" data-tab="star">별 판별</button>
+  </div>
+  <p class="tab-desc" id="tab-desc"></p>
+
+  <!-- ================= 관찰 탭 ================= -->
+  <section id="panel-obs">
+
+    <div class="cols">
+      <div class="stack">
+        <div class="card stage-card">
+          <h2>무대</h2>
+          <div class="stage stage--dark">
+            <canvas id="stage-canvas" aria-label="별과 기체 구름, 프리즘, 분광기를 그린 무대"></canvas>
+          </div>
+          <p class="stage-line" id="stage-line"></p>
+        </div>
+        <div class="card prompt-card">
+          <h2>관찰 지시</h2>
+          <ol class="prompts" id="prompts"></ol>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="card">
+          <h2>조절 변인</h2>
+          <div class="ctl">
+
+            <label class="checkrow" for="light-on">
+              <input type="checkbox" id="light-on" checked>
+              <span>광원 켜기</span>
+            </label>
+
+            <div class="ctl-row">
+              <div class="rowhead">
+                <span class="rowlabel">별 표면 온도</span>
+                <span class="rowval" id="temp-val">5800 K</span>
+              </div>
+              <input type="range" class="rng-star" id="temp" min="3000" max="15000" step="100" value="5800"
+                     aria-label="별 표면 온도">
+            </div>
+
+            <div class="ctl-row">
+              <span class="rowlabel">기체 놓기</span>
+              <div class="btnrow" id="gas-btns"></div>
+            </div>
+
+            <div class="ctl-row">
+              <span class="rowlabel">기체 상태</span>
+              <div class="btnrow">
+                <button class="sbtn is-on" id="cold-btn">저온</button>
+                <button class="sbtn" id="hot-btn">고온</button>
+              </div>
+            </div>
+
+            <div class="ctl-row">
+              <span class="rowlabel">프리즘</span>
+              <div class="btnrow">
+                <button class="btn" id="prism-btn">프리즘 빼 보기</button>
+              </div>
+            </div>
+
+            <div class="btnrow">
+              <button class="btn" id="reset-btn">실험 초기화</button>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>기체 정보</h2>
+          <div class="gi-name" id="gi-name">기체 없음</div>
+          <div class="gi-note" id="gi-note">기체를 놓으면 여기에 설명이 나옵니다.</div>
+        </div>
+
+        <div class="card">
+          <h2>원소 지문 데이터 시트</h2>
+          <div id="sheet"></div>
+          <p class="an-note">원소 옆의 동그란 색은 화면에서 구분하려고 붙인 표시색이며, 그 원소가 내는 빛의 색이 아닙니다.</p>
+        </div>
+
+        <details class="card story">
+          <summary class="sumline">알아 두면 좋은 이야기</summary>
+          <ul id="story-list"></ul>
+        </details>
+      </div>
+
+    </div>
+
+    <!-- 분석창은 2단 격자 바깥에 둔다 -->
+    <div class="card analyzer">
+      <h2>스펙트럼 분석창</h2>
+      <div class="an-head">
+        <span class="an-mode" id="an-mode">연속 스펙트럼</span>
+        <span class="an-desc" id="an-desc"></span>
+      </div>
+      <div class="stage stage--dark"><canvas id="spec-canvas" aria-label="스펙트럼 띠"></canvas></div>
+      <div class="rulerwrap"><canvas id="ruler-canvas" aria-label="파장 눈금자"></canvas></div>
+
+      <div class="an-foot">
+        <div class="readout">
+          <div class="label">포인터 파장</div>
+          <div><span class="value" id="rd-nm">—</span><span class="unit">nm</span></div>
+        </div>
+        <div class="readout">
+          <div class="label">표시 구간</div>
+          <div><span class="value" id="rd-view">380–750</span><span class="unit">nm</span></div>
+        </div>
+        <div class="readout" id="rd-gap-box">
+          <div class="label">선 위치 어긋남</div>
+          <div><span class="value" id="rd-gap">—</span><span class="unit">nm</span></div>
+        </div>
+      </div>
+
+      <div class="btnrow" style="margin-top:10px">
+        <button class="btn" id="zoom-btn">나트륨 D선 확대</button>
+        <button class="btn" id="overlay-btn">흡수·방출 겹쳐 보기</button>
+      </div>
+      <p class="an-note" id="an-note"></p>
+    </div>
+
+  </section>
+
+  <!-- ================= 별 판별 탭 ================= -->
+  <section id="panel-star" class="hid">
+    <div class="card">
+      <h2>미지의 별 두 개</h2>
+      <div class="starrow">
+        <p class="starlab" id="starA-lab">별 A</p>
+        <div class="stage stage--dark"><canvas id="starA-canvas" aria-label="별 A의 흡수 스펙트럼"></canvas></div>
+      </div>
+      <div class="starrow">
+        <p class="starlab" id="starB-lab">별 B</p>
+        <div class="stage stage--dark"><canvas id="starB-canvas" aria-label="별 B의 흡수 스펙트럼"></canvas></div>
+      </div>
+      <div class="rulerwrap"><canvas id="star-ruler" aria-label="파장 눈금자"></canvas></div>
+      <p class="an-note" id="star-view-note"></p>
+      <p class="rotate-hint hid" id="rotate-hint">가로로 돌리면 선이 더 잘 갈립니다.</p>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>원소 지문 — 눌러서 별의 스펙트럼과 맞대어 보기</h2>
+      <div class="fprow" id="fp-rows"></div>
+      <div class="btnrow" style="margin-top:10px">
+        <button class="btn" id="unknown-btn">지문 3종에 없는 선 찾기</button>
+        <button class="btn" id="star-reset">전체 보기로</button>
+      </div>
+    </div>
+
+    <div class="card tblwrap">
+      <h2>별을 구성하는 원소의 유무</h2>
+      <table>
+        <thead><tr><th>원소</th><th id="th-a">별 A</th><th id="th-b">별 B</th></tr></thead>
+        <tbody id="star-tbody"></tbody>
+      </table>
+      <p class="an-note">원소 지문을 눌러 직접 맞대어 본 뒤 칸이 채워집니다. 채점하지 않습니다 — 판단은 여러분과 선생님의 몫입니다.</p>
+      <p class="wrapup" id="wrapup"></p>
+    </div>
+  </section>
+
+  <details class="card limits">
+    <summary class="sumline">이 모형의 가정과 한계</summary>
+    <ol>
+      <li>광원을 켠 채 기체를 고온으로 두면, 실제로는 흡수와 방출이 함께 일어나 어느 쪽이 이길지는 두 온도의 비교로 정해집니다. 이 화면은 교과서의 두 장면(별 대기 통과 / 가열된 기체 관측)을 갈라 보여 주기 위해 <b>관측 대상을 바꾸는 것</b>으로 단순화했습니다.</li>
+      <li>선의 밝기·깊이는 <b>교육용 임의 단위(a.u.)</b>입니다. 실제 세기비와 다릅니다.</li>
+      <li>선의 굵기는 <b>화면 해상도에 맞춰 자동으로 조정</b>됩니다. 실제 선폭이 아닙니다.</li>
+      <li>실제 별의 대기에는 수십 종의 원소가 섞여 있어 <b>수백 개의 흡수선</b>이 나타납니다(프라운호퍼가 태양에서 발견한 것이 그것입니다). 이 화면은 한 번에 한 원소만 놓습니다.</li>
+      <li>파장에서 화면 색으로 바꾸는 계산은 <b>근사</b>입니다. 380 nm 부근과 750 nm 부근은 실제로 사람 눈에 거의 안 보입니다. 이 화면은 <b>사람 눈에 보이는 파장 범위만</b> 그립니다 — 별빛에는 이 범위 밖의 빛도 있지만 여기서는 다루지 않습니다.</li>
+      <li>별의 표면 온도로 연속 스펙트럼의 색을 바꾸는 계산은, 별을 <b>온도만으로 빛의 색이 완전히 정해지는 이상적인 물체</b>로 가정한 것입니다.</li>
+      <li>「별 판별」 탭의 별 A·B는 <b>교과서 46쪽의 그림을 옮긴 것</b>이며, 실제 관측된 별이 아닙니다. 별 B의 「미확인 원소」는 이 시뮬레이션이 지문을 제공하지 않는 실제 원소 하나의 선을 쓴 것입니다.</li>
+      <li>기체 구름의 두께·밀도는 고정되어 있습니다. 실제로는 기체의 양에 따라 흡수선의 깊이가 달라집니다.</li>
+      <li>방출 스펙트럼의 밝기는 <b>지금 보고 있는 구간 안에서 가장 밝은 선이 1이 되도록 맞춘 것</b>이며 절대 밝기가 아닙니다. 확대하면 같은 두 선의 밝기비가 조금 달라집니다.</li>
+      <li>선의 세기 하나로 <b>밝은 선의 밝기와 어두운 선의 깊이를 같이 씁니다</b>. 실제로는 두 값이 다릅니다.</li>
+    </ol>
+  </details>
+
+</main>
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="spectrum"></script>
+<script src="sim.js"></script>
+</body></html>
