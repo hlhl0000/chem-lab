@@ -59,7 +59,7 @@
     controlTitle: $("controlTitle"), atmRange: $("atmRange"), atmNow: $("atmNow"), mercuryButton: $("mercuryButton"), waterButton: $("waterButton"), liquidNow: $("liquidNow"), waterNote: $("waterNote"),
     standButton: $("standButton"), cameraReset: $("cameraReset"), cameraResetJ: $("cameraResetJ"), addRange: $("addRange"), addNow: $("addNow"), addMercury: $("addMercury"), resetJtube: $("resetJtube"),
     heightValue: $("heightValue"), heightUnit: $("heightUnit"), heightLabel: $("heightLabel"), conditionReadout: $("conditionReadout"), conversionReadout: $("conversionReadout"),
-    barometerReadouts: $("barometerReadouts"), jtubeReadouts: $("jtubeReadouts"), dhValue: $("dhValue"), gasPressureValue: $("gasPressureValue"), gasLengthReadout: $("gasLengthReadout"), moleculeReadout: $("moleculeReadout"),
+    barometerReadouts: $("barometerReadouts"), jtubeReadouts: $("jtubeReadouts"), dhValue: $("dhValue"), deltaLabel: $("deltaLabel"), gasPressureValue: $("gasPressureValue"), gasLengthReadout: $("gasLengthReadout"), moleculeReadout: $("moleculeReadout"),
     guideCurrent: $("guideCurrent"), qualityButton: $("qualityButton"), moleculeToggle: $("moleculeToggle"), moleculeCaption: $("moleculeCaption"), directionToggle: $("directionToggle"), directionBadge: $("directionBadge"), tubeWarning: $("tubeWarning"),
   };
   if (!dom.canvas || !dom.stage) return;
@@ -120,16 +120,24 @@
   function makeMaterials() {
     const THREE = root.THREE;
     return {
-      mercury: new THREE.MeshStandardMaterial({ color: "#aeb8c4", metalness: 0.94, roughness: 0.18 }),
+      mercury: new THREE.MeshStandardMaterial({ color: "#34444c", metalness: 0.36, roughness: 0.17 }),
+      mercuryCore: new THREE.MeshBasicMaterial({ color: "#40545e" }),
       water: new THREE.MeshPhysicalMaterial({ color: "#2f8fc1", metalness: 0, roughness: 0.12, transparent: true, opacity: 0.76 }),
       glass: assetPreview
         ? new THREE.MeshStandardMaterial({ color: "#478aab", metalness: 0.1, roughness: 0.24, transparent: true, opacity: 0.82, side: THREE.DoubleSide })
-        : new THREE.MeshPhysicalMaterial({ color: "#82bedb", metalness: 0, roughness: state.quality === "high" ? 0.06 : 0.2, transparent: true, opacity: 0.3, side: THREE.DoubleSide }),
-      ceramic: new THREE.MeshStandardMaterial({ color: assetPreview ? "#c8bda9" : "#f0ece3", roughness: 0.44 }),
-      stand: new THREE.MeshStandardMaterial({ color: "#33434c", metalness: 0.58, roughness: 0.48 }),
+        : new THREE.MeshPhysicalMaterial({ color: "#a6dded", metalness: 0, roughness: state.quality === "high" ? 0.12 : 0.22, transparent: true, opacity: 0.5, side: THREE.FrontSide, depthWrite: false }),
+      glassInner: new THREE.MeshPhysicalMaterial({ color: "#3f7893", metalness: 0, roughness: 0.24, transparent: true, opacity: 0.34, side: THREE.BackSide, depthWrite: false }),
+      glassEdge: new THREE.MeshStandardMaterial({ color: "#3d778f", metalness: 0.08, roughness: 0.2, transparent: true, opacity: 0.8, depthWrite: false }),
+      glassSilhouette: new THREE.MeshBasicMaterial({ color: "#4d8ba5", transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }),
+      glassHighlight: new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.62, depthWrite: false }),
+      ceramic: new THREE.MeshStandardMaterial({ color: assetPreview ? "#c8bda9" : "#e3e0d8", roughness: 0.5 }),
+      ceramicEdge: new THREE.MeshStandardMaterial({ color: "#a8b2b5", metalness: 0.05, roughness: 0.55 }),
+      stand: new THREE.MeshStandardMaterial({ color: "#26343c", metalness: 0.7, roughness: 0.32 }),
       wood: new THREE.MeshStandardMaterial({ color: "#bd895f", roughness: 0.72 }),
-      gas: new THREE.MeshStandardMaterial({ color: "#2f6596", roughness: 0.38 }),
+      gas: new THREE.MeshStandardMaterial({ color: "#2774a5", roughness: 0.26, transparent: true, opacity: 0.88 }),
       air: new THREE.MeshStandardMaterial({ color: "#5481b4", roughness: 0.38 }),
+      ruler: new THREE.MeshStandardMaterial({ color: "#e8eceb", metalness: 0.22, roughness: 0.38 }),
+      rulerMark: new THREE.MeshBasicMaterial({ color: "#354c57" }),
     };
   }
   function cast(mesh) { mesh.castShadow = true; mesh.receiveShadow = true; return mesh; }
@@ -142,18 +150,72 @@
     mesh.position.set(x, baseY, z); parent.add(mesh); return mesh;
   }
   function setColumn(mesh, baseY, height) { mesh.scale.y = Math.max(height, 0.001); mesh.position.y = baseY + height / 2; }
+  function addGlassCylinder(parent, radius, height, materials, x, y, z, closedTop) {
+    const THREE = root.THREE;
+    const outer = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 40, 1, true), materials.glass);
+    outer.position.set(x, y, z); outer.renderOrder = 4; parent.add(outer);
+    const inner = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.82, radius * 0.82, height * 0.985, 40, 1, true), materials.glassInner);
+    inner.position.set(x, y, z); inner.renderOrder = 3; parent.add(inner);
+    [-1, 1].forEach((side) => {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.91, radius * 0.09, 10, 40), materials.glassEdge);
+      ring.rotation.x = Math.PI / 2; ring.position.set(x, y + side * height / 2, z); ring.renderOrder = 5; parent.add(ring);
+    });
+    const shine = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.12, height * 0.9, 0.012), materials.glassHighlight);
+    shine.position.set(x - radius * 0.43, y, z + radius * 0.92); shine.renderOrder = 6; parent.add(shine);
+    [0, Math.PI / 2, Math.PI, Math.PI * 1.5].forEach((angle) => {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.07, height * 0.96, radius * 0.035), materials.glassEdge);
+      rail.position.set(x + Math.sin(angle) * radius * 0.98, y, z + Math.cos(angle) * radius * 0.98); rail.renderOrder = 5; parent.add(rail);
+    });
+    if (closedTop) {
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, radius * 0.16, 40), materials.glass);
+      cap.position.set(x, y + height / 2 + radius * 0.07, z); cap.renderOrder = 4; parent.add(cap);
+    }
+    return outer;
+  }
+  function addTubeGlass(parent, curve, radius, materials) {
+    const THREE = root.THREE;
+    const outer = new THREE.Mesh(new THREE.TubeGeometry(curve, 120, radius, 28, false), materials.glass);
+    outer.renderOrder = 4; parent.add(outer);
+    const inner = new THREE.Mesh(new THREE.TubeGeometry(curve, 120, radius * 0.8, 28, false), materials.glassInner);
+    inner.renderOrder = 3; parent.add(inner);
+    const silhouette = new THREE.Mesh(new THREE.TubeGeometry(curve, 120, radius * 1.035, 28, false), materials.glassSilhouette);
+    silhouette.renderOrder = 2; parent.add(silhouette);
+    return outer;
+  }
+  function addMeniscus(parent, radius, material, x, y, z) {
+    const mesh = cast(new root.THREE.Mesh(new root.THREE.SphereGeometry(radius, 32, 14), material));
+    mesh.scale.y = 0.18; mesh.position.set(x, y, z); parent.add(mesh); return mesh;
+  }
+  function addRuler(parent, materials, height) {
+    const THREE = root.THREE;
+    const ruler = cast(new THREE.Mesh(new THREE.BoxGeometry(0.18, height, 0.05), materials.ruler));
+    ruler.position.set(0.48, 0.31 + height / 2, -0.26); parent.add(ruler);
+    const tickCount = 20;
+    for (let index = 0; index <= tickCount; index += 1) {
+      const major = index % 5 === 0;
+      const tick = new THREE.Mesh(new THREE.BoxGeometry(major ? 0.16 : 0.095, 0.012, 0.012), materials.rulerMark);
+      tick.position.set(0.48 - (major ? 0 : 0.03), 0.31 + height * index / tickCount, -0.225); parent.add(tick);
+    }
+  }
   function addBench(parent, materials) {
     const top = cast(new root.THREE.Mesh(new root.THREE.BoxGeometry(11, 0.3, 5.4), materials.wood));
     top.position.y = -0.15; parent.add(top);
-    const wall = new root.THREE.Mesh(new root.THREE.PlaneGeometry(14, 9), new root.THREE.MeshStandardMaterial({ color: "#edf3f2", roughness: 0.94 }));
+    const wall = new root.THREE.Mesh(new root.THREE.PlaneGeometry(14, 9), new root.THREE.MeshStandardMaterial({ color: "#d8e2e1", roughness: 0.94 }));
     wall.position.set(0, 4.4, -2.72); parent.add(wall);
   }
   function addHuman(parent) {
     const silhouette = new root.THREE.Group();
-    const body = cast(new root.THREE.Mesh(new root.THREE.CapsuleGeometry(0.18, 0.72, 8, 16), new root.THREE.MeshStandardMaterial({ color: "#4f6574", roughness: 0.72 })));
-    body.position.y = 0.82; silhouette.add(body);
+    const clothing = new root.THREE.MeshStandardMaterial({ color: "#456979", roughness: 0.72 });
+    const body = cast(new root.THREE.Mesh(new root.THREE.CapsuleGeometry(0.18, 0.62, 8, 16), clothing));
+    body.position.y = 0.95; silhouette.add(body);
+    [-1, 1].forEach((side) => {
+      const arm = cast(new root.THREE.Mesh(new root.THREE.CylinderGeometry(0.055, 0.055, 0.62, 12), clothing));
+      arm.position.set(side * 0.23, 0.94, 0); arm.rotation.z = side * 0.22; silhouette.add(arm);
+      const leg = cast(new root.THREE.Mesh(new root.THREE.CylinderGeometry(0.065, 0.07, 0.62, 12), clothing));
+      leg.position.set(side * 0.09, 0.32, 0); leg.rotation.z = -side * 0.07; silhouette.add(leg);
+    });
     const head = cast(new root.THREE.Mesh(new root.THREE.SphereGeometry(0.18, 18, 12), new root.THREE.MeshStandardMaterial({ color: "#d5a889", roughness: 0.75 })));
-    head.position.y = 1.5; silhouette.add(head);
+    head.position.y = 1.56; silhouette.add(head);
     silhouette.position.set(-2.4, 0.02, 0.32); parent.add(silhouette);
   }
   function clearWorld() {
@@ -169,23 +231,36 @@
     addBench(group, materials);
     const baseY = 0.31;
     const fluid = state.liquid === "mercury" ? materials.mercury : materials.water;
-    addCylinder(group, 2.16, 0.28, materials.ceramic, 0, baseY / 2, 0, 64);
-    addCylinder(group, 1.92, 0.085, fluid, 0, baseY + 0.018, 0, 64);
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(2.16, 0.075, 14, 64), materials.ceramic);
-    rim.rotation.x = Math.PI / 2; rim.position.y = baseY + 0.14; group.add(rim);
+    const dishBase = cast(new THREE.Mesh(new THREE.CylinderGeometry(2.18, 2.04, 0.27, 64), materials.ceramic));
+    dishBase.position.y = 0.135; group.add(dishBase);
+    const dishInner = cast(new THREE.Mesh(new THREE.CylinderGeometry(1.94, 1.94, 0.07, 64), materials.ceramicEdge));
+    dishInner.position.y = 0.285; group.add(dishInner);
+    addCylinder(group, 1.86, 0.065, fluid, 0, baseY + 0.03, 0, 64);
+    const fluidEdge = new THREE.Mesh(new THREE.TorusGeometry(1.8, 0.055, 12, 64), fluid);
+    fluidEdge.rotation.x = Math.PI / 2; fluidEdge.position.y = baseY + 0.072; group.add(fluidEdge);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(2.08, 0.13, 16, 64), materials.ceramic);
+    rim.rotation.x = Math.PI / 2; rim.position.y = baseY + 0.12; group.add(rim);
     const tubeHeight = state.liquid === "water" ? 11.4 : 5.55;
-    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, tubeHeight, 32, 1, true), materials.glass);
-    tube.position.set(0, baseY + tubeHeight / 2, 0); group.add(tube);
-    const cap = addCylinder(group, 0.172, 0.08, materials.glass, 0, baseY + tubeHeight + 0.03, 0, 32);
-    cap.material = materials.glass;
-    const clampBase = cast(new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.14, 36), materials.stand));
-    clampBase.position.set(-1.72, 0.07, 0.12); group.add(clampBase);
-    addCylinder(group, 0.07, Math.max(5.5, tubeHeight * 0.86), materials.stand, -1.72, Math.max(5.5, tubeHeight * 0.86) / 2, 0.12, 20);
-    const clamp = cast(new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.2, 0.55), materials.stand));
-    clamp.position.set(-0.15, Math.min(tubeHeight - 0.35, 4.1), 0); group.add(clamp);
+    addGlassCylinder(group, 0.19, tubeHeight, materials, 0, baseY + tubeHeight / 2, 0, true);
+    addRuler(group, materials, tubeHeight * 0.94);
+    const standHeight = Math.max(5.4, tubeHeight * 0.82);
+    const standX = -1.82;
+    const standZ = -0.58;
+    const clampBase = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.9, 0.14, 36), materials.stand));
+    clampBase.position.set(standX, 0.07, standZ); group.add(clampBase);
+    addCylinder(group, 0.075, standHeight, materials.stand, standX, standHeight / 2, standZ, 20);
+    const clampY = Math.min(tubeHeight - 0.35, 4.08);
+    const arm = cast(new THREE.Mesh(new THREE.BoxGeometry(Math.abs(standX) - 0.18, 0.09, 0.09), materials.stand));
+    arm.position.set(standX / 2 - 0.08, clampY, standZ); group.add(arm);
+    const clampRing = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.045, 12, 32), materials.stand);
+    clampRing.rotation.x = Math.PI / 2; clampRing.position.set(0, clampY, 0); group.add(clampRing);
+    [-1, 1].forEach((side) => {
+      const jaw = cast(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.2, 0.12), materials.stand));
+      jaw.position.set(side * 0.23, clampY, -0.02); group.add(jaw);
+    });
     if (state.liquid === "water") addHuman(group);
     const column = addColumn(group, 0.132, fluid, 0, baseY, 0);
-    const meniscus = addCylinder(group, 0.137, 0.035, fluid, 0, baseY, 0, 32);
+    const meniscus = addMeniscus(group, 0.145, fluid, 0, baseY, 0);
     const arrows = [];
     for (let index = 0; index < 5; index += 1) {
       const arrow = new THREE.Group();
@@ -195,7 +270,7 @@
       arrow.position.set(-1.5 + index * 0.75, 3.15 + (index % 2) * 0.18, -0.26); group.add(arrow); arrows.push(arrow);
       shaft.castShadow = true;
     }
-    visuals = { type: "barometer", group, baseY, tubeHeight, column, meniscus, arrows };
+    visuals = { type: "barometer", group, baseY, tubeHeight, column, meniscus, arrows, currentHeight: tubeHeight };
     scene.add(group); world = group; updateBarometerVisual();
   }
   function updateBarometerVisual() {
@@ -206,12 +281,15 @@
     const currentHeight = visuals.tubeHeight + (targetHeight - visuals.tubeHeight) * state.standing;
     setColumn(visuals.column, visuals.baseY, currentHeight);
     visuals.meniscus.position.y = visuals.baseY + currentHeight;
+    visuals.currentHeight = currentHeight;
     const scale = 0.78 + state.atmosphere * 0.34;
     visuals.arrows.forEach((arrow) => { arrow.scale.y = scale; });
   }
   function buildJTube() {
     const THREE = root.THREE;
     const materials = makeMaterials();
+    materials.glass.opacity = 0.36;
+    materials.glassInner.opacity = 0.26;
     const group = new THREE.Group();
     group.position.x = -0.1;
     addBench(group, materials);
@@ -222,22 +300,37 @@
     const curve = new THREE.CatmullRomCurve3([
       new THREE.Vector3(leftX, topY, 0), new THREE.Vector3(leftX, 0.88, 0), new THREE.Vector3(leftX + 0.13, 0.34, 0), new THREE.Vector3(-0.45, 0.18, 0), new THREE.Vector3(0.54, 0.18, 0), new THREE.Vector3(rightX, 0.64, 0), new THREE.Vector3(rightX, 5.8, 0),
     ]);
-    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 110, 0.18, 20, false), materials.glass); group.add(tube);
-    const cap = addCylinder(group, 0.19, 0.08, materials.glass, leftX, topY + 0.02, 0, 24); cap.rotation.z = Math.PI / 2;
-    const left = addColumn(group, 0.142, materials.mercury, leftX, baseY, 0);
-    const right = addColumn(group, 0.142, materials.mercury, rightX, baseY, 0);
-    const connector = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.142, 0.142, rightX - leftX, 28), materials.mercury));
-    connector.rotation.z = Math.PI / 2; connector.position.set((leftX + rightX) / 2, baseY + 0.02, 0); group.add(connector);
-    const gasTube = new THREE.Mesh(new THREE.CylinderGeometry(0.132, 0.132, 1, 28, 1, true), new THREE.MeshBasicMaterial({ color: "#a7d4ee", transparent: true, opacity: 0.17, side: THREE.DoubleSide }));
+    addTubeGlass(group, curve, 0.22, materials);
+    [leftX, rightX].forEach((x) => {
+      const opening = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.025, 10, 36), materials.glassEdge);
+      opening.rotation.x = Math.PI / 2; opening.position.set(x, x === leftX ? topY : 5.8, 0); opening.renderOrder = 6; group.add(opening);
+    });
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.055, 36), materials.glass);
+    cap.position.set(leftX, topY + 0.035, 0); cap.renderOrder = 5; group.add(cap);
+    const left = addColumn(group, 0.142, materials.mercuryCore, leftX, baseY, 0);
+    const right = addColumn(group, 0.142, materials.mercuryCore, rightX, baseY, 0);
+    const liquidCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(leftX, baseY + 0.2, 0), new THREE.Vector3(leftX + 0.18, baseY - 0.03, 0),
+      new THREE.Vector3(-0.45, baseY - 0.1, 0), new THREE.Vector3(0.5, baseY - 0.1, 0),
+      new THREE.Vector3(rightX - 0.18, baseY + 0.15, 0), new THREE.Vector3(rightX, baseY + 0.34, 0),
+    ]);
+    const connector = cast(new THREE.Mesh(new THREE.TubeGeometry(liquidCurve, 72, 0.142, 24, false), materials.mercuryCore)); group.add(connector);
+    const leftMeniscus = addMeniscus(group, 0.15, materials.mercuryCore, leftX, baseY, 0);
+    const rightMeniscus = addMeniscus(group, 0.15, materials.mercuryCore, rightX, baseY, 0);
+    const gasTube = new THREE.Mesh(new THREE.CylinderGeometry(0.132, 0.132, 1, 28, 1, true), new THREE.MeshBasicMaterial({ color: "#a7d4ee", transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false }));
     gasTube.position.set(leftX, baseY, 0); group.add(gasTube);
     const particles = [];
     for (let index = 0; index < 12; index += 1) {
-      const particle = cast(new THREE.Mesh(new THREE.SphereGeometry(0.073, 16, 12), materials.gas));
+      const particle = cast(new THREE.Mesh(new THREE.SphereGeometry(0.048, 16, 12), materials.gas));
       particle.userData = { phase: index * 0.77, row: ((index * 7) % 11) / 10, x: (((index * 5) % 5) - 2) * 0.042, z: (((index * 3) % 5) - 2) * 0.042 };
       group.add(particle); particles.push(particle);
     }
-    const base = cast(new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.14, 36), materials.stand)); base.position.set(-2.62, 0.07, 0.12); group.add(base);
-    addCylinder(group, 0.07, 5.45, materials.stand, -2.62, 2.73, 0.12, 18);
+    const standX = -2.55;
+    const standZ = -0.62;
+    const base = cast(new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.9, 0.14, 36), materials.stand)); base.position.set(standX, 0.07, standZ); group.add(base);
+    addCylinder(group, 0.075, 5.1, materials.stand, standX, 2.55, standZ, 18);
+    const arm = cast(new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.09, 0.09), materials.stand)); arm.position.set(-2.02, 3.75, standZ); group.add(arm);
+    const holder = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.045, 12, 32), materials.stand); holder.rotation.x = Math.PI / 2; holder.position.set(leftX, 3.75, 0); group.add(holder);
     const arrows = [];
     for (let index = 0; index < 3; index += 1) {
       const arrow = new THREE.Group();
@@ -245,7 +338,7 @@
       const tip = cast(new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.16, 14), materials.air)); tip.position.y = -0.28; tip.rotation.x = Math.PI; arrow.add(tip);
       arrow.position.set(0.76 + index * 0.34, 5.3 + (index % 2) * 0.15, 0); group.add(arrow); arrows.push(arrow);
     }
-    visuals = { type: "jtube", group, baseY, leftX, rightX, topY, left, right, gasTube, particles, arrows };
+    visuals = { type: "jtube", group, baseY, leftX, rightX, topY, left, right, leftMeniscus, rightMeniscus, gasTube, particles, arrows, gasBase: baseY, gasHeight: 1 };
     scene.add(group); world = group; updateJTubeVisual(0);
   }
   function buildAssetPreview(kind) {
@@ -276,11 +369,15 @@
     const scale = 0.018;
     const leftHeight = 0.34 + data.closedRise * scale;
     const rightHeight = 0.34 + data.openRise * scale;
+    visuals.leftHeight = leftHeight; visuals.rightHeight = rightHeight;
     setColumn(visuals.left, visuals.baseY, leftHeight);
     setColumn(visuals.right, visuals.baseY, rightHeight);
+    visuals.leftMeniscus.position.y = visuals.baseY + leftHeight;
+    visuals.rightMeniscus.position.y = visuals.baseY + rightHeight;
     const gasBase = visuals.baseY + leftHeight;
     const gasHeight = Math.max(0.45, visuals.topY - gasBase - 0.18);
     visuals.gasTube.scale.y = gasHeight; visuals.gasTube.position.y = gasBase + gasHeight / 2;
+    visuals.gasBase = gasBase; visuals.gasHeight = gasHeight;
     visuals.particles.forEach((particle) => {
       const dataPoint = particle.userData;
       particle.position.set(visuals.leftX + dataPoint.x, gasBase + 0.14 + dataPoint.row * (gasHeight - 0.28) + Math.sin(now / 700 + dataPoint.phase) * 0.018, dataPoint.z);
@@ -323,11 +420,13 @@
     if (useFallback) { dom.canvas.classList.add("is-hidden"); dom.fallback.style.display = "block"; drawFallback(); return; }
     const THREE = root.THREE;
     renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, context, antialias: true });
-    renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.08; renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    scene = new THREE.Scene(); scene.background = new THREE.Color("#dce9ed"); scene.fog = new THREE.Fog("#dce9ed", 13, 29);
+    renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.96; renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    scene = new THREE.Scene(); scene.background = new THREE.Color("#c8d8dd"); scene.fog = new THREE.Fog("#c8d8dd", 15, 31);
     camera = new THREE.PerspectiveCamera(37, 1, 0.1, 100); camera.userData.lookAt = new THREE.Vector3();
-    scene.add(new THREE.HemisphereLight("#f7fcff", "#5c7077", 1.8));
-    const key = new THREE.DirectionalLight("#fff1d6", 2.6); key.position.set(6, 11, 6); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); scene.add(key);
+    scene.add(new THREE.HemisphereLight("#eff9ff", "#465b63", 1.35));
+    const key = new THREE.DirectionalLight("#fff1d6", 2.05); key.position.set(6, 11, 6); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); scene.add(key);
+    const glassLight = new THREE.DirectionalLight("#8fd8f4", 0.72); glassLight.position.set(-5, 7, 4); scene.add(glassLight);
+    const frontFill = new THREE.DirectionalLight("#ffffff", 0.82); frontFill.position.set(0, 5, 8); scene.add(frontFill);
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 30), new THREE.MeshStandardMaterial({ color: "#c2cbd0", roughness: 0.9 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
     buildWorld(); resize(); placeCamera(false);
   }
@@ -354,7 +453,7 @@
       dom.heightValue.textContent = value; dom.heightUnit.textContent = unit; dom.heightLabel.textContent = `${value} ${unit}`; dom.conditionReadout.innerHTML = `<strong>[대기압 ${state.atmosphere.toFixed(2)} atm · ${liquidName()}]</strong> h = ${value} ${unit}`;
       dom.tubeWarning.classList.toggle("is-hidden", height <= ENGINE.TUBE_LENGTH[state.liquid]); dom.guideCurrent.textContent = state.liquid === "water" ? "③ 물 기둥의 높이를 사람 실루엣과 비교합니다." : "① 다시 세우기를 눌러 수은 기둥이 멈추는 모습을 봅니다.";
     } else {
-      const data = ENGINE.jtubeFromAdd(state.added, ENGINE.JT_L0); dom.addRange.value = String(state.added); dom.addNow.textContent = `${state.added} mm`; dom.dhValue.textContent = data.dh.toFixed(0); dom.gasPressureValue.textContent = (ENGINE.MMHG_REF + data.dh).toFixed(0); dom.gasLengthReadout.innerHTML = `기체 기둥 길이: <strong>${data.L.toFixed(1)} mm</strong>`; dom.guideCurrent.textContent = "④ 수은을 더 넣어 높이차와 기체 기둥 길이를 비교합니다.";
+      const data = ENGINE.jtubeFromAdd(state.added, ENGINE.JT_L0); dom.addRange.value = String(state.added); dom.addNow.textContent = `${state.added} mm`; dom.dhValue.textContent = data.dh.toFixed(0); dom.deltaLabel.textContent = `Δh ${data.dh.toFixed(0)} mm`; dom.gasPressureValue.textContent = (ENGINE.MMHG_REF + data.dh).toFixed(0); dom.gasLengthReadout.innerHTML = `기체 기둥 길이: <strong>${data.L.toFixed(1)} mm</strong>`; dom.guideCurrent.textContent = "④ 수은을 더 넣어 높이차와 기체 기둥 길이를 비교합니다.";
     }
     dom.qualityButton.textContent = `화질: ${state.quality === "high" ? "높음" : "보통"}`; dom.qualityButton.setAttribute("aria-pressed", String(state.quality === "high"));
   }
@@ -363,10 +462,39 @@
   function setLiquid(next) { if (state.liquid === next) return; state.liquid = next; state.standing = 1; buildWorld(); resetCamera(); refreshScene(false); }
   function setQuality() { state.quality = state.quality === "high" ? "normal" : "high"; if (renderer) { renderer.shadowMap.enabled = state.quality === "high"; resize(); } buildWorld(); refreshScene(false); }
   function startStanding() { if (state.scene !== "barometer") return; state.standing = 0; state.standingAt = performance.now(); dom.guideCurrent.textContent = "① 관 속 액체가 내려가며 기둥 위에 진공부가 남습니다."; }
+  function updateSceneLabels() {
+    if (!camera || !visuals.group || assetPreview) return;
+    const THREE = root.THREE;
+    const isBarometer = visuals.type === "barometer";
+    const specs = isBarometer ? [
+      [".vacuum-label", [0, visuals.baseY + visuals.tubeHeight - 0.4, 0], [20, -18]],
+      [".height-label", [0, visuals.baseY + visuals.currentHeight * 0.56, 0], [28, -12]],
+      [".pressure-label", [-1.5, 3.15, -0.26], [-82, 8]],
+      [".column-label", [0, visuals.baseY + visuals.currentHeight * 0.72, 0], [72, -16]],
+    ] : [
+      [".gas-label", [visuals.leftX, visuals.gasBase + visuals.gasHeight * 0.68, 0], [-84, -14]],
+      [".outside-label", [visuals.rightX, 5.32, 0], [24, -14]],
+      [".delta-label", [(visuals.leftX + visuals.rightX) / 2, visuals.baseY + (visuals.leftHeight + visuals.rightHeight) / 2, 0], [12, -14]],
+    ];
+    const width = dom.stage.clientWidth;
+    const height = dom.canvas.clientHeight;
+    specs.forEach(([selector, coordinates, offset]) => {
+      const element = dom.stage.querySelector(selector);
+      if (!element) return;
+      const point = new THREE.Vector3(coordinates[0], coordinates[1], coordinates[2]);
+      visuals.group.localToWorld(point); point.project(camera);
+      const rawX = (point.x * 0.5 + 0.5) * width + offset[0];
+      const rawY = (-point.y * 0.5 + 0.5) * height + offset[1];
+      const x = Math.max(8, Math.min(width - element.offsetWidth - 8, rawX));
+      const y = Math.max(8, Math.min(height - element.offsetHeight - 8, rawY));
+      element.style.left = `${x}px`; element.style.top = `${y}px`; element.classList.add("is-anchored");
+    });
+  }
   function animate(now) {
     if (cameraTween && camera) { const progress = Math.min(1, (now - cameraTween.started) / MOTION.CAMERA_MS); const eased = easeOut(progress); camera.position.lerpVectors(cameraTween.from, cameraTween.to, eased); camera.userData.lookAt = cameraTween.fromTarget.clone().lerp(cameraTween.toTarget, eased); camera.lookAt(camera.userData.lookAt); if (progress === 1) cameraTween = null; }
     if (state.scene === "barometer" && state.standing < 1) { state.standing = Math.min(1, (now - state.standingAt) / MOTION.STAND_MS); updateBarometerVisual(); if (state.standing === 1) { dom.guideCurrent.textContent = "① 기둥은 멈추고 관 위에는 진공부가 남았습니다."; } }
     if (state.scene === "jtube") updateJTubeVisual(now);
+    updateSceneLabels();
     if (renderer) renderer.render(scene, camera);
     rafId = root.requestAnimationFrame(animate);
   }
