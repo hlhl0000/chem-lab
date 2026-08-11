@@ -63,6 +63,16 @@ const SIMS = [
     tags: ["보일 법칙","샤를 법칙","아보가드로 법칙","이상 기체 방정식","절대 온도","변인 통제"]
   },
   {
+    id: "torricelli",
+    title: "토리첼리 실험 — 대기압과 수은 기둥",
+    cat: "물질의 상태",
+    path: "torricelli/",
+    icon: "torricelli",
+    ready: true,
+    desc: "토리첼리 기압계의 수은 기둥이 대기압에 따라 달라지는 모습과, J자관에 수은을 더할 때 갇힌 기체 기둥이 줄어드는 모습을 3D로 살펴봅니다.",
+    tags: ["대기압","토리첼리","수은 기둥","진공","J자관","기체 압력"]
+  },
+  {
     id: "universe",
     title: "우주 초기 원소의 생성",
     cat: "통합과학",
@@ -167,6 +177,12 @@ const ICONS = {
            stroke-linecap="round" stroke-linejoin="round"/>
            <circle cx="16" cy="27" r="3.4"/><circle cx="28" cy="38" r="3.4"/><circle cx="18" cy="42" r="3.4"/>
            <circle cx="31" cy="24" r="3.4"/>`,
+  torricelli:`<path d="M31 7v35" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+              <path d="M25 7h12" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+              <path d="M31 23v19" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+              <path d="M10 45h42" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+              <path d="M16 51c4 5 28 5 32 0" fill="none" stroke="currentColor" stroke-width="3" opacity=".55"/>
+              <path d="M48 10v15M43 20l5 5 5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`,
   flask:`<path d="M26 8v18L12 50a4 4 0 0 0 3.5 6h33A4 4 0 0 0 52 50L38 26V8" fill="none"
          stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
          <path d="M22 8h20" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
