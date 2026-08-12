@@ -27,7 +27,8 @@
   .stage canvas{display:block; width:100%}
   .stagePair{position:relative}
   .stagePair > div{position:absolute; inset:0; transition:opacity .18s linear}
-  .cmpnames{display:none; pointer-events:none}
+  /* 캔버스보다 뒤에 놓이면(형제 순서상 먼저) 불투명한 캔버스에 가려 글자가 아예 보이지 않는다 */
+  .cmpnames{display:none; pointer-events:none; z-index:3}
   .cmpnames.on{display:block}
   .cmpnames span{position:absolute; bottom:7px; width:50%; text-align:center;
     font-size:11.5px; font-weight:700; color:var(--t3)}
@@ -35,13 +36,29 @@
   /* position:static면 캔버스(내용 없이도 height 400px를 그대로 차지)가 이 안내문을 상자
      바깥(overflow:hidden)으로 밀어내 화면에 전혀 보이지 않는 실측 결함이 있었다.
      캔버스 위에 겹쳐 덮는 오버레이로 바꿔 항상 보이게 한다. */
-  #glFallback{display:none; position:absolute; inset:0; background:var(--stage-light); z-index:2;
+  /* z-index 2 로 두면 폴백(2D) 캔버스(#latWrap)까지 덮어 버려, 확대해도 입자 배열이
+     전혀 보이지 않았다. 안내문을 맨 아래에 두고 확대하면 그 위로 배열이 떠오르게 한다
+     — 안내문이 시키는 "슬라이더를 끝까지 밀어 보세요"와 화면이 같은 말을 하게 된다. */
+  #glFallback{display:none; position:absolute; inset:0; background:var(--stage-light); z-index:1;
     padding:22px 16px; font-size:13.5px; color:var(--t2); line-height:1.7; overflow:auto}
+  #latWrap{z-index:2}
+
+  /* 확대 그림 바로 위에 겹치는 상시 표기 — 하단의 긴 「가정과 한계」만으로는
+     그림이 먼저 주는 인상을 막지 못한다. 클릭·드래그는 캔버스로 그대로 통과시킨다. */
+  #latNote{position:absolute; inset:auto 10px auto 10px; top:8px; z-index:4;
+    pointer-events:none; display:flex; flex-direction:column; gap:2px;
+    background:rgba(255,255,255,.87); border:1px solid var(--line); border-radius:8px;
+    padding:6px 9px; font-size:11.5px; line-height:1.5; color:var(--t2)}
+  #latNote b{color:var(--t1)}
+  #latNote .sub{color:var(--t3)}
+  @media(max-width:560px){ #latNote .why{display:none} }
 
   .ctl{margin-bottom:10px}
   .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
     font-size:13px; margin-bottom:4px; color:var(--t2); gap:8px}
   .ctl .row .val{font-variant-numeric:tabular-nums; font-weight:700; color:var(--t1)}
+  .ctl .row .scalenote{font-style:normal; font-size:11px; color:var(--t3);
+    border:1px solid var(--line); border-radius:5px; padding:1px 5px; margin-left:4px}
   .zoomstate{font-size:12.5px; color:var(--t2); line-height:1.6; margin-top:4px}
   .info{font-size:12.5px; color:var(--t2); background:#f8fafc; border:1px solid var(--line);
     border-radius:8px; padding:9px 11px; margin-top:9px; line-height:1.65}
@@ -120,6 +137,13 @@
         <div class="stage stage--light" id="latWrap">
           <canvas id="lat" aria-label="입자 배열을 확대한 그림. 입자를 누르면 그 입자의 종류와 이웃과의 결합이 표시됩니다. 비교 모드에서는 두 표본이 나란히 나옵니다."></canvas>
         </div>
+        <!-- 그림 옆에 붙는 상시 표기 — 화면 아래 「가정과 한계」보다 먼저 읽히게 한다 -->
+        <div id="latNote">
+          <span>고체 <b>내부에서 잘라 본 대표 부분</b> — 구조는 <b>모든 방향으로 계속</b>됩니다.<span
+                class="why"> (가장자리가 흐린 것은 화면 밖으로 이어진다는 뜻입니다.)</span></span>
+          <span class="sub" id="stickNote">막대는 <b>실제 결합봉이 아니라 이웃 표시</b>입니다.</span>
+          <span class="sub" id="cellNote">테두리 상자 = <b>되풀이되는 최소 단위(단위 세포) 하나</b> — 결정을 이루는 부품이 아닙니다.</span>
+        </div>
       </div>
       <div class="btns">
         <button id="spinBtn">회전 멈추기</button>
@@ -133,13 +157,28 @@
     <div class="card">
       <h2>확대해 보기</h2>
       <div class="ctl">
-        <div class="row"><span>배율</span><span class="val" id="vZoom">×1</span></div>
+        <div class="row">
+          <span>배율 <em class="scalenote">개념적 확대 단계</em></span>
+          <span class="val" id="vZoom">×1 (맨눈 크기)</span>
+        </div>
         <input type="range" class="rng-vol" id="sZoom" min="0" max="100" step="1" value="0"
-               aria-label="확대 배율">
+               aria-label="확대 단계 (개념적 척도)">
       </div>
       <div class="zoomstate" id="zoomState"></div>
+      <label class="cmpToggleRow" for="nbToggle" id="nbRow" style="display:none">
+        <input type="checkbox" id="nbToggle" class="cmpCheck">
+        최근접 이웃 표시 (막대)
+      </label>
       <details class="adv">
-        <summary>심화 — 격자 상수 (교육과정 범위 밖 · 시험 범위 아님)</summary>
+        <summary>심화 — 단위 세포·격자 상수 (교육과정 범위 밖 · 시험 범위 아님)</summary>
+        <label class="cmpToggleRow" for="cellToggle" id="cellRow" style="display:none">
+          <input type="checkbox" id="cellToggle" class="cmpCheck">
+          가운데 <b>단위 세포 하나</b>를 테두리로 보기
+        </label>
+        <div class="body" style="color:var(--t3)">
+          결정은 이 상자 하나가 <b>모든 방향으로 되풀이된 것</b>입니다.
+          상자가 결정을 이루는 <b>부품</b>인 것은 아닙니다.
+        </div>
         <div class="body" id="adv"></div>
         <div class="body" style="color:var(--t3)">
           ※ 성취기준 [12물에01-04] 해설은 <b>"결정 구조는 다루지 않고"</b> 이온·공유·금속으로
@@ -227,11 +266,18 @@
   <b class="h">이 모형의 가정과 한계 — 반드시 함께 읽을 것</b><br>
   ① 표본 그림은 <b>사진이 아니라 재질을 흉내 낸 3D 그림</b>입니다. 색·광택·투명도는 실제에 가깝게
      맞췄지만, 굳기·조흔색·쪼개짐·무게감은 이 화면으로 알 수 없습니다.<br>
-  ② 입자 배열은 <b>3차원 공-막대 모형</b>입니다. 실제 결정에서 잘라낸 일부이며 단위 세포가
-     아닙니다. 이웃 관계가 같도록 만든 <b>단순화 모형</b>이며(석영·얼음·황철석·흑요석),
-     입자의 개수·크기 비도 보기 좋게 조정했습니다. 막대는 <b>이웃 관계를 보여 주는 표시</b>이고,
-     금속(구리·철)은 방향이 정해진 결합이 없어 막대를 그리지 않았습니다. 배율 숫자는
-     맨눈→입자로 가는 <b>개념적 척도</b>이며 광학 배율·실제 확대비와 정확히 같지 않습니다.<br>
+  ② 입자 배열은 고체 <b>내부에서 잘라 본 대표 부분</b>입니다. 화면 가운데만 또렷하게 그리고
+     가장자리는 흐리게 지웠는데, 이는 <b>구조가 화면 밖으로 계속 이어진다</b>는 뜻입니다 —
+     화면에 보이는 덩어리가 물체 하나(예: "NaCl 분자")인 것이 <b>아닙니다.</b>
+     되풀이되는 최소 단위(단위 세포)는 「심화」에서만 테두리로 보여 줍니다.
+     이웃 관계가 같도록 만든 <b>단순화 모형</b>이며(석영·얼음·황철석·흑요석),
+     입자의 개수·크기 비도 보기 좋게 조정했습니다.<br>
+  ②-1 <b>막대는 결합봉이 아닙니다.</b> 공유 결합(분자 안·그물 안)에만 막대를 그리고,
+     <b>암염·황철석의 이온 사이에는 기본적으로 막대를 그리지 않습니다</b> — 이온이 맞닿아 쌓인
+     모습으로 보여 줍니다. 「최근접 이웃 표시」를 켜면 나오는 막대는 <b>어느 이온이 이웃인지를
+     알려 주는 표시</b>일 뿐 방향이 정해진 결합이 아닙니다. 금속(구리·철)도 같은 이유로
+     막대를 그리지 않았습니다. 배율 숫자는 맨눈→입자로 가는 <b>개념적 확대 단계</b>이며
+     광학 배율·실제 확대비와 같지 않습니다(그래서 화면에 「약」으로 적습니다).<br>
   ③ 격자 상수가 있는 8종 중 <b>7종</b>(석영·암염·황철석·구리·얼음·다이아몬드·철)은 그 값으로
      계산한 밀도가 <b>문헌 밀도와 거의 일치</b>하는 것을 확인했습니다(흑요석은 비결정성이라
      격자 상수가 없습니다). <b>드라이아이스는 따로 처리했습니다</b> — 격자 상수의 측정 온도가
@@ -244,7 +290,8 @@
      "규칙성이 없다"는 대비는 그대로 성립합니다.<br>
   ⑥ 원자·이온 색은 <b>CPK 국제 표준</b>입니다. 실제 원자에 색이 있는 것은 아닙니다.<br>
   ⑦ 단위 세포·배위수·격자 상수는 <b>교육과정 범위 밖</b>이며 <b>시험 범위가 아닙니다.</b>
-     화면에서 「심화」로 접어 두었습니다.
+     기본 화면에서는 <b>강조하지 않고</b> 「심화」로 접어 두었습니다 — 기본 화면의 입자 그림은
+     단위 세포가 아니라 <b>대표 부분</b>입니다.
 </p>
 
 </div>

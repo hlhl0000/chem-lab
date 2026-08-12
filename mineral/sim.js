@@ -146,11 +146,15 @@ const mById = id => MIN.LIST.find(m => m.id === id);
 
 /* 확대 배율 — 슬라이더 0~100 을 1배 ~ 10⁹배로 (로그) */
 function magnification(z) { return Math.pow(10, (z / 100) * 9); }
+/* ⚠ 이 숫자는 **광학 배율이 아니라 개념적 확대 단계**다. 맨눈에서 입자까지 가는
+   길을 로그로 눌러 놓은 값이므로 "정확히 몇 배"로 읽히면 안 된다 —
+   그래서 화면에는 「약」을 붙이고 옆에 "개념적 확대 단계"라고 못 박아 둔다. */
 function zoomLabel(z) {
   const m = magnification(z);
-  if (m < 1e4) return `×${Math.round(m).toLocaleString("ko-KR")}`;
-  if (m < 1e8) return `×${(m / 1e4).toFixed(m < 1e6 ? 1 : 0)}만`;
-  return `×${(m / 1e8).toFixed(1)}억`;
+  if (m < 1.5) return "×1 (맨눈 크기)";
+  if (m < 1e4) return `약 ×${Math.round(m).toLocaleString("ko-KR")}`;
+  if (m < 1e8) return `약 ×${(m / 1e4).toFixed(m < 1e6 ? 1 : 0)}만`;
+  return `약 ×${(m / 1e8).toFixed(1)}억`;
 }
 
 /* 뷰 혼합 구간 — LATTICE_Z 경성 전환을 대체한다. z<시작 이면 표본 무대(0),
@@ -370,28 +374,41 @@ function orderIndex(pts) {
    확대 뷰에 실제로 그려지는 배열이다. 2D 함수(makeLattice)는 그대로 둔다 —
    WebGL을 못 쓰는 기기의 폴백과 검증 스크립트(orderIndex·topology)가 그것을 쓴다.
 
-   반환 { atoms, bonds, nn, rref, style }
+   반환 { atoms, bonds, nn, rref, style, cell, cellO, fill? }
      atoms — [{x,y,z,s,role?,mol?}]  반지름 L3_R 인 공 안쪽으로 잘라낸 덩어리
-     bonds — [[i,j,kind]]  kind: "in"(공유·이온 연결선) | "hb"(분자 사이 — 점선)
+     bonds — [[i,j,kind]]  kind: "in"(공유 결합 — 실선) | "hb"(분자 사이 — 점선)
+                                 | "nb"(**결합봉이 아니라 최근접 이웃 표시** — 기본 비표시)
      nn    — 가장 가까운 이웃 거리(모형 단위)
      rref  — 공 반지름을 정하는 기준 길이(가장 짧은 연결선 길이)
      style — "stick" 공+막대 / "pack" 공만(금속 결합은 방향이 정해진 연결선이 없다)
+     cell  — 되풀이되는 최소 단위(단위 세포)의 모서리 길이. 「심화」 테두리에만 쓴다.
+     cellO — 그 테두리 상자의 시작 모서리 좌표(격자점에 걸리도록 광물마다 다르다)
+     fill  — 이웃 막대를 껐을 때 쓰는 **공간 채움** 반지름 기준(이온이 맞닿게)
 
    ⚠ 실제 결정에서 잘라낸 일부이며 되풀이되는 단위 자체가 아니다.
      공 크기 비는 보기 좋게 조정했고, 석영·얼음·황철석·흑요석은 이웃 관계만 같게 둔
      단순화 모형이다. 이 사실은 화면의 「이 모형의 가정과 한계」에 적는다. */
 
-const L3_R = 1.0;         // 잘라내는 공의 반지름(모형 단위)
-const L3_TARGET = 150;    // 한 판에 그릴 원자 수 목표
+/* ★ 2026-08-12 개정 — "유한한 덩어리처럼 보이는 경계"를 없앤다.
+   예전에는 반지름 1.0 짜리 공 안에서 약 150개만 잘라내 화면 한가운데 떠 있었다.
+   그러면 배열이 **거기서 끝나는 완결된 물체**로 읽혀 "NaCl 거대 분자", "결정은 작은
+   입자 큐브들의 집합" 같은 오개념을 만든다(교사 검토 지적). 그래서
+     ① 잘라내는 공을 **화면보다 크게**(L3_R) 잡아 배열이 화면 밖으로 계속 나가게 하고,
+     ② 그릴 때 화면 좌표 기준으로 가장자리를 옅게 지운다(UI부 FADE_IN/FADE_OUT).
+   실제로 그리는 것은 화면 안에 들어오는 입자뿐이라(절두체 컬링) 개수가 늘어도 무겁지 않다. */
+const L3_R = 1.90;        // 잘라내는 공의 반지름(모형 단위) — 화면 네 변보다 넉넉히 크게
+const L3_CELL = 0.54;     // 되풀이 단위(입방 격자 모서리)의 모형 크기.
+                          // 끝까지 확대해도 세로로 3회 이상 되풀이되어 보이도록 잡았다.
+const L3_MAX = 4400;      // 한 판에 만들 원자 수 상한(안전판)
 
 function l3InBall(x, y, z) { return x * x + y * y + z * z <= L3_R * L3_R + 1e-9; }
 
-/* 같은 골격을 간격만 바꿔 다시 만들어, 원자 수가 목표 이하가 되는 첫 결과를 쓴다.
-   간격을 손으로 맞추면 잘라내는 경계에서 개수가 계단식으로 튀어 조절이 되지 않는다. */
+/* 되풀이 단위 크기는 광물마다 같게 두되(L3_CELL), 원자 수가 상한을 넘으면 간격을 늘려
+   다시 만든다. 간격을 손으로 맞추면 잘라내는 경계에서 개수가 계단식으로 튄다. */
 function l3Fit(build, u0, target) {
-  const cap = target || L3_TARGET;
-  let u = u0, r = build(u);
-  for (let t = 0; t < 12 && r.atoms.length > cap; t++) { u *= 1.13; r = build(u); }
+  const cap = target || L3_MAX;
+  let u = u0 || L3_CELL, r = build(u);
+  for (let t = 0; t < 12 && r.atoms.length > cap; t++) { u *= 1.10; r = build(u); }
   return r;
 }
 
@@ -418,7 +435,7 @@ function l3Fcc(u) {
     if (l3InBall(x, y, z)) atoms.push({ x, y, z, s: 0 });
   }
   const nn = u * Math.SQRT1_2;
-  return { atoms, bonds: [], nn, rref: nn, style: "pack" };
+  return { atoms, bonds: [], nn, rref: nn, style: "pack", cell: u, cellO: 0 };
 }
 
 /* 모서리 + 가운데 한 개짜리 쌓임(철) — 이웃 8개. 구리보다 성기다 */
@@ -431,10 +448,15 @@ function l3Bcc(u) {
     if (l3InBall(cx, cy, cz)) atoms.push({ x: cx, y: cy, z: cz, s: 0 });
   }
   const nn = u * Math.sqrt(3) / 2;
-  return { atoms, bonds: [], nn, rref: nn, style: "pack" };
+  return { atoms, bonds: [], nn, rref: nn, style: "pack", cell: u, cellO: -u / 2 };
 }
 
-/* 두 이온이 번갈아 놓인 쌓임(암염) */
+/* 두 이온이 번갈아 놓인 쌓임(암염)
+   ★ 이온 사이의 막대는 **결합봉이 아니다.** 방향이 정해진 결합이 있는 것처럼 읽혀
+     "NaCl 분자"라는 오개념을 만들기 때문에 kind를 "nb"(이웃 표시)로 달아 두고,
+     기본 화면에서는 **막대 없이 이온이 맞닿은 공간 채움**으로 그린다(UI부 showNb).
+     이온 반지름 비는 실제 그대로(Na⁺ 1.02 Å : Cl⁻ 1.81 Å)이고, 두 반지름의 합이 이온 사이
+     거리의 0.94배가 되게 그린다 — 딱 맞붙여 놓으면 큰 Cl⁻ 뒤로 Na⁺ 가 거의 가려진다. */
 function l3RockSalt(u) {
   const atoms = [], h = u / 2, n = Math.ceil(2 * L3_R / h) + 1;
   for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) for (let k = -n; k <= n; k++) {
@@ -443,7 +465,8 @@ function l3RockSalt(u) {
     atoms.push({ x, y, z, s: ((i + j + k) % 2 + 2) % 2 });
   }
   const nn = h;
-  return { atoms, bonds: l3BondsByDist(atoms, nn * 1.05, true), nn, rref: nn, style: "stick" };
+  const bonds = l3BondsByDist(atoms, nn * 1.05, true).map(b => [b[0], b[1], "nb"]);
+  return { atoms, bonds, nn, rref: nn, style: "stick", fill: nn * 0.60, cell: u, cellO: -u / 2 };
 }
 
 /* 황철석 — 철 자리와 S₂ 덩어리가 번갈아 놓인다(단순화 모형).
@@ -462,9 +485,13 @@ function l3Pyrite(u) {
     const b = atoms.length; atoms.push({ x: x - ax[0] * d, y: y - ax[1] * d, z: z - ax[2] * d, s: 1 });
     bonds.push([a, b, "in"]);
   }
-  /* 철 자리 ↔ 황 — 서로 다른 자리끼리만 잇는다 */
-  const cross = l3BondsByDist(atoms, h * 1.28, true);
-  return { atoms, bonds: bonds.concat(cross), nn: h, rref: 0.40 * u, style: "stick" };
+  /* 철 자리 ↔ 황 — 서로 다른 자리끼리만 잇는다.
+     이 선은 S₂ 안의 공유 결합("in")과 달리 **이웃 표시**일 뿐이므로 "nb"로 단다. */
+  const cross = l3BondsByDist(atoms, h * 1.28, true).map(b => [b[0], b[1], "nb"]);
+  return {
+    atoms, bonds: bonds.concat(cross), nn: h, rref: 0.40 * u, style: "stick",
+    fill: h * 0.43, cell: u, cellO: -u / 2
+  };
 }
 
 /* 이웃 4개가 사방으로 뻗은 그물(다이아몬드). 원자 하나가 이웃 4개와 모두 이어진다. */
@@ -481,7 +508,10 @@ function l3TetraNet(u) {
 }
 function l3Diamond(u) {
   const { pts, nn } = l3TetraNet(u);
-  return { atoms: pts, bonds: l3BondsByDist(pts, nn * 1.08, false), nn, rref: nn, style: "stick" };
+  return {
+    atoms: pts, bonds: l3BondsByDist(pts, nn * 1.08, false),
+    nn, rref: nn, style: "stick", cell: u, cellO: 0
+  };
 }
 
 /* 석영 — 규소 그물의 이웃 사이마다 산소를 하나씩 끼워 넣는다.
@@ -497,7 +527,7 @@ function l3Bridged(u) {
     atoms.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2, s: 1 });
     bonds.push([i, mid, "in"], [mid, j, "in"]);
   }
-  return { atoms, bonds, nn: nn / 2, rref: nn / 2, style: "stick" };
+  return { atoms, bonds, nn: nn / 2, rref: nn / 2, style: "stick", cell: u, cellO: 0 };
 }
 
 /* 얼음 — 산소가 사방 이웃 4개와 이어진 그물. 산소마다 수소 2개를 붙인다.
@@ -522,7 +552,7 @@ function l3Ice(u) {
     });
     bonds.push([owner, h, "in"], [h, other, "hb"]);
   }
-  return { atoms, bonds, nn, rref: nn * 0.36, style: "stick" };
+  return { atoms, bonds, nn, rref: nn * 0.36, style: "stick", cell: u, cellO: 0 };
 }
 
 /* 드라이아이스 — 자리마다 O=C=O 하나를 통째로 놓는다. 분자 방향은 자리마다 번갈아 둔다.
@@ -544,20 +574,44 @@ function l3DryIce(u) {
     bonds.push([c, o1, "in"], [c, o2, "in"]);
     mol++;
   }
-  return { atoms, bonds, nn: u * Math.SQRT1_2, rref: 0.206 * u, style: "stick" };
+  return { atoms, bonds, nn: u * Math.SQRT1_2, rref: 0.206 * u, style: "stick", cell: u, cellO: 0 };
 }
 
 /* 흑요석 — 이어져 있으나 되풀이되는 규칙이 없는 그물.
    규소 자리를 규칙 없이 흩어 놓고, 가까운 이웃끼리 이어 그 사이마다 산소를 끼운다. */
 function l3Amorphous(rnd) {
-  const pts = [], minD = 0.30;
+  /* 자리 사이 최소 거리는 석영의 규소-규소 거리(L3_CELL·√3/4)와 비슷하게 잡는다 —
+     둘을 나란히 비교하므로 "비결정이 더 성기다/촘촘하다"는 딴 인상을 주면 안 된다.
+     자리 수가 수백 개로 늘어 하나씩 전부 대조하면 느리므로 격자 칸에 나눠 담아 확인한다. */
+  const nnQ = L3_CELL * Math.sqrt(3) / 4;              // 석영의 규소-규소 거리
+  const minD = nnQ * 0.767;                            // 규칙 없이 놓으려면 최소 간격을 더 좁게 잡아야
+  const target = Math.round(0.297 / (minD * minD * minD)   // 같은 **자리 밀도**에 닿는다
+    * (4 / 3) * Math.PI * L3_R * L3_R * L3_R);
+  const pts = [];
+  const cs = minD, half = Math.ceil(L3_R / cs) + 1, side = half * 2 + 1;
+  const cellOf = new Map();
+  const ci = v => Math.min(side - 1, Math.max(0, Math.floor(v / cs) + half));
   let guard = 0;
-  while (pts.length < 46 && guard++ < 9000) {
+  while (pts.length < target && guard++ < 400000) {
     const x = (rnd() * 2 - 1) * L3_R, y = (rnd() * 2 - 1) * L3_R, z = (rnd() * 2 - 1) * L3_R;
     if (!l3InBall(x, y, z)) continue;
+    const gx = ci(x), gy = ci(y), gz = ci(z);
     let ok = true;
-    for (const q of pts) { const dx = q.x - x, dy = q.y - y, dz = q.z - z; if (dx * dx + dy * dy + dz * dz < minD * minD) { ok = false; break; } }
-    if (ok) pts.push({ x, y, z, s: 0 });
+    for (let a = gx - 1; a <= gx + 1 && ok; a++)
+      for (let b = gy - 1; b <= gy + 1 && ok; b++)
+        for (let c = gz - 1; c <= gz + 1 && ok; c++) {
+          const list = cellOf.get((a * side + b) * side + c);
+          if (!list) continue;
+          for (const qi of list) {
+            const q = pts[qi], dx = q.x - x, dy = q.y - y, dz = q.z - z;
+            if (dx * dx + dy * dy + dz * dz < minD * minD) { ok = false; break; }
+          }
+        }
+    if (!ok) continue;
+    const key = (gx * side + gy) * side + gz;
+    if (!cellOf.has(key)) cellOf.set(key, []);
+    cellOf.get(key).push(pts.length);
+    pts.push({ x, y, z, s: 0 });
   }
   /* 가까운 이웃끼리 잇되, 이웃이 하나도 없는 자리는 가장 가까운 자리에 억지로 잇는다
      — 그물이 끊겨 점만 흩어져 보이면 "비결정 = 입자가 떨어져 있다"는 딴 뜻이 된다. */
@@ -583,15 +637,17 @@ function l3Amorphous(rnd) {
   return { atoms, bonds, nn: minD, rref: minD / 2, style: "stick" };
 }
 
+/* 되풀이 단위를 광물마다 같은 크기(L3_CELL)로 맞춘다 — 어느 광물을 골라도
+   화면에 같은 횟수만큼 되풀이되어 보이고, 비교 모드에서 좌우 척도가 어긋나지 않는다. */
 function makeLattice3D(m, rnd) {
-  if (m.id === "copper") return l3Fit(l3Fcc, 0.34, 430);
-  if (m.id === "iron") return l3Fit(l3Bcc, 0.30, 430);
-  if (m.id === "halite") return l3Fit(l3RockSalt, 0.60);
-  if (m.id === "pyrite") return l3Fit(l3Pyrite, 0.86);
-  if (m.id === "diamond") return l3Fit(l3Diamond, 0.52);
-  if (m.id === "quartz") return l3Fit(l3Bridged, 0.80);
-  if (m.id === "ice") return l3Fit(l3Ice, 0.86);
-  if (m.id === "dryice") return l3Fit(l3DryIce, 0.66);
+  if (m.id === "copper") return l3Fit(l3Fcc, L3_CELL);
+  if (m.id === "iron") return l3Fit(l3Bcc, L3_CELL);
+  if (m.id === "halite") return l3Fit(l3RockSalt, L3_CELL);
+  if (m.id === "pyrite") return l3Fit(l3Pyrite, L3_CELL);
+  if (m.id === "diamond") return l3Fit(l3Diamond, L3_CELL);
+  if (m.id === "quartz") return l3Fit(l3Bridged, L3_CELL);
+  if (m.id === "ice") return l3Fit(l3Ice, L3_CELL);
+  if (m.id === "dryice") return l3Fit(l3DryIce, L3_CELL);
   return l3Amorphous(rnd);
 }
 
@@ -604,7 +660,8 @@ const CSSV = n => getComputedStyle(document.documentElement).getPropertyValue(n)
 const C = {
   blue: CSSV("--d-blue"), amber: CSSV("--d-amber"), ink: CSSV("--t1"),
   gray: CSSV("--d-gray"), t3: CSSV("--t3"), stageLight: CSSV("--stage-light"),
-  green: CSSV("--d-green"), red: CSSV("--d-red"), violet: CSSV("--d-violet")
+  green: CSSV("--d-green"), red: CSSV("--d-red"), violet: CSSV("--d-violet"),
+  cyan: CSSV("--d-cyan")
 };
 /* ⚠ 아래 두 가지는 토큰으로 바꾸면 안 된다.
    ① 광물의 색은 그 물질의 **실제 겉보기 색**이다 (사이트 테마 색이 아니다).
@@ -618,7 +675,8 @@ const CPK = {
 /* 각 광물의 배열에서 자리(s=0,1,…)에 놓이는 입자 */
 const SITES = {
   quartz: [{ sym: "Si", label: "규소 Si", cpk: CPK.Si, r: 1.0 }, { sym: "O", label: "산소 O", cpk: CPK.O, r: 0.72 }],
-  halite: [{ sym: "Na⁺", label: "나트륨 이온 Na⁺", cpk: CPK.Na, r: 0.62 }, { sym: "Cl⁻", label: "염화 이온 Cl⁻", cpk: CPK.Cl, r: 1.0 }],
+  /* Na⁺ 1.02 Å : Cl⁻ 1.81 Å = 0.56 : 1 — 막대를 끈 기본 화면에서 두 이온이 정확히 맞닿는다 */
+  halite: [{ sym: "Na⁺", label: "나트륨 이온 Na⁺", cpk: CPK.Na, r: 0.56 }, { sym: "Cl⁻", label: "염화 이온 Cl⁻", cpk: CPK.Cl, r: 1.0 }],
   pyrite: [{ sym: "Fe", label: "철 Fe", cpk: CPK.Fe, r: 1.0 }, { sym: "S", label: "황 S", cpk: CPK.S, r: 0.80 }],
   copper: [{ sym: "Cu", label: "구리 원자 Cu (양이온 + 자유 전자)", cpk: CPK.Cu, r: 1.0 }],
   ice: [{ sym: "O", label: "산소 O (물 분자의 중심)", cpk: CPK.O, r: 1.0 }, { sym: "H", label: "수소 H", cpk: CPK.H, r: 0.50 }],
@@ -633,9 +691,26 @@ let zoomV = 0;
 let lattice = null;        // 폴백(2D)용
 let lat3 = null;           // 확대 뷰(3D 공-막대)용
 let picked = -1;
+/* 최근접 이웃 막대(암염·황철석) — **기본은 끈다.**
+   이온 사이의 막대는 방향이 정해진 결합봉처럼 읽혀 "NaCl 분자"라는 오개념을 만든다.
+   기본 화면은 이온이 맞닿은 공간 채움이고, 필요한 사람만 직접 켠다. */
+let showNb = false;
+/* 단위 세포 테두리 — 「심화」에서만 켠다(교육과정 범위 밖). */
+let showCell = false;
 let spin = 0, tilt = -0.42, spinning = true;
-let rndSeed = 20260731;
-const rnd = () => { rndSeed = (rndSeed * 1103515245 + 12345) & 0x7fffffff; return rndSeed / 0x7fffffff; };
+/* 씨앗 고정 난수 — 흑요석의 "규칙 없음"을 만들 때만 쓴다(누가 열어도 같은 그림).
+   ⚠ 예전 식 (seed*1103515245+12345)&0x7fffffff 은 자바스크립트에서 곱이 2⁵³을 넘어
+     아래 자리가 잘려 나가 짧은 주기에 갇혔다. 자리 수가 수백 개로 늘어난 지금은
+     그 결함이 그대로 "자리가 더 이상 놓이지 않는" 현상으로 드러나므로 32비트
+     정수 연산(Math.imul)만 쓰는 mulberry32 로 바꾼다. */
+let rndSeed = 20260731 >>> 0;
+const rnd = () => {
+  rndSeed = (rndSeed + 0x6D2B79F5) >>> 0;
+  let t = rndSeed;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
 
 /* ── 비교 모드 상태 ── */
 let cmpOn = false;
@@ -796,15 +871,17 @@ void main(){
    앞뒤가 제대로 가려진다 — WebGL 1 에는 조각별 깊이 쓰기가 없기 때문이다.
    ============================================================ */
 const VERT3 = `attribute vec3 aPos; attribute vec2 aLocal; attribute vec3 aCol;
-attribute vec3 aPerp; attribute vec2 aParam;
+attribute vec3 aPerp; attribute vec3 aParam;
 uniform mat4 uProj;
-varying vec2 vLocal; varying vec3 vCol; varying vec3 vPerp; varying vec2 vParam;
+varying vec2 vLocal; varying vec3 vCol; varying vec3 vPerp; varying vec3 vParam;
 void main(){
   vLocal = aLocal; vCol = aCol; vPerp = aPerp; vParam = aParam;
   gl_Position = uProj * vec4(aPos, 1.0);
 }`;
+/* vParam.z — 이 입자 하나의 진하기(0~1). 화면 가운데는 1, 가장자리로 갈수록 0에
+   가까워져 배열이 "끝난" 것이 아니라 "흐려지며 계속되는" 것으로 보이게 한다. */
 const FRAG3 = `precision mediump float;
-varying vec2 vLocal; varying vec3 vCol; varying vec3 vPerp; varying vec2 vParam;
+varying vec2 vLocal; varying vec3 vCol; varying vec3 vPerp; varying vec3 vParam;
 uniform float uAlpha;
 uniform vec3 uLight;
 void main(){
@@ -829,7 +906,7 @@ void main(){
   vec3 h = normalize(uLight + vec3(0.0, 0.0, 1.0));
   float spe = pow(max(dot(n, h), 0.0), 26.0);
   vec3 c = vCol * (amb + 0.74 * dif) * edge + vec3(1.0) * spe * 0.30;
-  gl_FragColor = vec4(clamp(c, 0.0, 1.0), uAlpha);
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), uAlpha * vParam.z);
 }`;
 
 const gcv = $("gl");
@@ -870,12 +947,16 @@ function initGL() {
 function shapeNum(s) {
   return { cube: 0, prism: 1, blob: 2, octa: 3, rcube: 4, chunk: 5, chip: 6 }[s] ?? 2;
 }
-function zoomScaleFor(z) { return 1 + Math.min(Math.max(z, 0), ZOOM_BLEND_START) / ZOOM_BLEND_START * 3; }
-/* 확대 뷰의 모형 크기 — 크로스페이드가 시작될 때 작게 들어와 배율과 함께 계속 커진다.
-   표본(zoomScale)이 55에서 멈추고 그 뒤로는 이 값이 이어받아 확대가 끊기지 않는다. */
+/* 표본은 크로스페이드가 끝나는 지점(70)까지 계속 커진다 — 55에서 멈춰 버리면
+   그 구간에서 "다가가는 느낌"이 끊긴다. 70을 넘으면 표본은 이미 다 지워진 뒤다. */
+function zoomScaleFor(z) { return 1 + Math.min(Math.max(z, 0), ZOOM_BLEND_END) / ZOOM_BLEND_END * 4.2; }
+/* 확대 뷰의 모형 크기.
+   ★ 예전에는 0.42에서 시작해 작은 덩어리가 화면 한가운데 떠 있었다. 이제는 크로스페이드가
+     시작될 때 이미 **화면을 가득 채우는 크기**로 들어와, 배열이 화면 밖으로 이어져 보인다.
+     (1.15 → 1.45. 끝까지 확대해도 되풀이 단위가 세로로 3회 이상 보인다.) */
 function latScaleFor(z) {
   const t = Math.min(Math.max((z - ZOOM_BLEND_START) / (100 - ZOOM_BLEND_START), 0), 1);
-  return 0.42 + t * 1.05;
+  return 1.15 + t * 0.30;
 }
 
 function hexToRgb01(hex) {
@@ -906,7 +987,7 @@ function drawOneGL(m, x, y, w, h) {
 }
 
 /* ── 확대 뷰(3D) — 정점 만들기 ──────────────────────────────── */
-const FPV = 13;                       // 정점 하나가 쓰는 float 수
+const FPV = 14;                       // 정점 하나가 쓰는 float 수 (마지막 하나는 진하기)
 let vArr = new Float32Array(0), iArr = new Uint16Array(0);
 let vHead = 0, iHead = 0, primCount = 0;
 function ensureCap(prims) {
@@ -914,13 +995,13 @@ function ensureCap(prims) {
   if (vArr.length < needV) vArr = new Float32Array(Math.ceil(needV * 1.6));
   if (iArr.length < needI) iArr = new Uint16Array(Math.ceil(needI * 1.6));
 }
-function putVert(px, py, pz, lx, ly, cr, cg, cb, ex, ey, ez, kind, dash) {
+function putVert(px, py, pz, lx, ly, cr, cg, cb, ex, ey, ez, kind, dash, fade) {
   const o = vHead;
   vArr[o] = px; vArr[o + 1] = py; vArr[o + 2] = pz;
   vArr[o + 3] = lx; vArr[o + 4] = ly;
   vArr[o + 5] = cr; vArr[o + 6] = cg; vArr[o + 7] = cb;
   vArr[o + 8] = ex; vArr[o + 9] = ey; vArr[o + 10] = ez;
-  vArr[o + 11] = kind; vArr[o + 12] = dash;
+  vArr[o + 11] = kind; vArr[o + 12] = dash; vArr[o + 13] = fade;
   vHead += FPV;
 }
 function quadIndices() {
@@ -929,14 +1010,14 @@ function quadIndices() {
   iArr[iHead + 3] = b; iArr[iHead + 4] = b + 2; iArr[iHead + 5] = b + 3;
   iHead += 6; primCount++;
 }
-function emitSphere(cx, cy, cz, r, col) {
-  putVert(cx - r, cy - r, cz, -1, -1, col[0], col[1], col[2], 0, 0, 0, 0, 0);
-  putVert(cx + r, cy - r, cz, 1, -1, col[0], col[1], col[2], 0, 0, 0, 0, 0);
-  putVert(cx + r, cy + r, cz, 1, 1, col[0], col[1], col[2], 0, 0, 0, 0, 0);
-  putVert(cx - r, cy + r, cz, -1, 1, col[0], col[1], col[2], 0, 0, 0, 0, 0);
+function emitSphere(cx, cy, cz, r, col, fade) {
+  putVert(cx - r, cy - r, cz, -1, -1, col[0], col[1], col[2], 0, 0, 0, 0, 0, fade);
+  putVert(cx + r, cy - r, cz, 1, -1, col[0], col[1], col[2], 0, 0, 0, 0, 0, fade);
+  putVert(cx + r, cy + r, cz, 1, 1, col[0], col[1], col[2], 0, 0, 0, 0, 0, fade);
+  putVert(cx - r, cy + r, cz, -1, 1, col[0], col[1], col[2], 0, 0, 0, 0, 0, fade);
   quadIndices();
 }
-function emitStick(ax, ay, az, bx, by, bz, w, col, kind, dash) {
+function emitStick(ax, ay, az, bx, by, bz, w, col, kind, dash, fade) {
   /* 화면에 놓이는 띠 — 축과 수직인 방향은 시선축(0,0,1)과의 외적으로 잡는다.
      축이 시선과 거의 나란하면(정면에서 본 막대) 띠가 사라지므로 그리지 않는다. */
   const dx = bx - ax, dy = by - ay;
@@ -944,26 +1025,37 @@ function emitStick(ax, ay, az, bx, by, bz, w, col, kind, dash) {
   if (L < 1e-5) return;
   const ex = dy / L, ey = -dx / L;
   const ox = ex * w, oy = ey * w;
-  putVert(ax + ox, ay + oy, az, -1, 1, col[0], col[1], col[2], ex, ey, 0, kind, dash);
-  putVert(bx + ox, by + oy, bz, 1, 1, col[0], col[1], col[2], ex, ey, 0, kind, dash);
-  putVert(bx - ox, by - oy, bz, 1, -1, col[0], col[1], col[2], ex, ey, 0, kind, dash);
-  putVert(ax - ox, ay - oy, az, -1, -1, col[0], col[1], col[2], ex, ey, 0, kind, dash);
+  putVert(ax + ox, ay + oy, az, -1, 1, col[0], col[1], col[2], ex, ey, 0, kind, dash, fade);
+  putVert(bx + ox, by + oy, bz, 1, 1, col[0], col[1], col[2], ex, ey, 0, kind, dash, fade);
+  putVert(bx - ox, by - oy, bz, 1, -1, col[0], col[1], col[2], ex, ey, 0, kind, dash, fade);
+  putVert(ax - ox, ay - oy, az, -1, -1, col[0], col[1], col[2], ex, ey, 0, kind, dash, fade);
   quadIndices();
 }
 
-/* 원자·막대를 한 덩어리의 "그릴 것" 목록으로 만들어 lat3 에 붙여 둔다.
-   [종류, a, b] — 종류 0=원자, 1=막대(실선) 2=막대(점선). 막대는 두 쪽으로 나눠
-   각각 자기 쪽 원자 색으로 그린다(양쪽 색이 다른 표준 공-막대 그림). */
+/* ── "그릴 것" 목록 ────────────────────────────────────────────────
+   종류 0=원자, 1=막대(실선·공유 결합), 2=막대(점선·분자 사이), 3=막대(최근접 이웃 표시).
+   ★ 원자 번호별로 **이어 붙여** 담는다. 그래야 화면 밖 원자를 걸러낼 때 그 원자의 막대까지
+     한 번에 건너뛸 수 있다 — 원자 수가 수천 개로 늘어난 지금은 목록 전체를 매 프레임
+     훑는 방식으로는 감당이 되지 않는다.
+     _ps[i] ~ _ps[i+1] 이 원자 i 가 책임지는 구간(자기 공 하나 + 자기에게서 뻗는 막대들). */
 function primsOf(l3) {
-  if (l3._prims) return l3._prims;
-  const P = [];
-  for (let i = 0; i < l3.atoms.length; i++) P.push([0, i, -1]);
-  for (const [i, j, kind] of l3.bonds) {
-    const k = kind === "hb" ? 2 : 1;
-    P.push([k, i, j], [k, j, i]);
+  if (l3._pk) return;
+  const N = l3.atoms.length, deg = new Int32Array(N);
+  for (const b of l3.bonds) { deg[b[0]]++; deg[b[1]]++; }
+  const ps = new Int32Array(N + 1);
+  let acc = 0;
+  for (let i = 0; i < N; i++) { ps[i] = acc; acc += 1 + deg[i]; }
+  ps[N] = acc;
+  const pk = new Uint8Array(acc), pa = new Int32Array(acc), pb = new Int32Array(acc);
+  const cur = new Int32Array(N);
+  for (let i = 0; i < N; i++) { const o = ps[i]; pk[o] = 0; pa[o] = i; pb[o] = -1; cur[i] = o + 1; }
+  for (const b of l3.bonds) {
+    const i = b[0], j = b[1], kind = b[2];
+    const k = kind === "hb" ? 2 : (kind === "nb" ? 3 : 1);
+    let o = cur[i]++; pk[o] = k; pa[o] = i; pb[o] = j;
+    o = cur[j]++; pk[o] = k; pa[o] = j; pb[o] = i;
   }
-  l3._prims = P;
-  return P;
+  l3._pk = pk; l3._pa = pa; l3._pb = pb; l3._ps = ps;
 }
 const COL_CACHE = {};
 function colOf(mnr, s) {
@@ -974,7 +1066,11 @@ function colOf(mnr, s) {
 }
 function siteOf(mnr, s) { const arr = SITES[mnr.id]; return arr[Math.min(s, arr.length - 1)]; }
 
-const CAM_Z = 3.35, FOVY = 0.72;
+/* 카메라를 멀리 두고 화각을 좁힌다(거의 평행 투영).
+   ★ 예전 값(3.35 / 0.72)은 덩어리가 작을 때는 괜찮았지만, 배열을 화면 밖까지 넓힌 지금은
+     카메라 쪽으로 튀어나온 앞줄 입자가 5배 넘게 부풀어 화면을 덮어 버린다.
+     tan(FOVY/2)·CAM_Z 는 그대로 1.261 이라 화면에 담기는 범위(틀)는 예전과 같다. */
+const CAM_Z = 9.0, FOVY = 0.2788;
 const PROJ = new Float32Array(16);
 function persp(out, fovy, aspect, near, far) {
   const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
@@ -985,74 +1081,142 @@ function persp(out, fovy, aspect, near, far) {
   return out;
 }
 const BLUE_RGB = hexToRgb01(C.blue || "#2563eb");
+/* 단위 세포 테두리 색 — CPK 색(보라 Na·초록 Cl·빨강 O·주황 Fe·노랑 S…) 어느 것과도
+   겹치지 않는 짙은 청록을 쓴다. 입자 색으로 오해되면 안 된다. */
+const CELL_RGB = hexToRgb01(C.cyan || "#0f5c8c");
 let vpBuf = new Float32Array(0);      // 원자의 시점 좌표
+let fadeBuf = new Float32Array(0);    // 원자별 진하기(화면 가장자리로 갈수록 0)
 let zBuf = new Float32Array(0);       // 그릴 것들의 깊이
+let aBuf = new Float32Array(0);       // 그릴 것들의 진하기
+let primBuf = null;                   // 그릴 것들의 목록 번호
 let ordBuf = null;                    // 깊이 순서
+
+/* ── 화면 가장자리 지우기(비네트) ─────────────────────────────────
+   화면 좌표(정규화 −1~1)에서 중심으로부터의 거리 rn 로 진하기를 정한다.
+   거리는 max(|x|,|y|) 로 잰다 — 화면 틀과 같은 네모 모양으로 흐려져 네 변이 고르게 옅어지고,
+   모서리만 뻥 뚫리지 않는다. rn ≤ FADE_IN 이면 그대로, FADE_OUT 이면 0.
+   화면 네 변(rn=1)에서는 아직 0.5 쯤 남아 있어 배열이 **화면 밖으로 이어지는 것처럼** 보인다.
+   모형 좌표가 아니라 화면 좌표로 재는 이유 — 화면이 가로로 길어도 네 변이 고르게 흐려진다. */
+const FADE_IN = 0.45, FADE_OUT = 1.35;
+/* 시선 방향(깊이)으로도 같은 식으로 지운다 — 뒤쪽 층이 끝없이 겹쳐 보이면
+   배열이 아니라 얼룩으로 읽힌다. 화면 세로 절반 길이를 1로 잰 값이다. */
+const DEPTH_IN = 0.35, DEPTH_OUT = 0.95;
+const PICK_MIN = 0.55;                // 이만큼 선명한(=가운데) 입자만 고를 수 있다
+const BOND_MIN = 0.12;                // 막대는 이보다 옅어지면 아예 그리지 않는다
+const MAX_PRIMS = 15000;              // 정점 번호가 16비트라 그릴 것은 16383개가 한계
+let farFloor = 0.045;                 // 저사양 기기에서는 이 값을 올려 주변부를 덜 그린다
+function sstep(a, b, x) {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
 
 /* 한 판에 3차원 공-막대 모형을 그린다.
    x,y,w,h — 픽셀 뷰포트 / rect — 클릭 판정에 쓸 CSS 픽셀 사각형
-   store — 원자의 화면 좌표를 담아 둘 배열(클릭 판정용) */
+   store — 원자의 화면 좌표를 담아 둘 배열(클릭 판정용)
+
+   ★ 이 함수가 하는 일의 순서
+     ① 원자를 시점 좌표로 옮기고, 화면 좌표에서의 진하기(fadeBuf)를 잰다.
+        화면 밖으로 나간 것은 진하기 0 — 그리지 않는다(절두체 컬링).
+     ② 진하기가 남아 있는 원자만, 그 원자가 책임지는 공·막대를 목록에 담는다.
+     ③ 먼 것부터 그린다(화가 알고리즘).
+     ④ 「심화」에서 켰다면 가운데 단위 세포 하나만 테두리로 덧그린다. */
 function drawLattice3D(mnr, l3, x, y, w, h, alpha, pickedIdx, rect, store) {
   if (!l3 || w < 8 || h < 8) { if (store) store.length = 0; return; }
+  primsOf(l3);
   const atoms = l3.atoms, N = atoms.length;
-  const P = primsOf(l3);
-  /* 판이 좁으면(비교 모드·좁은 화면) 덩어리가 좌우로 잘린다 — 판의 가로세로 비에 맞춰 줄인다 */
-  const scale = latScaleFor(zoomV) * Math.min(1, (w / h) / 1.9);
+  const scale = latScaleFor(zoomV);
   /* 표본 무대는 광선을 돌린다(물체는 반대로 도는 것처럼 보인다). 두 무대가 같은 방향으로
      돌아야 하므로 모형에는 부호를 뒤집어 준다. */
   const yaw = -spin, pitch = -tilt;
-  const cy = Math.cos(yaw), sy = Math.sin(yaw), cx = Math.cos(pitch), sx = Math.sin(pitch);
+  const cyw = Math.cos(yaw), syw = Math.sin(yaw), cpt = Math.cos(pitch), spt = Math.sin(pitch);
+  const aspect = w / h, fp = 1 / Math.tan(FOVY / 2);
+  const nbOn = showNb;
 
+  /* ① 시점 좌표 + 진하기 */
   if (vpBuf.length < N * 3) vpBuf = new Float32Array(N * 3 * 2);
+  if (fadeBuf.length < N) fadeBuf = new Float32Array(N * 2);
   for (let i = 0; i < N; i++) {
     const a = atoms[i];
     const X = a.x * scale, Y = a.y * scale, Z = a.z * scale;
-    const x1 = cy * X + sy * Z, z1 = -sy * X + cy * Z;
-    const y2 = cx * Y - sx * z1, z2 = sx * Y + cx * z1;
-    vpBuf[i * 3] = x1; vpBuf[i * 3 + 1] = y2; vpBuf[i * 3 + 2] = z2 - CAM_Z;
-  }
-
-  if (zBuf.length < P.length) { zBuf = new Float32Array(P.length * 2); }
-  if (!ordBuf || ordBuf.length < P.length) ordBuf = new Int32Array(P.length * 2);
-  const ord = ordBuf.subarray(0, P.length);
-  for (let k = 0; k < P.length; k++) {
-    const p = P[k];
-    if (p[0] === 0) zBuf[k] = vpBuf[p[1] * 3 + 2];
-    else zBuf[k] = (vpBuf[p[1] * 3 + 2] * 0.75 + vpBuf[p[2] * 3 + 2] * 0.25);
-    ord[k] = k;
-  }
-  ord.sort((a, b) => zBuf[a] - zBuf[b]);   // 먼 것(더 작은 z)부터
-
-  const rUnit = l3.style === "pack" ? l3.nn * 0.50 : l3.rref * 0.40;
-  const stickW = Math.max(rUnit * 0.24, l3.rref * 0.085);
-  ensureCap(P.length + 2);
-  vHead = 0; iHead = 0; primCount = 0;
-
-  for (let n = 0; n < P.length; n++) {
-    const p = P[ord[n]];
-    if (p[0] === 0) {
-      const i = p[1], a = atoms[i];
-      const r = rUnit * siteOf(mnr, a.s).r * scale;
-      const col = colOf(mnr, a.s);
-      if (i === pickedIdx) {
-        emitSphere(vpBuf[i * 3], vpBuf[i * 3 + 1], vpBuf[i * 3 + 2], r * 1.34, BLUE_RGB);
+    const x1 = cyw * X + syw * Z, z1 = -syw * X + cyw * Z;
+    const y2 = cpt * Y - spt * z1, z2 = spt * Y + cpt * z1;
+    const vz = z2 - CAM_Z;
+    vpBuf[i * 3] = x1; vpBuf[i * 3 + 1] = y2; vpBuf[i * 3 + 2] = vz;
+    let f = 0;
+    if (vz < -0.25) {
+      const ndcX = (fp / aspect) * x1 / -vz, ndcY = fp * y2 / -vz;
+      const ax = ndcX < 0 ? -ndcX : ndcX, ay = ndcY < 0 ? -ndcY : ndcY;
+      const rn = ax > ay ? ax : ay;
+      if (rn < FADE_OUT) {
+        const dz = (z2 < 0 ? -z2 : z2) / 1.261;
+        f = (1 - sstep(FADE_IN, FADE_OUT, rn)) * (1 - sstep(DEPTH_IN, DEPTH_OUT, dz));
       }
-      emitSphere(vpBuf[i * 3], vpBuf[i * 3 + 1], vpBuf[i * 3 + 2], r, col);
+    }
+    fadeBuf[i] = f;
+  }
+
+  /* ② 그릴 것 모으기 — 이웃 막대(kind 3)는 켰을 때만 */
+  /* 공 반지름 — 막대를 끈 이온 결정은 fill(거의 맞닿게), 금속은 촘촘히 쌓인 모습,
+     공-막대 모형은 이웃 거리의 0.32배(막대와 틈이 또렷하게 보이는 크기). */
+  const rUnit = (l3.fill && !nbOn) ? l3.fill
+    : (l3.style === "pack" ? l3.nn * 0.48 : l3.rref * 0.32);
+  const stickW = Math.max(rUnit * 0.24, l3.rref * 0.085);
+  const pk = l3._pk, pa = l3._pa, pb = l3._pb, ps = l3._ps, total = pk.length;
+  const cap = Math.min(total, MAX_PRIMS);
+  if (zBuf.length < cap) { zBuf = new Float32Array(cap); aBuf = new Float32Array(cap); }
+  if (!primBuf || primBuf.length < cap) { primBuf = new Int32Array(cap); ordBuf = new Int32Array(cap); }
+  let M = 0;
+  for (let i = 0; i < N && M < cap; i++) {
+    const fi = fadeBuf[i];
+    if (fi < farFloor) continue;
+    const e = ps[i + 1];
+    for (let o = ps[i]; o < e && M < cap; o++) {
+      const k = pk[o];
+      let al;
+      if (k === 0) { al = fi; zBuf[M] = vpBuf[i * 3 + 2]; }
+      else {
+        if (k === 3 && !nbOn) continue;
+        const j = pb[o], fj = fadeBuf[j];
+        const mn = fi < fj ? fi : fj;
+        al = mn * mn;                       // 막대는 공보다 빨리 흐려진다 — 가운데만 또렷하게
+        if (al < BOND_MIN) continue;
+        zBuf[M] = vpBuf[i * 3 + 2] * 0.75 + vpBuf[j * 3 + 2] * 0.25;
+      }
+      aBuf[M] = al; primBuf[M] = o; M++;
+    }
+  }
+
+  /* ③ 먼 것(더 작은 z)부터 */
+  const ord = ordBuf.subarray(0, M);
+  for (let s = 0; s < M; s++) ord[s] = s;
+  ord.sort((p, q) => zBuf[p] - zBuf[q]);
+
+  ensureCap(M + 2);
+  vHead = 0; iHead = 0; primCount = 0;
+  for (let s = 0; s < M; s++) {
+    const sl = ord[s], o = primBuf[sl], k = pk[o], al = aBuf[sl];
+    if (k === 0) {
+      const i = pa[o], a = atoms[i];
+      const r = rUnit * siteOf(mnr, a.s).r * scale;
+      if (i === pickedIdx) {
+        emitSphere(vpBuf[i * 3], vpBuf[i * 3 + 1], vpBuf[i * 3 + 2], r * 1.34, BLUE_RGB, al);
+      }
+      emitSphere(vpBuf[i * 3], vpBuf[i * 3 + 1], vpBuf[i * 3 + 2], r, colOf(mnr, a.s), al);
     } else {
-      const i = p[1], j = p[2];
+      const i = pa[o], j = pb[o];
       const axv = vpBuf[i * 3], ayv = vpBuf[i * 3 + 1], azv = vpBuf[i * 3 + 2];
       const bxv = (vpBuf[i * 3] + vpBuf[j * 3]) / 2;
       const byv = (vpBuf[i * 3 + 1] + vpBuf[j * 3 + 1]) / 2;
       const bzv = (vpBuf[i * 3 + 2] + vpBuf[j * 3 + 2]) / 2;
-      const col = colOf(mnr, atoms[i].s);
-      const wOut = (p[0] === 2 ? stickW * 0.62 : stickW) * scale;
-      emitStick(axv, ayv, azv, bxv, byv, bzv, wOut, col, p[0], p[0] === 2 ? 5 : 0);
+      const wOut = (k === 2 ? stickW * 0.62 : stickW) * scale;
+      emitStick(axv, ayv, azv, bxv, byv, bzv, wOut, colOf(mnr, atoms[i].s), k === 2 ? 2 : 1,
+        k === 2 ? 5 : 0, al);
     }
   }
 
   gl.viewport(x, y, w, h);
   gl.scissor(x, y, w, h);
-  persp(PROJ, FOVY, w / h, 0.1, 30);
+  persp(PROJ, FOVY, aspect, 0.1, 30);
   gl.useProgram(prog3);
   gl.uniformMatrix4fv(U3.uProj, false, PROJ);
   gl.uniform1f(U3.uAlpha, alpha);
@@ -1064,29 +1228,53 @@ function drawLattice3D(mnr, l3, x, y, w, h, alpha, pickedIdx, rect, store) {
   gl.enableVertexAttribArray(A3.aLocal); gl.vertexAttribPointer(A3.aLocal, 2, gl.FLOAT, false, st, 12);
   gl.enableVertexAttribArray(A3.aCol); gl.vertexAttribPointer(A3.aCol, 3, gl.FLOAT, false, st, 20);
   gl.enableVertexAttribArray(A3.aPerp); gl.vertexAttribPointer(A3.aPerp, 3, gl.FLOAT, false, st, 32);
-  gl.enableVertexAttribArray(A3.aParam); gl.vertexAttribPointer(A3.aParam, 2, gl.FLOAT, false, st, 44);
+  gl.enableVertexAttribArray(A3.aParam); gl.vertexAttribPointer(A3.aParam, 3, gl.FLOAT, false, st, 44);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo3);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, iArr.subarray(0, iHead), gl.DYNAMIC_DRAW);
   gl.drawElements(gl.TRIANGLES, iHead, gl.UNSIGNED_SHORT, 0);
+
+  /* ④ 「심화」 — 되풀이되는 최소 단위 **하나만** 테두리로. 기본 화면에서는 그리지 않는다
+     (교육과정상 단위 세포는 범위 밖이고, 기본 화면에서 강조하면 "결정 = 상자들의 집합"으로 읽힌다). */
+  if (showCell && l3.cell) {
+    const u = l3.cell, o0 = l3.cellO || 0, cs = [];
+    for (let bx = 0; bx < 2; bx++) for (let by = 0; by < 2; by++) for (let bz = 0; bz < 2; bz++) {
+      const X = (o0 + bx * u) * scale, Y = (o0 + by * u) * scale, Z = (o0 + bz * u) * scale;
+      const x1 = cyw * X + syw * Z, z1 = -syw * X + cyw * Z;
+      const y2 = cpt * Y - spt * z1, z2 = spt * Y + cpt * z1;
+      cs.push([x1, y2, z2 - CAM_Z]);
+    }
+    const E = [[0, 1], [0, 2], [0, 4], [1, 3], [1, 5], [2, 3], [2, 6], [3, 7], [4, 5], [4, 6], [5, 7], [6, 7]];
+    ensureCap(14);
+    vHead = 0; iHead = 0; primCount = 0;
+    const wCell = Math.max(l3.rref * 0.042, 0.004) * scale;
+    for (const e of E) {
+      const A = cs[e[0]], B = cs[e[1]];
+      emitStick(A[0], A[1], A[2], B[0], B[1], B[2], wCell, CELL_RGB, 1, 0, 1);
+    }
+    gl.bufferData(gl.ARRAY_BUFFER, vArr.subarray(0, vHead), gl.DYNAMIC_DRAW);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, iArr.subarray(0, iHead), gl.DYNAMIC_DRAW);
+    gl.drawElements(gl.TRIANGLES, iHead, gl.UNSIGNED_SHORT, 0);
+  }
+
   gl.disableVertexAttribArray(A3.aPos); gl.disableVertexAttribArray(A3.aLocal);
   gl.disableVertexAttribArray(A3.aCol); gl.disableVertexAttribArray(A3.aPerp);
   gl.disableVertexAttribArray(A3.aParam);
 
-  /* 클릭 판정용 화면 좌표(CSS 픽셀) */
+  /* 클릭 판정용 화면 좌표(CSS 픽셀) — 또렷한 가운데 입자만 담는다.
+     주변부는 "계속 이어진다"를 보여 주는 배경이므로 고르지 않는다. */
   if (store) {
     store.length = 0;
-    const f = 1 / Math.tan(FOVY / 2);
     for (let i = 0; i < N; i++) {
+      if (fadeBuf[i] < PICK_MIN) continue;
       const vz = vpBuf[i * 3 + 2];
-      if (vz > -0.2) continue;
-      const ndcX = (f / (w / h)) * vpBuf[i * 3] / -vz;
-      const ndcY = f * vpBuf[i * 3 + 1] / -vz;
+      const ndcX = (fp / aspect) * vpBuf[i * 3] / -vz;
+      const ndcY = fp * vpBuf[i * 3 + 1] / -vz;
       const r = rUnit * siteOf(mnr, atoms[i].s).r * scale;
       store.push({
         i, z: vz,
         x: rect.x + (ndcX * 0.5 + 0.5) * rect.w,
         y: rect.y + (0.5 - ndcY * 0.5) * rect.h,
-        r: Math.max(3, r * f * 0.5 * rect.h / -vz)
+        r: Math.max(3, r * fp * 0.5 * rect.h / -vz)
       });
     }
   }
@@ -1153,13 +1341,16 @@ function drawGL() {
 
 /* ── 확대 뷰 조작 — 끌어서 돌리기 · 눌러서 입자 고르기 ── */
 let dragging = false, dragMoved = 0, lastX = 0, lastY = 0;
+/* 입자가 겹쳐 보이는 자리에서는 **앞쪽 입자**를 고른다(공간 채움에서는 뒤쪽 입자의
+   중심이 더 가까울 수 있다). 공 안을 누른 것이 하나도 없을 때만 가장 가까운 것을 고른다. */
 function nearestAtom(list, x, y) {
-  let best = -1, bd = 1e9;
+  let best = -1, bd = 1e9, front = -1, fz = -1e9, fd = 1e9;
   for (const g of list) {
     const d = Math.hypot(g.x - x, g.y - y);
+    if (d <= g.r && g.z > fz) { fz = g.z; front = g.i; fd = d; }
     if (d < g.r + 8 && d < bd) { bd = d; best = g.i; }
   }
-  return { idx: best, d: bd };
+  return front >= 0 ? { idx: front, d: fd } : { idx: best, d: bd };
 }
 function stagePointerDown(ev) {
   dragging = true; dragMoved = 0;
@@ -1231,7 +1422,8 @@ function drawLatticePanel(mnr, lat, ox, oy, S, pickedIdx) {
       lctx.moveTo(a.x, a.y); lctx.lineTo(b.x, b.y); lctx.stroke();
     }
     lctx.setLineDash([]);
-  } else {
+    /* 암염·황철석의 근접선은 결합봉이 아니라 이웃 표시다 — 3D 화면과 같게 기본은 그리지 않는다 */
+  } else if (!((mnr.id === "halite" || mnr.id === "pyrite") && !showNb)) {
     lctx.strokeStyle = "rgba(40,45,52,0.28)"; lctx.lineWidth = 1.6; lctx.setLineDash([]);
     const near = lat.bondNear
       ? lat.bondNear / (1 + 2 * LAT_PAD) * S * 1.12
@@ -1376,20 +1568,32 @@ function showPick() {
     }
   }
   updateBondLegend();
+  updateStageNotes();
 }
 function updateBondLegend() {
   const el = $("bondLegend");
   const list = cmpOn ? [mineralL, mineralR] : [mineral];
   const mols = list.filter(m => m.molecular);
-  if (!mols.length) { el.style.display = "none"; el.innerHTML = ""; return; }
+  const nbs = list.filter(hasNbSticks);
+  if (!mols.length && !nbs.length) { el.style.display = "none"; el.innerHTML = ""; return; }
   el.style.display = "block";
   const hasHb = mols.some(m => m.id === "ice");
   const hasNone = mols.some(m => m.id === "dryice");
-  el.innerHTML = `<b>막대 범례</b><br>
-    <span class="bl-in"></span> 분자 <b>안</b>의 결합(공유 결합, 굵은 막대)` +
-    (hasHb ? ` &nbsp; <span class="bl-between"></span> 분자 <b>사이</b>의 수소 결합(점선)` : "") +
-    (hasNone ? `<br><span style="color:var(--t3)">드라이아이스는 분자 <b>사이</b>를 잇는 막대를 그리지 않았습니다 —
-      분산력은 방향이 정해진 결합이 아니기 때문입니다. 분자 사이의 <b>틈</b>으로 보세요.</span>` : "");
+  let html = "";
+  if (mols.length) {
+    html += `<b>막대 범례</b><br>
+      <span class="bl-in"></span> 분자 <b>안</b>의 결합(공유 결합, 굵은 막대)` +
+      (hasHb ? ` &nbsp; <span class="bl-between"></span> 분자 <b>사이</b>의 수소 결합(점선)` : "") +
+      (hasNone ? `<br><span style="color:var(--t3)">드라이아이스는 분자 <b>사이</b>를 잇는 막대를 그리지 않았습니다 —
+        분산력은 방향이 정해진 결합이 아니기 때문입니다. 분자 사이의 <b>틈</b>으로 보세요.</span>` : "");
+  }
+  if (nbs.length) {
+    if (html) html += "<br>";
+    html += `<span style="color:var(--t3)">${nbs.map(m => m.name).join("·")}는 이온이 <b>맞닿은 채 쌓인 모습</b>으로 그렸습니다 —
+      이온 사이에는 <b>방향이 정해진 결합봉이 없습니다.</b> 「최근접 이웃 표시」를 켜면 어느 이온이
+      서로 이웃인지 막대로 볼 수 있지만, 그 막대는 <b>결합봉이 아니라 이웃 표시</b>입니다.</span>`;
+  }
+  el.innerHTML = html;
 }
 
 /* ── 광물 고르기 (단일 모드) ── */
@@ -1489,15 +1693,38 @@ function applyZoom() {
   $("latWrap").style.pointerEvents = (!use3D && b >= 0.5) ? "auto" : "none";
   $("vZoom").textContent = zoomLabel(zoomV);
   $("zoomState").innerHTML = zoomV >= ZOOM_BLEND_END
-    ? "지금은 <b>입자 하나하나가 보이는 크기</b>입니다. 끌어서 돌려 보고, 입자를 눌러 보세요."
+    ? "지금은 <b>입자 하나하나가 보이는 크기</b>입니다. 화면에 보이는 것은 고체 <b>안쪽의 한 자리</b>이고, " +
+      "같은 배열이 <b>화면 밖으로도 계속</b>됩니다. 끌어서 돌려 보고, 가운데 입자를 눌러 보세요."
     : (zoomV > ZOOM_BLEND_START
-      ? "배율이 커지는 중입니다 — 표본 안쪽의 <b>입자 배열</b>이 떠오릅니다."
+      ? "배율이 커지는 중입니다 — 표본 <b>안쪽으로 들어가</b> 입자 배열이 떠오릅니다."
       : (zoomV > 30
-        ? "표면의 결이 보이기 시작합니다. <b>배율이 ×" + Math.round(magnification(ZOOM_BLEND_START)).toLocaleString("ko-KR") + "을 넘으면</b> 입자 배열이 나타납니다."
+        ? "표면의 결이 보이기 시작합니다. <b>약 ×" + Math.round(magnification(ZOOM_BLEND_START)).toLocaleString("ko-KR") + " 단계를 넘으면</b> 입자 배열이 나타납니다."
         : "<b>손에 들고 보는 크기</b>입니다. 이 겉모습만으로 결정인지 알 수 있을까요?"));
   $("pickCard").style.display = zoomV >= ZOOM_BLEND_START ? "" : "none";
+  updateStageNotes();
   resize();
 }
+
+/* ── 확대 그림 **바로 위에** 붙는 상시 표기 ────────────────────────────
+   하단의 「가정과 한계」만으로는 늦다 — 그림이 먼저 주는 인상을 막지 못한다.
+   그래서 같은 자리에서 세 가지를 말한다.
+     ① 이것은 고체 내부에서 잘라 본 대표 부분이고 구조는 모든 방향으로 계속된다
+     ② (막대를 켰다면) 그 막대는 결합봉이 아니라 이웃 표시다
+     ③ (심화 테두리를 켰다면) 테두리는 되풀이되는 최소 단위 하나다 */
+function hasNbSticks(m) { return m.id === "halite" || m.id === "pyrite"; }
+function updateStageNotes() {
+  const on = blend(zoomV) > 0.12;
+  const list = cmpOn ? [mineralL, mineralR] : [mineral];
+  const anyNb = list.some(hasNbSticks);
+  const anyCell = !!gl && list.some(m => !!m.a);   // 폴백(2D)에서는 테두리를 그릴 수 없다
+  $("latNote").style.display = on ? "flex" : "none";
+  $("stickNote").style.display = (anyNb && showNb) ? "" : "none";
+  $("cellNote").style.display = (showCell && anyCell) ? "" : "none";
+  $("nbRow").style.display = anyNb ? "" : "none";
+  $("cellRow").style.display = anyCell ? "" : "none";
+}
+$("nbToggle").onchange = e => { showNb = e.target.checked; updateStageNotes(); drawGL(); drawLat(); };
+$("cellToggle").onchange = e => { showCell = e.target.checked; updateStageNotes(); drawGL(); };
 $("sZoom").oninput = e => { zoomV = +e.target.value; applyZoom(); };
 $("spinBtn").onclick = () => { spinning = !spinning; $("spinBtn").textContent = spinning ? "회전 멈추기" : "회전 시키기"; };
 
@@ -1511,8 +1738,10 @@ function trackPerf(dtMs) {
   if (frameTimes.length > 30) frameTimes.shift();
   if (frameTimes.length === 30) {
     const avg = frameTimes.reduce((a, b) => a + b, 0) / 30;
-    if (avg > 22 && (dprCap > 1 || raySteps > 48)) {
-      dprCap = 1; raySteps = 48; resize();
+    if (avg > 22 && (dprCap > 1 || raySteps > 48 || farFloor < 0.3)) {
+      /* 저사양 기기 — 해상도와 광선 수를 낮추고, 이어짐을 보여 주는 **주변부**를
+         옅은 쪽부터 덜 그린다. 가운데 선명한 부분과 화면 밖으로 이어지는 인상은 남는다. */
+      dprCap = 1; raySteps = 48; farFloor = 0.20; resize();
     }
   }
 }
