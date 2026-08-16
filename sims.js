@@ -14,7 +14,7 @@
 const SIMS = [
   {
     id: "geotime-ride",
-    title: "지질 시대의 바다 — 1인칭 라이드",
+    title: "지질 시대의 바다",
     cat: "통합과학",
     path: "geotime-ride/",
     icon: "geotime",
@@ -24,7 +24,7 @@ const SIMS = [
   },
   {
     id: "mineral",
-    title: "고체 — 겉모습에서 입자 배열까지",
+    title: "고체와 입자 배열",
     cat: "물질의 상태",
     path: "mineral/",
     icon: "mineral",
@@ -34,7 +34,7 @@ const SIMS = [
   },
   {
     id: "liquid",
-    title: "액체 — 끓음 실험",
+    title: "액체와 끓는점",
     cat: "물질의 상태",
     path: "liquid/",
     icon: "liquid",

@@ -1375,7 +1375,7 @@ window.GeoRide = (function () {
   function boot(firstEra) {
     renderCredits();
     const $ = id => document.getElementById(id);
-    $("h1").textContent = TEXT.title + " — 1인칭 라이드";
+    $("h1").textContent = TEXT.title;
     $("subhead").textContent = TEXT.subheadRide;
     $("startBody").textContent = TEXT.lieCardFull;
     $("startBtn").textContent = TEXT.startButton;
