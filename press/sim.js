@@ -136,17 +136,53 @@ function rank(entries, target) {
   return survivors;
 }
 
-/* 인원별 라운드 수·제한 시간(확정 38 — 정지점 1 승인, 변경 없음) */
-const ROUNDS = { 2: 4, 3: 3, 4: 2 };
-const LIMITS = { 2: 30, 3: 30, 4: 30 };
+/* 인원별 라운드 수·제한 시간
+   (개선 v1 확정 2 — 전 인원 2라운드 고정 · 확정 14 — 4인만 조작 25초로 하향) */
+const ROUNDS = { 2: 2, 3: 2, 4: 2 };
+const LIMITS = { 2: 30, 3: 30, 4: 25 };
 
 /* 학생 활동 시간 예산(초) — X-2의 단일 원천(F-1). 화면 코드에 다시 타이핑하지 않는다.
-   공식(§3 「학생 활동 시간 예산」): 총초 = 고정비 160
-     + 라운드수 × (라운드머리 15 + (조작 + 전환 5) × 인원 + 공개·확인 20)
-   고정비 160초 내역: 기기 준비·조 편성 45 + 규칙 설명 60 + 인원 선택 10 + 마무리 45(확정 38) */
+   공식(개선 지시안 §3 단계 1-2):
+     총초 = (고정비 160 + 닉네임 입력 10 × 인원)
+          + 라운드수 × (라운드머리 15 + (조작 제한 + 전환 5) × 인원
+                        + 공개·정지점 8 × 인원 + 결과표 확인 20)
+   고정비 160초 내역: 기기 준비·조 편성 45 + 규칙 설명 60 + 인원 선택 10 + 마무리 45(확정 38)
+   ⚠ 닉네임 입력 10초/인(개선 지시안 추정 3)과 공개 연출+정지점 8초/인(추정 2)은
+     사용자 확정값이 아니라 추정값이다 — 교실 실측으로 갱신되면 이 두 상수만 고친다.
+   결과: k=2 → 422초 · k=3 → 518초 · k=4 → 574초 (전부 420~600 범위) */
 const FIXED_COST_SECONDS = 160;
-function budgetSeconds(k) {
-  return FIXED_COST_SECONDS + ROUNDS[k] * (35 + (LIMITS[k] + 5) * k);
+const NICK_INPUT_SECONDS = 10;      // 인당 닉네임 입력(추정 3)
+const ROUND_HEAD_SECONDS = 15;      // 라운드 머리 — 목표·시작 압력 제시(targetBrief)
+const TURN_SWITCH_SECONDS = 5;      // 조작 차례 전환
+const REVEAL_HOLD_SECONDS = 8;      // 인당 공개 연출 3.3초 + 정지점 확인(추정 2)
+const RESULT_VIEW_SECONDS = 20;     // 라운드 결과표 확인
+function budgetFor(k, rounds, limit) {
+  return FIXED_COST_SECONDS + NICK_INPUT_SECONDS * k
+    + rounds * (ROUND_HEAD_SECONDS + (limit + TURN_SWITCH_SECONDS) * k
+      + REVEAL_HOLD_SECONDS * k + RESULT_VIEW_SECONDS);
+}
+function budgetSeconds(k) { return budgetFor(k, ROUNDS[k], LIMITS[k]); }
+
+/* ── 국면(phase) — 개선 지시안 §3 ★ 상태 전이표가 정본이다. 값은 이 열 개뿐이다 ── */
+const PHASES = ["idle", "setup", "rules", "targetBrief", "playing",
+  "allSubmitted", "reveal", "revealHold", "roundResult", "ended"];
+
+/* 캔버스 압력 표시 모드 — 화면 코드가 조건을 다시 쓰지 않고 이 함수만 부른다(F-1 단일 원천).
+     "none"   : 압력 신호를 하나도 그리지 않는다(막대·숫자 둘 다 없음)
+     "start"  : 라운드 시작 압력(전원 같은 고정값)만 그린다 — 조작 전에만 허용된다
+     "reveal" : 공개 연출·판정 뒤의 실제 압력을 그린다
+   ★ 잠금 규칙(원 설계의 심장) — playing에서 슬라이더를 건드린 뒤(turnLocked)는 "none"이다. */
+function meterMode(phase, turnLocked) {
+  if (phase === "targetBrief") return "start";
+  if (phase === "playing") return turnLocked ? "none" : "start";
+  if (phase === "reveal" || phase === "revealHold" || phase === "roundResult" || phase === "ended") return "reveal";
+  return "none";
+}
+
+/* 한 참가자의 판정이 끝난 뒤 갈 국면 — 마지막 참가자면 결과표로 자동 진행(확정 4),
+   아니면 정지점(revealHold)에서 멈춰 「다음 참가자」 버튼을 기다린다(요구 ⑥). */
+function afterJudgePhase(revealIdx, k) {
+  return revealIdx >= k - 1 ? "roundResult" : "revealHold";
 }
 
 /* ================= UI ================= */
@@ -181,13 +217,15 @@ const SEATS = ["①", "②", "③", "④"];
 /* 신규 요구(2026-08-01) — 공개 연출을 4단계로 다시 짠다: ① 유압유 이동 → ② 램 상승 → ③ 가압 → ④ 판정.
    네 구간의 합이 REVEAL_TOTAL_MS(다음 참가자로 넘어가는 시점)와 같아야 한다. */
 const REVEAL_OIL_MS = 300;      // ① 유압유가 관을 따라 이동한다(램은 아직 정지)
-/* 재작업(2026-08-01 3차) — "피스톤이 올라오는 속도만 0.5배속"(사용자 요청). 같은 거리를
-   두 배 시간에 이동해야 0.5배속이므로 RISE_MS만 2배로 늘린다. 오일 이동·가압·판정 구간은
-   그대로 두고(요청이 "속도만"이라고 명시), TOTAL_MS는 늘어난 만큼(300ms)만 같이 늘려
-   판정 구간 길이(400ms)가 이전과 같게 유지되도록 재계산했다. */
-const REVEAL_RISE_MS = 600;     // ② 램이 아래에서 위로 올라와 물체에 닿는다 (0.5배속 = 이전 300ms×2)
-const REVEAL_PRESS_MS = 500;    // ③ 램이 계속 밀어 올려 물체가 눌린다 · 압력 숫자가 여기까지 함께 오른다
-const REVEAL_TOTAL_MS = 1800;   // ④ 판정(균열 갈라짐) 포함, 다음 참가자로 넘어가는 시점
+/* 개선 v1(2026-08-16) — 공개 연출 감속(요구 ⑤ · 추정 1). 사용자 요청은 "현재의 2~3배",
+   그중 3배 상한을 채택했다: 램 상승 600 → 1800 ms. 가압 구간도 500 → 700 ms로 늘려
+   압력 숫자가 오르는 구간(RISE+PRESS = 2,500 ms)을 길게 잡았다.
+   합산 검산: 300(오일) + 1800(램 상승) + 700(가압) + 500(판정) = 3,300 = REVEAL_TOTAL_MS.
+   ※ 이전 이력: 2026-08-01 3차에서 "피스톤 속도만 0.5배속"으로 RISE 300 → 600으로 늘렸고,
+     그때 판정 구간 400 ms를 유지하려고 TOTAL을 1,800으로 맞췄다. 이 판이 그 위에 얹힌다. */
+const REVEAL_RISE_MS = 1800;    // ② 램이 아래에서 위로 올라와 물체에 닿는다 (개선 전 600 ms의 3배)
+const REVEAL_PRESS_MS = 700;    // ③ 램이 계속 밀어 올려 물체가 눌린다 · 압력 숫자가 여기까지 함께 오른다
+const REVEAL_TOTAL_MS = 3300;   // ④ 판정(균열 갈라짐) 500 ms 포함 — 이 참가자 연출이 끝나는 시점
 function revealStageProgress(elapsed) {
   const oilT = clamp(elapsed / REVEAL_OIL_MS, 0, 1);
   const riseT = clamp((elapsed - REVEAL_OIL_MS) / REVEAL_RISE_MS, 0, 1);
@@ -223,9 +261,11 @@ let useLimit = true;
 const state = { N: 10, T: 400, V: 2.75 };   // 조절 변인의 "지금 값" — 항상 화면에 보인다(그림 신호)
 
 const G = {
-  phase: "idle",         // idle | playing | allSubmitted | reveal | roundResult | ended
+  /* phase 값은 계산부 PHASES의 10개뿐이다 — 지시안 §3 ★ 상태 전이표가 정본 */
+  phase: "idle",
   k: 0, round: 0, totalRounds: 0,
-  startOffset: 0, order: [], turnPos: 0,
+  order: [], turnPos: 0,
+  names: [],             // 닉네임 — 메모리에만 존재한다(저장·전송·URL 금지 · §5 금지 1)
   data: null, entries: [], wins: [],
   turnLocked: false, turnStart: 0,
   revealSeatOrder: [], revealIdx: 0, revealPhaseStart: 0,
@@ -234,9 +274,27 @@ const G = {
 
 const S = { N: $("sN"), T: $("sT"), V: $("sV") };
 const RANGE = { N: PRESS.N, T: PRESS.T, V: PRESS.V };
+const NICKS = [$("nick0"), $("nick1"), $("nick2"), $("nick3")];
 
 function fmtInt(x) { return Math.round(x).toLocaleString("ko-KR"); }
 function seatLabel(i) { return SEATS[i] || ("#" + (i + 1)); }
+/* 기본 닉네임 — 빈칸이면 ①~④번(확정 3) */
+function defaultName(i) { return seatLabel(i) + "번"; }
+/* 참가자 표시 이름 — 차례·결과표·최종 순위·공개 중 표시가 전부 이 함수 하나를 쓴다(F-1) */
+function playerName(i) { return (G.names && G.names[i]) || defaultName(i); }
+/* innerHTML에 넣기 전 반드시 통과시킨다 — 닉네임은 학생이 직접 친 문자열이다 */
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+/* 닉네임 입력란 → G.names. 공백만 친 칸도 기본값으로 되돌린다 */
+function readNames() {
+  G.names = Array.from({ length: G.k }, (_, i) => {
+    const el = NICKS[i];
+    const v = el ? el.value.trim() : "";
+    return v || defaultName(i);
+  });
+}
 
 /* ================= 조절 변인 입력 ================= */
 function syncSliderDom() {
@@ -250,7 +308,8 @@ function onSlide(k, v) {
   if (!isFinite(v)) return;
   state[k] = clamp(snap(v, R.step), R.min, R.max);
   syncSliderDom();
-  if (G.phase === "playing" && !G.turnLocked) { G.turnLocked = true; renderDynamic(); }
+  /* 처음 손대는 순간 잠근다 — renderStatic을 거쳐야 시작 압력 표시(DOM·캔버스)가 함께 꺼진다 */
+  if (G.phase === "playing" && !G.turnLocked) { G.turnLocked = true; renderStatic(); }
 }
 S.N.oninput = e => onSlide("N", +e.target.value);
 S.T.oninput = e => onSlide("T", +e.target.value);
@@ -260,10 +319,10 @@ function setControlsEnabled(on) {
 }
 
 /* ================= 게임 진행 ================= */
-function orderForRound(r) {
-  const off = (G.startOffset + (r - 1)) % G.k;
-  return Array.from({ length: G.k }, (_, i) => (off + i) % G.k);
-}
+/* 라운드 순서는 항상 ①→②→③→④ 고정이다(개선 v1 확정 15 — 선공 회전 폐지).
+   개선 전에는 선공 자리를 무작위로 뽑아 라운드마다 순서를 돌렸는데, 결과표는 늘 좌석
+   번호순(①부터)으로 정렬하므로 "먼저 조작한 사람 = ①번 행"이 성립하지 않았다. 이것이
+   사용자가 보고한 "먼저 조작한 사람의 부피가 결과표에서 뒤바뀌어 보인다"의 원인이다. */
 function currentSeat() { return G.order[G.turnPos]; }
 
 function resetTurnControls() {
@@ -273,29 +332,80 @@ function resetTurnControls() {
   G.turnStart = performance.now();
 }
 
-function startGame() {
+/* ── 1단계 setup — 인원·닉네임·제한 시간. 목표는 아직 만들지 않는다 ── */
+function openSetup() {
+  G.phase = "setup";
+  G.data = null; G.entries = []; G.round = 0; G.totalRounds = 0;
+  /* 앞 조의 별명·승수·인원이 다음 조의 1단계 화면에 남지 않게 지운다(S-검토 B-1·B-7).
+     입력란도 함께 비운다 — 「이전」 복귀는 backToSetup()이 처리하므로(openSetup을 거치지
+     않는다) 이 초기화가 「이전 시 입력값 유지」를 깨지 않는다(사용자 확정 2026-08-16).
+     G.k는 beginGame()이 selectedK로 다시 세우고, 닉네임 칸 개수는 selectedK를 쓴다. */
+  G.k = 0; G.names = []; G.wins = [];
+  for (let i = 0; i < NICKS.length; i++) { if (NICKS[i]) NICKS[i].value = ""; }
+  G.turnLocked = false;
+  setControlsEnabled(false);
+  $("resultCard").style.display = "none";
+  $("finalCard").style.display = "none";
+  syncNickRow();
+  renderStatic();
+}
+/* ── 2단계 rules — 「게임 방법」. 「이전」으로 돌아가면 입력값은 DOM에 그대로 남는다 ── */
+function openRules() {
+  if (G.phase !== "setup") return;
+  G.phase = "rules";
+  renderStatic();
+}
+function backToSetup() {
+  if (G.phase !== "rules") return;
+  G.phase = "setup";
+  renderStatic();
+}
+/* ── rules 「다음」 — 여기서 비로소 게임이 열리고 라운드 1이 생성된다 ── */
+function beginGame() {
+  if (G.phase !== "rules") return;
   G.k = selectedK;
+  readNames();
   G.wins = Array(G.k).fill(0);
   G.round = 0;
   G.totalRounds = ROUNDS[G.k];
-  G.startOffset = Math.floor(Math.random() * G.k);
   $("resultCard").style.display = "none";
   $("finalCard").style.display = "none";
   nextRound();
 }
+/* ── 3단계 targetBrief(라운드 머리) — 목표 압력과 시작 압력을 보여주고 멈춘다.
+   라운드 2도 같은 국면을 거친다. 목표가 이미 생성됐으므로 「이전」은 두지 않는다 ── */
 function nextRound() {
   G.round++;
   if (G.round > G.totalRounds) { endGame(); return; }
   G.data = makeRound(Math.random);
   G.entries = [];
-  G.order = orderForRound(G.round);
+  G.order = Array.from({ length: G.k }, (_, i) => i);   // 확정 15 — 항등 순열 고정
   G.turnPos = 0;
+  resetTurnControls();
+  G.phase = "targetBrief";
+  setControlsEnabled(false);
+  renderStatic();
+}
+/* playing으로 들어오는 유일한 문 — targetBrief에서만 열린다(§6 도달 경로 검사 대상) */
+function startTurns() {
+  if (G.phase !== "targetBrief") return;
   resetTurnControls();
   G.phase = "playing";
   setControlsEnabled(true);
   renderStatic();
 }
-function submitTurn() {
+/* 차례가 막 바뀐 직후에 도착한 늦은 클릭을 무시한다 — 타이머 자동 제출과 클릭의 경합.
+   제한 시간이 끝나 자동 제출된 순간 직전 참가자의 늦은 클릭(수십 ms)이 도착하면, 국면이
+   아직 playing이라 phase 가드를 통과해 「다음 참가자의 제출」로 처리된다. 그러면 다음
+   사람은 차례를 잃고 라운드 시작값이 그의 기록으로 남는다(S-검토 A-1 실측 재현).
+   G.turnStart은 차례가 시작될 때마다 resetTurnControls()가 다시 찍는다. */
+const TURN_GRACE_MS = 500;
+
+/* auto === true 는 타이머 만료로 코드가 부르는 제출이다(유예를 적용하지 않는다).
+   사람이 누른 제출은 auto === false 로 들어와 유예 검사를 받는다. */
+function submitTurn(auto) {
+  if (G.phase !== "playing") return;   // 타이머 자동 제출과 클릭이 겹쳐도 두 번 담기지 않는다(P-검토 B-1)
+  if (auto !== true && performance.now() - G.turnStart < TURN_GRACE_MS) return;
   const P = pressure(state.N, state.T, state.V);
   /* crackSeed — 이 참가자가 부서질 경우 균열 모양을 고정할 시드. 라운드 진행 중 값이
      바뀌지 않으므로 공개·라운드결과·최종화면 어디서 다시 그려도 같은 모양이 나온다. */
@@ -305,17 +415,39 @@ function submitTurn() {
     G.phase = "allSubmitted";
     setControlsEnabled(false);
   } else {
-    resetTurnControls();
-    G.phase = "playing";
+    resetTurnControls();   // 다음 사람 차례 — 국면은 playing 그대로다
   }
   renderStatic();
 }
 function startReveal() {
+  if (G.phase !== "allSubmitted") return;
   G.revealSeatOrder = Array.from({ length: G.k }, (_, i) => i);   // 참가자 순서(①→②→③→④)대로 공개
   G.revealIdx = 0;
   G.revealPhaseStart = performance.now();
   G.phase = "reveal";
   setControlsEnabled(false);
+  renderStatic();
+}
+/* 지금 공개 중인 참가자 */
+function revealSeat() { return G.revealSeatOrder[G.revealIdx]; }
+function revealEntry() {
+  const seat = revealSeat();
+  return seat === undefined ? null : (G.entries.find(x => x.seat === seat) || null);
+}
+/* 한 참가자의 판정이 끝났다 — 마지막 참가자면 결과표로 자동(확정 4),
+   아니면 정지점(revealHold)에 멈춰 「다음 참가자」 버튼을 기다린다(요구 ⑥) */
+function holdOrFinishReveal() {
+  if (G.phase !== "reveal") return;
+  if (afterJudgePhase(G.revealIdx, G.k) === "roundResult") { finishReveal(); return; }
+  G.phase = "revealHold";
+  renderStatic();
+}
+/* 「다음 — <닉네임> 결과 보기」 — 정지점에서 전진하는 유일한 경로 */
+function nextRevealPlayer() {
+  if (G.phase !== "revealHold") return;
+  G.revealIdx++;
+  G.revealPhaseStart = performance.now();
+  G.phase = "reveal";
   renderStatic();
 }
 function finishReveal() {
@@ -336,44 +468,82 @@ function endGame() {
 }
 function endNow() {
   if (G.phase === "idle" || G.phase === "ended") return;
+  /* 위저드(setup·rules)에서는 아직 라운드가 없다 — 최종 순위표를 만들 값이 없으므로
+     대기 상태로 되돌린다. 「여기서 끝내기」 버튼 자체도 그 두 국면에서는 숨겨져 있다. */
+  if (G.round < 1) { G.phase = "idle"; setControlsEnabled(false); renderStatic(); return; }
   endGame();
 }
 
 /* ================= 화면 갱신(상태 전환 시 1회) ================= */
+/* 국면별 표시 여부는 이 표 하나가 정한다(매뉴얼 §13 ① — 단일 원천).
+   흩어진 display 대입은 게이팅을 조용히 우회하므로, display를 쓰는 곳은
+   applyPhaseVisibility() 하나로 모은다(결과·최종 카드 두 장은 예외 — 아래 주석). */
+const SHOW = {
+  idleNote:      { on: "block", phases: ["idle"] },
+  newGame:       { on: "", phases: ["idle", "ended"] },
+  endGame:       { on: "", phases: ["targetBrief", "playing", "allSubmitted", "reveal", "revealHold", "roundResult"] },
+  wizSetup:      { on: "block", phases: ["setup"] },
+  wizRules:      { on: "block", phases: ["rules"] },
+  goalMain:      { on: "flex", phases: ["targetBrief", "playing", "allSubmitted", "reveal", "revealHold", "roundResult", "ended"] },
+  startInfo:     { on: "flex", phases: ["targetBrief", "playing"] },
+  timerWrap:     { on: "flex", phases: ["playing"] },
+  startTurnBtn:  { on: "", phases: ["targetBrief"] },
+  submitBtn:     { on: "", phases: ["playing"] },
+  submitNote:    { on: "", phases: ["playing"] },
+  revealBtn:     { on: "", phases: ["allSubmitted"] },
+  nextPlayerBtn: { on: "", phases: ["revealHold"] },
+  nextRoundBtn:  { on: "", phases: ["roundResult"] }
+};
+function applyPhaseVisibility() {
+  for (const id in SHOW) {
+    const rule = SHOW[id];
+    $(id).style.display = rule.phases.indexOf(G.phase) >= 0 ? rule.on : "none";
+  }
+  /* ★ 잠금 규칙 — 슬라이더를 건드린 뒤에는 시작 압력을 DOM에서도 지운다.
+     (캔버스 쪽은 meterMode()가 "none"을 돌려주는 것으로 같은 판정을 한다) */
+  if (meterMode(G.phase, G.turnLocked) !== "start") $("startInfo").style.display = "none";
+}
 function renderStatic() {
-  const playing = G.phase !== "idle" && G.phase !== "ended";
+  const inGame = G.round >= 1 && G.phase !== "idle" && G.phase !== "setup" && G.phase !== "rules";
   /* 재작업 A-4 — "새 게임"은 idle일 때만 강조(primary). 게임 중·종료 후에는 다른 하나의
-     강조 버튼(제출/공개/다음 라운드/최종 카드의 새 게임)과 겹치지 않게 뗀다. 국면마다
-     강조 버튼이 항상 1개 이하가 되게 하는 것이 목적이다(§3 3-E·§6 I군). */
+     강조 버튼(다음/조작 시작/제출/공개/다음 참가자/다음 라운드)과 겹치지 않게 뗀다.
+     국면마다 강조 버튼이 항상 1개 이하가 되게 하는 것이 목적이다(§3 3-E·§6 I군). */
   $("newGame").classList.toggle("primary", G.phase === "idle");
-  $("roundNow").textContent = playing ? G.round : "–";
-  $("roundTotal").textContent = playing ? G.totalRounds : "–";
+  $("roundNow").textContent = inGame ? G.round : "–";
+  $("roundTotal").textContent = inGame ? G.totalRounds : "–";
   $("turnLab").textContent =
-    G.phase === "playing" ? seatLabel(currentSeat()) + "번 차례"
+    G.phase === "setup" ? "1단계 — 인원과 별명"
+    : G.phase === "rules" ? "2단계 — 게임 방법"
+    : G.phase === "targetBrief" ? "3단계 — 목표 확인"
+    : G.phase === "playing" ? playerName(currentSeat()) + " 차례"
     : G.phase === "allSubmitted" ? "전원 제출 완료"
-    : G.phase === "reveal" ? "공개 중"
+    : G.phase === "reveal" ? "공개 중 — " + playerName(revealSeat())
+    : G.phase === "revealHold" ? "결과 확인 — " + playerName(revealSeat())
     : G.phase === "roundResult" ? "라운드 결과"
     : G.phase === "ended" ? "게임 종료"
     : "대기 중";
-  $("winsLab").textContent = G.k
-    ? Array.from({ length: G.k }, (_, i) => seatLabel(i) + G.wins[i]).join(" ")
+  $("winsLab").textContent = G.k && G.names.length
+    ? Array.from({ length: G.k }, (_, i) => playerName(i) + " " + G.wins[i]).join(" · ")
     : "–";
 
-  $("idleNote").style.display = G.phase === "idle" ? "block" : "none";
-  $("goalMain").style.display = G.phase === "idle" ? "none" : "flex";
   $("goalVal").textContent = G.data ? fmtInt(G.data.target) : "–";
   if (G.data) $("startVal").textContent = fmtInt(G.data.P0);
+  $("goalCard").classList.toggle("brief", G.phase === "targetBrief");
 
-  $("submitBtn").style.display = G.phase === "playing" ? "" : "none";
-  $("revealBtn").style.display = G.phase === "allSubmitted" ? "" : "none";
-  $("nextRoundBtn").style.display = G.phase === "roundResult" ? "" : "none";
   $("nextRoundBtn").textContent = G.round >= G.totalRounds ? "최종 결과 보기" : "다음 라운드";
-
-  $("timerWrap").style.display = G.phase === "playing" ? "flex" : "none";
+  if (G.phase === "revealHold") {
+    $("nextPlayerName").textContent = playerName(G.revealSeatOrder[G.revealIdx + 1]);
+  }
 
   $("turnHint").textContent =
-    G.phase === "playing" ? "— " + seatLabel(currentSeat()) + "번, 지금 조절하세요" : "";
+    G.phase === "playing" ? "— " + playerName(currentSeat()) + ", 지금 조절하세요" : "";
+  $("stageWho").textContent =
+    (G.phase === "reveal" || G.phase === "revealHold") ? "공개 중 — " + playerName(revealSeat()) : "";
 
+  applyPhaseVisibility();
+  syncHowto();
+
+  /* 결과·최종 카드는 카드 자체를 접었다 폈다 하므로 전용 함수가 표시를 맡는다 */
   if (G.phase === "roundResult") renderResultTable();
   if (G.phase === "ended") renderFinal();
 
@@ -387,18 +557,19 @@ function lastRevealedEntry() {
   return G.entries.find(x => x.seat === seat) || null;
 }
 function pressureInfo() {
-  if (G.phase === "playing") {
-    return { locked: G.turnLocked, value: G.turnLocked ? null : pressure(state.N, state.T, state.V) };
-  }
-  if (G.phase === "reveal") {
-    const seat = G.revealSeatOrder[G.revealIdx];
-    const e = G.entries.find(x => x.seat === seat);
-    const elapsed = performance.now() - G.revealPhaseStart;
-    const judged = animPaused || revealStageProgress(elapsed).judged;
-    return { locked: !judged, value: judged ? e.P : null };
-  }
-  if (G.phase === "roundResult" || G.phase === "ended") {
-    const e = lastRevealedEntry();
+  const mode = meterMode(G.phase, G.turnLocked);
+  /* 조작 전 — 라운드 시작 압력(전원 같은 고정값)을 보여준다. 슬라이더 현재값이 아니라
+     G.data.P0을 쓴다: 잠금 전에는 두 값이 같고, 값을 하나로 두어야 누출 경로가 늘지 않는다 */
+  if (mode === "start" && G.data) return { locked: false, value: G.data.P0 };
+  if (mode === "reveal") {
+    if (G.phase === "reveal") {
+      const e = revealEntry();
+      const elapsed = performance.now() - G.revealPhaseStart;
+      const judged = animPaused || revealStageProgress(elapsed).judged;
+      return { locked: !judged, value: judged && e ? e.P : null };
+    }
+    /* revealHold — 지금 참가자의 최종 압력을 그대로 유지한다(다음 사람으로 전진하지 않는다) */
+    const e = G.phase === "revealHold" ? revealEntry() : lastRevealedEntry();
     if (e) return { locked: false, value: e.P };
   }
   return { locked: true, value: null };
@@ -408,11 +579,16 @@ function renderDynamic() {
   $("rP").textContent = pi.locked ? "🔒 잠김" : fmtInt(pi.value);
   $("rPUnit").textContent = pi.locked ? "" : "kPa";
   $("lockNote").textContent = pi.locked
-    ? (G.phase === "playing" ? "조절하는 동안 잠깁니다 — 제출하면 다음 사람에게 열립니다" : "제출하면 열립니다")
+    ? (G.phase === "playing" ? "조절하는 동안 잠깁니다 — 제출하면 다음 사람에게 열립니다"
+      : G.phase === "allSubmitted" || G.phase === "reveal" ? "공개하면 열립니다" : "")
     : "";
 
-  const showStart = G.phase === "playing" && G.turnPos === 0 && !G.turnLocked;
-  $("startInfo").style.display = showStart ? "flex" : "none";
+  /* 유예 구간(차례 시작 0.5초)에는 제출 버튼을 흐리게 — 클릭이 소리 없이 삼켜지지 않게 한다
+     (S-검토 B-4). renderDynamic이 playing 동안 매 프레임 돌므로 별도 타이머가 필요 없고,
+     제한 시간을 끈 경우(useLimit=false)도 같이 덮인다. */
+  if (G.phase === "playing") {
+    $("submitBtn").disabled = performance.now() - G.turnStart < TURN_GRACE_MS;
+  }
 
   if (G.phase === "playing" && useLimit) {
     const limit = LIMITS[G.k];
@@ -420,7 +596,7 @@ function renderDynamic() {
     const remain = Math.max(0, limit - elapsed);
     $("timerFill").style.width = Math.max(0, Math.min(100, remain / limit * 100)) + "%";
     $("timerTxt").textContent = "남은 시간 " + Math.ceil(remain) + "초";
-    if (remain <= 0) submitTurn();
+    if (remain <= 0) submitTurn(true);   // 타이머 만료 — 유예 검사 없이 제출한다
   } else if (G.phase === "playing") {
     $("timerTxt").textContent = "제한 시간 없음";
     $("timerFill").style.width = "100%";
@@ -438,14 +614,16 @@ function renderResultTable() {
     const v = verdict(e.P, G.data.target);
     const pct = Math.round(e.P / G.data.target * 100);
     const win = e.seat === G.roundWinnerSeat ? ' class="winrow"' : "";
-    return "<tr" + win + "><td>" + seatLabel(e.seat) + "</td><td>" + e.N + "</td><td>" + e.T +
+    /* 닉네임은 학생이 친 문자열이다 — innerHTML에 넣기 전 반드시 esc()를 거친다 */
+    return "<tr" + win + "><td>" + esc(playerName(e.seat)) + "</td><td>" + e.N + "</td><td>" + e.T +
       " K</td><td>" + e.V.toFixed(2) + " L</td><td>" + fmtInt(e.P) + " kPa</td><td>" + pct +
       " %</td><td>" + verdictCell(v) + "</td></tr>";
   }).join("");
-  const head = "<tr><th>참가자</th><th>입자 수</th><th>온도</th><th>부피</th><th>만든 압력</th><th>목표 대비</th><th>판정</th></tr>";
+  /* 다섯째 열 이름은 학습지 기록표의 열 이름을 그대로 따른다(개선 v1 확정 16 — 학습지 연계 B) */
+  const head = "<tr><th>참가자</th><th>입자 수</th><th>온도</th><th>부피</th><th>측정 압력</th><th>목표 대비</th><th>판정</th></tr>";
   $("resultTable").innerHTML = "<thead>" + head + "</thead><tbody>" + rows + "</tbody>";
   $("resultHead").textContent = G.roundWinnerSeat !== null
-    ? "이번 라운드 승자 — " + seatLabel(G.roundWinnerSeat) + "번"
+    ? "이번 라운드 승자 — " + playerName(G.roundWinnerSeat)
     : "전원 부서짐 — 승자 없음";
   $("resultCard").style.display = "";
 }
@@ -456,36 +634,51 @@ function renderFinal() {
   /* 재작업 B-4 — 표만으로는 승자가 강조돼 보이지 않는다(0승-0승도 둘 다 강조된다).
      문장으로 최종 승자를 명시한다(§3 3-B 10 · §6 E군). */
   const winTxt = winners.length > 1
-    ? "공동 1위 — " + winners.map(i => seatLabel(i)).join("·") + "번"
-    : "최종 승자 — " + seatLabel(winners[0]) + "번";
+    ? "공동 1위 — " + winners.map(i => playerName(i)).join("·")
+    : "최종 승자 — " + playerName(winners[0]);
   const rows = order.map(i =>
-    "<tr" + (G.wins[i] === top ? ' class="winrow"' : "") + "><td>" + seatLabel(i) +
-    "번</td><td>" + G.wins[i] + "승</td></tr>").join("");
-  $("finalBody").innerHTML = '<p class="winline">' + winTxt + '</p><table><thead><tr><th>참가자</th><th>승수</th></tr></thead><tbody>' + rows + "</tbody></table>";
+    "<tr" + (G.wins[i] === top ? ' class="winrow"' : "") + "><td>" + esc(playerName(i)) +
+    "</td><td>" + G.wins[i] + "승</td></tr>").join("");
+  $("finalBody").innerHTML = '<p class="winline">' + esc(winTxt) + '</p><table><thead><tr><th>참가자</th><th>승수</th></tr></thead><tbody>' + rows + "</tbody></table>";
   $("finalCard").style.display = "";
 }
 
 /* ================= 버튼 ================= */
 /* 재작업 B-3⑴ — 제한 시간 표시값을 LIMITS[selectedK]에서 매번 계산한다(하드코딩 제거, F-1). */
 function syncLimitTxt() { $("limitTxt").textContent = LIMITS[selectedK]; }
+/* 선택한 인원수만큼만 닉네임 칸을 보여준다 */
+function syncNickRow() {
+  for (let i = 0; i < NICKS.length; i++) {
+    $("nickWrap" + i).style.display = i < selectedK ? "inline-flex" : "none";
+  }
+}
 document.querySelectorAll(".pc").forEach(b => b.onclick = () => {
   selectedK = +b.dataset.n;
   document.querySelectorAll(".pc").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
   syncLimitTxt();
+  syncNickRow();
 });
 $("useLimit").onchange = e => { useLimit = e.target.checked; };
-$("newGame").onclick = startGame;
+$("newGame").onclick = openSetup;      // 1단계로 — 목표는 아직 만들지 않는다
 $("endGame").onclick = endNow;
-$("submitBtn").onclick = submitTurn;
+$("setupNext").onclick = openRules;    // 1 → 2단계
+$("rulesPrev").onclick = backToSetup;  // 2 → 1단계 (입력값 유지)
+$("rulesNext").onclick = beginGame;    // 2 → 3단계 (여기서 라운드 1 생성)
+$("startTurnBtn").onclick = startTurns;
+/* 화살표로 감싼다 — 그대로 넘기면 MouseEvent가 첫 인자로 들어가 우연히 동작할 뿐,
+   「사람이 누른 제출」이라는 뜻이 코드에 남지 않는다(S-검토 A-1) */
+$("submitBtn").onclick = () => submitTurn(false);
 $("revealBtn").onclick = startReveal;
+$("nextPlayerBtn").onclick = nextRevealPlayer;
 $("nextRoundBtn").onclick = () => { $("resultCard").style.display = "none"; nextRoundOrEnd(); };
-$("restartBtn").onclick = startGame;
+$("restartBtn").onclick = openSetup;
 
-/* ================= 「어떻게 하나」 — 1024px 미만은 기본 접힘, 그 이상은 항상 펼침 ================= */
+/* ================= 「게임 방법」 — 1024px 미만은 기본 접힘, 그 이상은 항상 펼침.
+   2단계(rules)에서는 폭과 상관없이 펼친다 — 그 단계의 내용 자체이기 때문이다 ================= */
 function syncHowto() {
   const wide = window.matchMedia("(min-width:1024px)").matches;
   const el = $("howto");
-  if (wide) el.setAttribute("open", ""); else el.removeAttribute("open");
+  if (wide || G.phase === "rules") el.setAttribute("open", ""); else el.removeAttribute("open");
 }
 window.addEventListener("resize", syncHowto);
 
@@ -542,20 +735,22 @@ function resize() {
 const MAX_SQUEEZE = 0.34;
 const MAX_BULGE = 0.20;
 
+/* 연출이 끝난 뒤의 최종 상태 — 감소 모션·정지점(revealHold)·결과표·최종 화면이 같은 그림을 쓴다 */
+function finalDisplay(e) {
+  return {
+    N: e.N, T: e.T, V: e.V, ramT: 1,
+    squeezeFrac: Math.min(e.P / G.data.target, 1),
+    meter: "reveal", dispP: e.P, finalP: e.P,
+    judged: true, verdict: verdict(e.P, G.data.target), crackT: 1, crackSeed: e.crackSeed
+  };
+}
 function displayState() {
+  const mode = meterMode(G.phase, G.turnLocked);
   if (G.phase === "reveal") {
-    const seat = G.revealSeatOrder[G.revealIdx];
-    const e = G.entries.find(x => x.seat === seat);
+    const e = revealEntry();
     const elapsed = performance.now() - G.revealPhaseStart;
-    if (animPaused) {
-      /* 요구 8 — 감소 모션에서는 연출을 건너뛰고 최종 상태를 바로 보여준다 */
-      return {
-        N: e.N, T: e.T, V: e.V, ramT: 1,
-        squeezeFrac: Math.min(e.P / G.data.target, 1),
-        meterOn: true, dispP: e.P, finalP: e.P,
-        judged: true, verdict: verdict(e.P, G.data.target), crackT: 1, crackSeed: e.crackSeed
-      };
-    }
+    /* 요구 8 — 감소 모션에서는 연출을 건너뛰고 최종 상태를 바로 보여준다 */
+    if (animPaused) return finalDisplay(e);
     const st = revealStageProgress(elapsed);
     const squeezeFrac = st.pressT * Math.min(e.P / G.data.target, 1);
     /* 압력 숫자는 ①~③(오일 이동+램 상승+가압) 동안 대기압에서 시작해 올라간다.
@@ -567,25 +762,28 @@ function displayState() {
     return {
       N: e.N, T: e.T, V: e.V, ramT: st.riseT,
       squeezeFrac,
-      meterOn: true, dispP, finalP: e.P,
+      meter: "reveal", dispP, finalP: e.P,
       judged: st.judged, verdict: st.judged ? verdict(e.P, G.data.target) : null,
       crackT: st.judgeT, crackSeed: e.crackSeed
     };
   }
+  /* 정지점 — 지금 참가자(revealIdx)의 최종 상태를 그대로 붙잡아 둔다.
+     lastRevealedEntry()는 마지막 좌석을 돌려주므로 여기서는 쓰지 않는다(P-검토 B-3) */
+  if (G.phase === "revealHold") {
+    const e = revealEntry();
+    if (e) return finalDisplay(e);
+  }
   if (G.phase === "roundResult" || G.phase === "ended") {
     const e = lastRevealedEntry();
-    if (e) {
-      return {
-        N: e.N, T: e.T, V: e.V, ramT: 1,
-        squeezeFrac: Math.min(e.P / G.data.target, 1),
-        meterOn: true, dispP: e.P, finalP: e.P,
-        judged: true, verdict: verdict(e.P, G.data.target), crackT: 1, crackSeed: e.crackSeed
-      };
-    }
+    if (e) return finalDisplay(e);
   }
+  /* 조작 전·조작 중 — 시작 압력만 그리거나(mode "start"), 잠겼으면 아무 압력 신호도 그리지 않는다 */
+  const startOn = mode === "start" && !!G.data;
   return {
     N: state.N, T: state.T, V: state.V, ramT: 0, squeezeFrac: 0,
-    meterOn: false, dispP: PRESS.PATM, finalP: null,
+    meter: startOn ? "start" : "none",
+    dispP: startOn ? G.data.P0 : PRESS.PATM,
+    finalP: startOn ? G.data.P0 : null,
     judged: false, verdict: null, crackT: 0, crackSeed: 1
   };
 }
@@ -736,13 +934,20 @@ function draw() {
      세로 위치는 1순위일 때 물체 한가운데(objTopY+objH/2)에 고정해 물체가 눌리면 따라가고,
      2순위(대기압 줄)일 때는 그 줄에 고정한다 — 물체를 따라가지는 않지만 화면에 늘 보인다. */
   let pressPlan = null;
-  if (ds.meterOn && G.data) {
+  /* 조작 중 잠금 — 압력 숫자·막대 대신 잠금 문구만 남긴다(요구 ④ · 지시안 §3 단계 5).
+     이 문구는 상수 문자열이라 어떤 압력 정보도 담지 않는다. */
+  const lockedNow = G.phase === "playing" && meterMode(G.phase, G.turnLocked) === "none";
+  if ((ds.meter !== "none" && G.data) || lockedNow) {
     const broken = ds.judged && ds.verdict === "부서짐";
     const core = fmtInt(ds.dispP) + " kPa";
     /* 색만으로 구분하지 않는다(색각 이상 대응) — 부서지면 숫자 옆에 항상 "✕"(또는 "✕ 부서짐")를 붙인다. */
-    const cands = broken
-      ? ["누르는 세기 " + core + " ✕ 부서짐", core + " ✕ 부서짐", core + " ✕"]
-      : ["누르는 세기 " + core, core];
+    const cands = lockedNow
+      ? ["🔒 조절 중 — 압력 잠김", "🔒 압력 잠김", "🔒 잠김"]
+      : ds.meter === "start"
+        ? ["지금 " + core, core]          // 라운드 시작 압력(요구 ④) — 전원 같은 값이다
+        : broken
+          ? ["누르는 세기 " + core + " ✕ 부서짐", core + " ✕ 부서짐", core + " ✕"]
+          : ["누르는 세기 " + core, core];
     const fitIn = (maxW, maxFont, minFont) => {
       for (let fs = maxFont; fs >= minFont; fs--) {
         ctx.font = "700 " + fs + "px sans-serif";
@@ -750,20 +955,36 @@ function draw() {
       }
       return null;
     };
+    /* 시작 압력·잠금 문구는 「큰 글씨」보다 「문구가 온전한 것」이 앞선다 — 숫자만 남으면
+       공개 때의 「누르는 세기」 숫자와 구분되지 않기 때문이다. 후보를 바깥 루프로 돌려
+       긴 문구를 작은 글씨(이 파일이 이미 쓰는 하한 11 px까지)로라도 먼저 살리고,
+       그래도 안 들어가면 줄인 문구로 내려간다.
+       공개 연출(reveal)의 숫자는 기존 규칙(큰 글씨 우선)을 그대로 둔다. */
+    const fitLabelFirst = (maxW, maxFont, minFont) => {
+      for (const c of cands) {
+        for (let fs = maxFont; fs >= minFont; fs--) {
+          ctx.font = "700 " + fs + "px sans-serif";
+          if (ctx.measureText(c).width <= maxW) return { text: c, font: fs };
+        }
+      }
+      return null;
+    };
+    const labelFirst = lockedNow || ds.meter === "start";
     const insideX = cx + objW / 2 + 8, insideW = colRightX - 6 - insideX;
     const outsideX = colRightX + 6, outsideW = rightLim - outsideX;
     const besideOK = insideW > 0 && insideW >= outsideW;
     const besideX = besideOK ? insideX : outsideX;
     const besideW = Math.max(0, besideOK ? insideW : outsideW);
 
-    let f = fitIn(besideW, 20, 16);
+    let f = labelFirst ? fitLabelFirst(besideW, 20, 11) : fitIn(besideW, 20, 16);
     if (f) {
       pressPlan = { x: besideX, align: "left", y: objTopY + objH / 2, text: f.text, font: f.font };
     } else {
       /* 대기압 줄(아래 "대기압 기준선" 절)이 스스로 midW-100 안으로 줄여 그리므로,
          오른쪽 100 px(여백 4 px씩 뺀 92 px)는 항상 비어 있다고 보장된다(단일 원천 재사용). */
       const atmX1 = W - M - 4, atmZoneW = Math.max(0, 100 - 8);
-      f = fitIn(atmZoneW, 20, 11) || { text: cands[cands.length - 1], font: 11 };
+      f = (labelFirst ? fitLabelFirst(atmZoneW, 20, 11) : fitIn(atmZoneW, 20, 11))
+        || { text: cands[cands.length - 1], font: 11 };
       pressPlan = { x: atmX1, align: "right", y: top - 8, text: f.text, font: f.font };
     }
     pressPlan.color = broken ? ERR_RED : C.ink;
@@ -866,7 +1087,7 @@ function draw() {
   ctx.strokeRect(baseX, baseTopY, baseW, baseH);
 
   /* 유압유 이동 화살표 — 공개 ① 단계에서 보이다가 램이 올라올수록 옅어진다(요구 2) */
-  const arrowA = ds.meterOn ? clamp(1 - ds.ramT, 0, 1) : 0;
+  const arrowA = ds.meter === "reveal" ? clamp(1 - ds.ramT, 0, 1) : 0;
   if (arrowA > 0.02) {
     ctx.save();
     ctx.globalAlpha = arrowA;
@@ -899,10 +1120,12 @@ function draw() {
     ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
   }
 
-  /* ── 오르는 압력 눈금 막대(요구 2) — 왼쪽 실린더/기름관과 오른쪽 프레임 사이 빈 자리.
+  /* ── 압력 눈금 막대(요구 2 · 개선 v1 요구 ④) — 왼쪽 실린더/기름관과 오른쪽 프레임 사이 빈 자리.
      큰 숫자는 위에서 물체 옆(또는 좁은 화면에서는 대기압 줄 오른쪽)으로 옮겼으므로,
-     여기는 막대 + 목표 눈금만 남긴다(중복 제거). */
-  if (ds.meterOn && G.data) {
+     여기는 막대 + 목표 눈금만 남긴다(중복 제거).
+     ds.meter가 "start"면 라운드 시작 압력에서 멈춘 막대다 — 슬라이더를 따라 움직이지 않는다.
+     "none"(잠금 후·대기 국면)이면 이 블록 자체가 실행되지 않는다. */
+  if (ds.meter !== "none" && G.data) {
     const gapX = xL + pw.wL + 6, gapR = colLeftX - 6;
     const meterW = gapR - gapX;
     if (meterW > 34) {
@@ -949,11 +1172,9 @@ function tick(ts) {
   if (G.phase === "playing") renderDynamic();
   if (G.phase === "reveal") {
     const elapsed = performance.now() - G.revealPhaseStart;
-    const total = animPaused ? 700 : REVEAL_TOTAL_MS;
-    if (elapsed > total) {
-      G.revealIdx++;
-      if (G.revealIdx >= G.k) { finishReveal(); } else { G.revealPhaseStart = performance.now(); }
-    }
+    /* 연출이 끝나면 자동으로 다음 참가자로 넘어가지 않는다 — 정지점에 멈춘다(요구 ⑥).
+       감소 모션이면 대기 없이 곧바로 최종 상태 + 정지점으로 간다(P-검토 B-2). */
+    if (animPaused || elapsed > REVEAL_TOTAL_MS) holdOrFinishReveal();
     renderDynamic();
   }
   draw();
@@ -995,9 +1216,10 @@ try {
   if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(cv.parentElement);
   window.addEventListener("resize", resize);
   syncSliderDom();
-  syncHowto();
   syncLimitTxt();
-  renderStatic();
+  syncNickRow();
+  setControlsEnabled(false);   // idle은 슬라이더 비활성이다(★ 상태 전이표) — 로드 직후에도 같다
+  renderStatic();   // syncHowto()는 renderStatic 안에서 국면과 함께 처리된다
   resize();
   rafId = requestAnimationFrame(loop);
 } catch (err) {
