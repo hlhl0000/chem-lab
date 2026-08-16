@@ -20,7 +20,7 @@
     <nav class="site-nav">
       <div class="inner">
         <a class="brand" href="${base}/index.html">
-          <span class="mark">화</span><span>화학 탐구실</span>
+          <span class="mark">C</span><span>ChemLab</span>
         </a>
         <span class="spacer"></span>
         <select id="simJump" aria-label="다른 시뮬레이션으로 이동">

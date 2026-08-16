@@ -44,7 +44,7 @@ const SIMS = [
   },
   {
     id: "press",
-    title: "유압 프레스 도전 — 물체를 부수지 않고 가장 세게 누르기",
+    title: "유압 프레스 도전 게임",
     cat: "물질의 상태",
     path: "press/",
     icon: "press",

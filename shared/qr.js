@@ -458,7 +458,7 @@ if (typeof document !== "undefined") (function init() {
     document.head.appendChild(style);
 
     var url = pageUrl(current);
-    var name = (h.textContent || "화학 탐구실").replace(/\s+/g, " ").trim();
+    var name = (h.textContent || "케미랩").replace(/\s+/g, " ").trim();
 
     var btn = document.createElement("button");
     btn.type = "button";
