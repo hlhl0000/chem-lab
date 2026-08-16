@@ -180,6 +180,28 @@ const BAND_LIGHT = "rgba(40,45,52,0.06)";     // 참고 구간 띠
 const BOX_INNER = "rgba(148,163,184,0.13)";   // 상자 안쪽 — 바깥(무대)과 확실히 구분되게
 const BOX_EDGE  = "rgba(203,213,225,0.55)";   // 상자 테두리
 
+/* ── 기체 종류 (③ 아보가드로 탭 전용) ──
+   이상 기체 모형에서는 기체 종류가 달라도 P·V·N·T 관계가 같다 — 종류를 바꿔도
+   부피가 안 변함을 눈으로 확인시키는 장치다(차시 3 활동 2-(2)).
+   그래서 엔진에는 아무것도 넘기지 않는다. 바뀌는 것은 이름과 색뿐이다.
+   ⚠ 입자를 그리는 크기는 종류가 달라도 절대 바꾸지 않는다 — 이 시뮬이 담당하는
+     ★★★ 오개념이 「분자 자체의 부피가 변한다」이다(매뉴얼 1부 P5 단원 표).
+     크기를 종류별로 다르게 그리면 "부피가 분자 크기에 달렸다"를 새로 심는다.
+   색은 화학적 의미가 없는 구분용 임의 색이다(매뉴얼 P5-M6 — 범례에 명시).
+   어두운 무대 대비비는 style.css 실측 주석 기준 sky 7.74 · mint 9.29 · violet 6.56. */
+const GASES = {
+  He: { html: "헬륨 He",          text: "He", mass: 4,  color: CSSV("--p-sky") },
+  N2: { html: "질소 N<sub>2</sub>", text: "N₂", mass: 28, color: CSSV("--p-mint") },
+  O2: { html: "산소 O<sub>2</sub>", text: "O₂", mass: 32, color: CSSV("--p-violet") }
+};
+let gasKind = "He";
+const rgbaOf = (hex, a) => {
+  const n = parseInt(hex.slice(1), 16);
+  return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")";
+};
+/* 무대에 그릴 입자 색 — ③ 탭에서만 종류를 따르고, 나머지 탭은 기본색(하늘) */
+const partColor = () => tab === "C" ? GASES[gasKind].color : C.sky;
+
 /* ── 탭 정의 ──
    세 법칙은 같은 엔진을 쓴다. 다른 것은 "무엇을 잠그고 무엇을 여는가"뿐이다. */
 const TABS = {
@@ -203,7 +225,7 @@ const TABS = {
     title: "아보가드로 법칙", mode: "iso", open: ["N"], set: { T: 300, P: 150 },
     range: { N: [25, 90, 1] }, init: { N: 55 },
     cond: "[T 일정, P 일정]", law: "V ∝ N (입자 수)",
-    desc: "<b>입자 수만</b> 바꾼다. 온도와 압력이 같으면 부피는 입자 수에만 비례한다.",
+    desc: "<b>입자 수만</b> 바꾼다. 온도와 압력이 같으면 부피는 입자 수에만 비례한다. <b>기체 종류</b>도 바꿔 보고, 같은 T·P·N에서 부피가 달라지는지 관찰하자.",
     stage: "입자 상자 — 입자를 넣으면 피스톤이 밀려난다",
     graph: "V–N 그래프 — 점선은 N = 0 까지 늘려 그린 구간"
   },
@@ -267,7 +289,9 @@ function applyTab() {
     ? "이 탭에서는 <b>피스톤이 스스로 움직인다.</b> 안쪽 압력과 바깥 압력이 같아지는 자리로 미끄러져 간 뒤 멈춘다. 무대 오른쪽 아래가 『평형』으로 바뀐 뒤에 기록하자."
     : "이 탭에서는 <b>피스톤을 직접 민다.</b> 부피를 정하고 압력을 읽는다.";
   $("recnote").textContent = "";
-  syncLabels(); buildAxisBar(); buildLegend(); renderTable();
+  $("cG").style.display = tab === "C" ? "" : "none";
+  $("gasnote").textContent = "";      // 탭에 처음 들어왔을 때는 안내를 띄우지 않는다
+  syncLabels(); buildAxisBar(); buildGasBar(); updateStageLegend(); buildLegend(); renderTable();
 }
 
 function syncLabels() {
@@ -298,6 +322,39 @@ function buildAxisBar() {
   note.className = "lb";
   note.textContent = axisMode === "V" ? "곡선(반비례) 모양" : "직선이면 P 는 1/V 에 비례";
   host.appendChild(note);
+}
+/* ── 탭 C 전용 기체 종류 선택 ──
+   종류를 바꿔도 엔진은 손대지 않는다(물리 동일). gas.reset() 도 부르지 않는다 —
+   피스톤이 미동도 하지 않는 것 자체가 보여 주려는 내용이기 때문이다.
+   ⚠ 다만 압력 표시값은 벽 충돌을 세는 값이라 **같은 기체에서도** 계속 흔들린다
+     (He 고정 실측 146.2~156.6 a.u.). 종류를 바꾼 직후의 흔들림을 학생이 「종류 때문」으로
+     오귀속할 수 있으므로, 버튼 바로 아래에 그렇지 않다는 안내를 띄운다(매뉴얼 §3 인과 근접). */
+function buildGasBar() {
+  const host = $("gasbar");
+  host.innerHTML = "";
+  Object.keys(GASES).forEach(k => {
+    const g = GASES[k];
+    const b = document.createElement("button");
+    b.innerHTML = g.html + ' <span class="gm">' + g.mass + " g/mol</span>";
+    if (gasKind === k) b.className = "primary";
+    b.setAttribute("aria-pressed", String(gasKind === k));
+    b.onclick = () => {
+      gasKind = k;
+      $("recnote").textContent = "";
+      $("gasnote").innerHTML = GASES[k].html + "로 바꿨습니다 — <b>부피 V 는 그대로</b>입니다. " +
+        "압력 수치는 벽에 부딪힌 횟수를 세어 얻는 값이라 <b>같은 기체에서도</b> 계속 조금씩 흔들립니다.";
+      buildGasBar(); updateStageLegend();
+    };
+    host.appendChild(b);
+  });
+}
+/* 무대 아래 범례의 「기체 입자」 항목 — ③ 탭에서는 종류 이름과 색을 따라간다 */
+function updateStageLegend() {
+  const pc = partColor();
+  $("legPart").style.background = pc;
+  $("legPartLb").innerHTML = tab === "C"
+    ? GASES[gasKind].html + ' 입자 <span class="legnote">(구분용 임의 색)</span>'
+    : "기체 입자";
 }
 function buildLegend() {
   const items = {
@@ -357,11 +414,12 @@ function drawBox() {
      그래서 동그라미는 "크기"가 아니라 **위치 표시**다.
      알맹이(충돌 반지름) + 후광(눈에 보이게 하는 장치) 두 겹으로 그린다. */
   const pr = Math.max(1.6, GAS.R * s);
+  const pc = partColor(), pcHalo = rgbaOf(pc, 0.28);   // ③ 탭에서만 종류별 색, 크기는 동일
   for (const p of gas.st.parts) {
     const X = ox + p.x * s, Y = oy + p.y * s;
-    bctx.fillStyle = "rgba(86,180,233,0.28)";
+    bctx.fillStyle = pcHalo;
     bctx.beginPath(); bctx.arc(X, Y, pr + 2.6, 0, 6.2832); bctx.fill();
-    bctx.fillStyle = C.sky;
+    bctx.fillStyle = pc;
     bctx.beginPath(); bctx.arc(X, Y, pr, 0, 6.2832); bctx.fill();
   }
 
@@ -394,9 +452,14 @@ function drawBox() {
      아래 두 줄은 어떤 조작을 해도 절대 바뀌지 않는다.
      ⚠ 글자가 상자를 넘치지 않도록 **실제 글자 폭을 재서** 판을 만든다.
        좁은 화면(휴대폰)에서는 짧은 문구로 바꾼다. */
+  /* ③ 탭에서는 첫 줄 앞에 기체 이름을 붙인다 — 줄 수는 늘리지 않는다.
+     색만으로는 종류를 구분할 수 없다(3종 색끼리 청색약 ΔE 10.6). 매뉴얼 P6-C3
+     「두 번째 채널 필수」를 이 문자 표기로 충족한다. 게다가 이름을 무대 안에 두면
+     화면만 보고도 지금 무엇을 고른 상태인지 읽힌다(P4-B1 3초 규칙). */
   bctx.font = "600 11.5px sans-serif"; bctx.textAlign = "left";
-  const wide = ["입자 크기 — 어떤 조작에도 안 변함", "입자 수 N = " + gas.st.N + " 개 — 안 변함"];
-  const narrow = ["크기 안 변함", "N = " + gas.st.N + " 개"];
+  const gp = tab === "C" ? GASES[gasKind].text + " — " : "";
+  const wide = [gp + "입자 크기는 어떤 조작에도 안 변함", "입자 수 N = " + gas.st.N + " 개 — 안 변함"];
+  const narrow = [gp + "크기 안 변함", "N = " + gas.st.N + " 개"];
   const need = t => Math.max(...t.map(x => bctx.measureText(x).width));
   let lines = wide, panW = need(wide) + pr * 2 + 30;
   if (panW > boxW - 12) { lines = narrow; panW = need(narrow) + pr * 2 + 30; }
@@ -409,9 +472,9 @@ function drawBox() {
     if (bctx.roundRect) bctx.roundRect(bx, by, panW, panH, 6); else bctx.rect(bx, by, panW, panH);
     bctx.fill(); bctx.stroke();
     const cx = bx + 10 + pr, cy = by + 13;
-    bctx.fillStyle = "rgba(86,180,233,0.28)";
+    bctx.fillStyle = pcHalo;    // 견본 입자도 지금 색을 따른다 — 무대 입자와 어긋나면 안 된다
     bctx.beginPath(); bctx.arc(cx, cy, pr + 2.6, 0, 6.2832); bctx.fill();
-    bctx.fillStyle = C.sky;
+    bctx.fillStyle = pc;
     bctx.beginPath(); bctx.arc(cx, cy, pr, 0, 6.2832); bctx.fill();
     bctx.fillStyle = C.silver;
     bctx.fillText(lines[0], cx + pr + 8, cy + 4);
@@ -639,7 +702,7 @@ function updateReadouts() {
 }
 
 /* ── 기록 ── */
-const HEADERS = ["좌석번호", "법칙", "온도 T (K)", "온도 t (℃)", "압력 P (a.u.)",
+const HEADERS = ["좌석번호", "법칙", "기체 종류", "온도 T (K)", "온도 t (℃)", "압력 P (a.u.)",
   "부피 V (×10⁴)", "입자 수 N", "P·V (×10⁴)", "PV/NkT", "PV=NkT 예측 압력 (a.u.)"];
 $("rec").onclick = () => {
   const m = gas.measure(), iso = TABS[tab].mode === "iso";
@@ -655,6 +718,10 @@ $("rec").onclick = () => {
      부피 고정 탭에서 압력은 **관찰 변인**이므로 실제로 잰 값을 기록한다. */
   rows.push({
     tab, seat: $("seat").value.trim() || "(무기명)", law: TABS[tab].title,
+    /* 종류 선택은 ③ 탭에만 있다. 표(HTML)는 <sub>, CSV(순수 문자)는 유니코드 —
+       매뉴얼 §6 「화학식 아래첨자는 <sub>로」는 화면 타이포 규범이라 CSV에는 적용되지 않는다. */
+    kind: tab === "C" ? GASES[gasKind].text : "—",
+    kindHtml: tab === "C" ? GASES[gasKind].html : "—",
     T: Math.round(m.T), V: m.V, P: iso ? m.PextDisp : m.Pdisp, N: m.N, Z: m.Z,
     Pideal: m.Pideal
   });
@@ -664,7 +731,7 @@ $("rec").onclick = () => {
 $("clr").onclick = () => { rows = rows.filter(r => r.tab !== tab); $("recnote").textContent = ""; renderTable(); };
 $("csv").onclick = () => {
   if (!rows.length) { $("recnote").innerHTML = '<span style="color:var(--d-amber);font-weight:700">먼저 데이터를 기록하세요.</span>'; return; }
-  const body = rows.map(r => [r.seat, r.law, r.T, r.T - 273, r.P.toFixed(2),
+  const body = rows.map(r => [r.seat, r.law, r.kind || "—", r.T, r.T - 273, r.P.toFixed(2),
     (r.V / 1e4).toFixed(3), r.N, (r.P * r.V / 1e4).toFixed(1), r.Z.toFixed(4), r.Pideal.toFixed(2)]);
   const csv = "﻿" + [HEADERS, ...body].map(a => a.join(",")).join("\r\n");
   const a = document.createElement("a");
@@ -682,7 +749,7 @@ function renderTable() {
         ["P·V", r => (r.P * r.V / 1e4).toFixed(0)]],
     B: [["T (K)", r => r.T], ["t (℃)", r => r.T - 273], ["V (×10⁴)", r => (r.V / 1e4).toFixed(2)],
         ["V/T ×100", r => (r.V / 1e4 / r.T * 100).toFixed(2)]],
-    C: [["N", r => r.N], ["V (×10⁴)", r => (r.V / 1e4).toFixed(2)],
+    C: [["기체", r => r.kindHtml || "—"], ["N", r => r.N], ["V (×10⁴)", r => (r.V / 1e4).toFixed(2)],
         ["V/N ×100", r => (r.V / 1e4 / r.N * 100).toFixed(2)]],
     D: [["T (K)", r => r.T], ["N", r => r.N], ["V (×10⁴)", r => (r.V / 1e4).toFixed(2)],
         ["P (a.u.)", r => r.P.toFixed(1)], ["PV/NkT", r => r.Z.toFixed(3)]]

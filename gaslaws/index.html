@@ -74,6 +74,9 @@
     font-weight:600; font-size:12.5px; color:var(--t1)}
 
   .fixnote{font-size:12px; color:var(--t3); margin-top:2px; line-height:1.6}
+  .gasbar{display:flex; gap:6px; flex-wrap:wrap; margin:2px 0 4px}
+  .gasbar .gm{font-weight:400; font-size:11.5px; opacity:.8}
+  .legnote{color:var(--t3); font-size:11.5px}
   .tablewrap{max-height:260px; overflow:auto}
   .axisbar{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px}
   .axisbar .lb{font-size:12px; color:var(--t3)}
@@ -85,7 +88,10 @@
   details.sheet li{margin:9px 0}
   details.sheet .tagq{display:inline-block; font-size:11.5px; font-weight:700; color:#fff;
     background:var(--d-violet); border-radius:5px; padding:1px 6px; margin-right:5px}
-  .limits{font-size:12.5px; color:var(--t3); margin:12px 0 0; line-height:1.8}
+  .limits{font-size:12.5px; color:var(--t3); margin:16px 0 0; line-height:1.8;
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px; box-shadow:var(--shadow)}
+  .limits b.h{color:var(--t1); font-size:13.5px}
   .subcard{margin-top:14px}
 </style>
 </head>
@@ -120,7 +126,7 @@
         <canvas id="box" aria-label="기체 입자가 든 상자와 피스톤. 입자 지름과 입자 수는 상자 왼쪽 위에 항상 표시되며, 어떤 조작에도 변하지 않습니다."></canvas>
       </div>
       <div class="legend" style="margin-top:7px">
-        <span class="item"><span class="swatch" style="background:#56b4e9"></span>기체 입자</span>
+        <span class="item"><span class="swatch" id="legPart" style="background:#56b4e9"></span><span id="legPartLb">기체 입자</span></span>
         <span class="item"><span class="swatch sq" style="background:#cbd5e1"></span>피스톤</span>
         <span class="item"><span class="swatch sq" style="background:#fb923c"></span>바깥에서 누르는 압력</span>
       </div>
@@ -149,6 +155,15 @@
         <div class="row"><span>입자 수 <em>N</em> <span class="lockmark" id="lkN"></span></span>
           <span class="val"><span id="vN">35</span> 개</span></div>
         <input type="range" class="rng-count" id="sN" min="15" max="110" step="1" value="35" aria-label="입자 수">
+      </div>
+
+      <!-- ③ 아보가드로 탭 전용 — sim.js 가 탭 전환 때 보이고 감춘다.
+           종류를 바꿔도 물리는 같다(이상 기체 모형). 이름과 입자 색만 바뀐다. -->
+      <div class="ctl" id="cG" style="display:none">
+        <div class="row"><span>기체 종류</span></div>
+        <div class="gasbar" id="gasbar"></div>
+        <div class="fixnote">이상 기체 모형은 분자의 크기·인력을 무시하므로 입자를 <b>같은 크기</b>로 그립니다. 색은 구분용 임의 색입니다.</div>
+        <div class="fixnote" id="gasnote"></div>
       </div>
 
       <div class="ctl" id="cV">
@@ -200,6 +215,9 @@
   <div class="legend" id="graphLegend" style="margin-top:7px"></div>
 </div>
 
+<!-- 보존 2026-08-13: 삭제 전 탐구 활동지 9문항 원문 (작업매뉴얼 2부 §11 v1.1 분기 —
+     "들어낸 문항은 삭제가 아니라 별도 보존을 권한다". 교사 시연용으로 문항을 들어내고
+     「이 모형의 가정과 한계」만 화면에 남긴다. 아래 원문은 개인정보를 포함하지 않는다.
 <details class="sheet" open>
   <summary>탐구 활동지</summary>
   <ol>
@@ -247,26 +265,31 @@
         <br>ⓑ 진단 3번("산소 기체는 이상 기체인가?")을 다시 읽고, 지금은 어떻게 답하겠는지 쓰세요.
         <br>※ 실제 기체의 <em>PV</em>/<em>nRT</em> 실측표는 <b>선생님이 따로 나눠 줍니다.</b>
         이 시뮬레이션으로는 볼 수 없습니다 — 이 모형에는 그 편차를 만들 재료가 아예 없기 때문입니다.</li>
-    </ol>
-
-  <p class="limits">
-    <b>이 모형의 가정과 한계 — 반드시 함께 읽을 것</b><br>
-    ① <b>이것은 이상 기체 모형입니다.</b> 일부러 그렇게 만들었습니다. 그래서 보일·샤를·아보가드로
-       세 법칙이 <b>정확히</b> 성립하고, ② 탭의 외삽선은 <b>정확히 −273 ℃</b>에서 <em>V</em> = 0 과 만납니다.<br>
-    ② 이 모형이 세운 가정 네 가지 — ⓐ 분자 자체의 <b>부피를 무시</b>한다 ⓑ 분자 사이에
-       <b>인력·척력이 없다</b> ⓒ 충돌은 <b>완전 탄성 충돌</b>이다 ⓓ 평균 운동 에너지는 <b>절대 온도에 비례</b>한다.<br>
-    ③ ⓐ 때문에 화면의 동그라미는 <b>분자의 크기가 아니라 위치를 나타내는 표시</b>입니다.
-       눈에 보이라고 후광을 둘렀을 뿐, 실제로는 크기가 없다고 가정한 입자입니다.<br>
-    ④ ⓑ 때문에 <b>아무리 압축하거나 냉각해도 액화가 일어나지 않습니다.</b> 실제 기체와 결정적으로 다른 점입니다.<br>
-    ⑤ 그래서 <b>실제 기체의 비이상성(PV/nRT ≠ 1)은 이 화면으로 볼 수 없습니다.</b>
-       그것은 실제 기체의 측정 자료로 다룹니다.<br>
-    ⑥ 이 상자는 <b>2차원</b>입니다. "부피"는 상자의 <b>넓이</b>이고, 단위는 실제 단위가 아닌
-       <b>임의 단위(a.u.)</b>입니다. 압력 100 a.u.는 1 atm이 아닙니다.<br>
-    ⑦ 화면의 압력은 식을 넣어 준 값이 아니라 <b>입자가 벽에 부딪힌 충격량을 실제로 세어 계산한 값</b>입니다.
-       그래서 아주 조금(1~2 %) 흔들리고, 표시할 때 짧은 시간 평균을 씁니다.<br>
-    ⑧ 절대 온도 환산은 로드맵에 맞춰 273.15가 아니라 <b>273</b>으로 통일했습니다.
-  </p>
+  </ol>
 </details>
+-->
+
+<p class="limits">
+  <b class="h">이 모형의 가정과 한계 — 반드시 함께 읽을 것</b><br>
+  ① <b>이것은 이상 기체 모형입니다.</b> 일부러 그렇게 만들었습니다. 그래서 보일·샤를·아보가드로
+     세 법칙이 <b>정확히</b> 성립하고, ② 탭의 외삽선은 <b>정확히 −273 ℃</b>에서 <em>V</em> = 0 과 만납니다.<br>
+  ② 이 모형이 세운 가정 네 가지 — ⓐ 분자 자체의 <b>부피를 무시</b>한다 ⓑ 분자 사이에
+     <b>인력·척력이 없다</b> ⓒ 충돌은 <b>완전 탄성 충돌</b>이다 ⓓ 평균 운동 에너지는 <b>절대 온도에 비례</b>한다.<br>
+  ③ ⓐ 때문에 화면의 동그라미는 <b>분자의 크기가 아니라 위치를 나타내는 표시</b>입니다.
+     눈에 보이라고 후광을 둘렀을 뿐, 실제로는 크기가 없다고 가정한 입자입니다.<br>
+  ④ ⓑ 때문에 <b>아무리 압축하거나 냉각해도 액화가 일어나지 않습니다.</b> 실제 기체와 결정적으로 다른 점입니다.<br>
+  ⑤ 그래서 <b>실제 기체의 비이상성(PV/nRT ≠ 1)은 이 화면으로 볼 수 없습니다.</b>
+     그것은 실제 기체의 측정 자료로 다룹니다.<br>
+  ⑥ 이 상자는 <b>2차원</b>입니다. "부피"는 상자의 <b>넓이</b>이고, 단위는 실제 단위가 아닌
+     <b>임의 단위(a.u.)</b>입니다. 압력 100 a.u.는 1 atm이 아닙니다.<br>
+  ⑦ 화면의 압력은 식을 넣어 준 값이 아니라 <b>입자가 벽에 부딪힌 충격량을 실제로 세어 계산한 값</b>입니다.
+     그래서 아주 조금(1~2 %) 흔들리고, 표시할 때 짧은 시간 평균을 씁니다.<br>
+  ⑧ 절대 온도 환산은 로드맵에 맞춰 273.15가 아니라 <b>273</b>으로 통일했습니다.<br>
+  ⑨ ③ 탭의 「기체 종류」 버튼은 입자의 <b>이름과 색만</b> 바꿉니다. 색은 화학적 의미가 없는
+     <b>구분용 임의 색</b>이고, 크기도 종류와 무관하게 같게 그립니다(③ 참조).
+     실제로는 같은 온도에서 무거운 분자가 더 느리게 움직이지만 이 화면은 그 속력 차이를
+     그리지 않습니다 — 속력 차이는 같은 T·P·N에서 부피가 같다는 사실에 영향을 주지 않습니다.
+</p>
 
 </div>
 
