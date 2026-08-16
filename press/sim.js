@@ -492,7 +492,9 @@ const SHOW = {
   submitNote:    { on: "", phases: ["playing"] },
   revealBtn:     { on: "", phases: ["allSubmitted"] },
   nextPlayerBtn: { on: "", phases: ["revealHold"] },
-  nextRoundBtn:  { on: "", phases: ["roundResult"] }
+  nextRoundBtn:  { on: "", phases: ["roundResult"] },
+  /* 결과 오버레이 — 장치 화면을 덮는 승패 비교. 결과 국면 두 곳에서만 뜬다(2026-08-16 요구) */
+  resultOverlay: { on: "flex", phases: ["roundResult", "ended"] }
 };
 function applyPhaseVisibility() {
   for (const id in SHOW) {
@@ -543,9 +545,11 @@ function renderStatic() {
   applyPhaseVisibility();
   syncHowto();
 
-  /* 결과·최종 카드는 카드 자체를 접었다 폈다 하므로 전용 함수가 표시를 맡는다 */
-  if (G.phase === "roundResult") renderResultTable();
-  if (G.phase === "ended") renderFinal();
+  /* 결과·최종 카드는 카드 자체를 접었다 폈다 하므로 전용 함수가 표시를 맡는다.
+     오버레이(장치 위 승패 비교)는 같은 자료를 세로 막대로 다시 그린다 — 표는 학습지
+     기록용으로 아래에 그대로 둔다(2026-08-16 사용자 확정). */
+  if (G.phase === "roundResult") { renderResultTable(); renderResultOverlay(); }
+  if (G.phase === "ended") { renderFinal(); renderFinalOverlay(); }
 
   renderDynamic();
 }
@@ -641,6 +645,92 @@ function renderFinal() {
     "</td><td>" + G.wins[i] + "승</td></tr>").join("");
   $("finalBody").innerHTML = '<p class="winline">' + esc(winTxt) + '</p><table><thead><tr><th>참가자</th><th>승수</th></tr></thead><tbody>' + rows + "</tbody></table>";
   $("finalCard").style.display = "";
+}
+
+/* ================= 결과 오버레이 (장치 화면 위 승패 비교) =================
+   상단 상태줄의 작은 글씨로는 교실 TV에서 승패가 읽히지 않는다는 지적에 따라, 라운드 결과와
+   최종 결과를 무대 위에 세로 막대로 덮어 보여준다(2026-08-16 사용자 확정).
+   · 값 행 / 막대 행 / 이름 행을 같은 열 수·같은 gap으로 맞춰 세로 정렬을 유지한다
+   · 색만으로 구분하지 않는다(매뉴얼 §9) — 부서짐엔 「✕」, 승자엔 「승」을 값 문자열에 붙인다
+   · 색은 CSS 클래스로만 준다. sim.js가 새 색 토큰을 읽지 않아야 데이터 색 3개 규칙이 유지된다
+   · 닉네임은 학생이 친 문자열이므로 innerHTML 조립 전 반드시 esc()를 거친다 */
+const OVERLAY_HEADROOM = 1.12;   // 막대 최댓값 위에 남기는 여유(목표선 라벨 자리)
+
+function overlayBars(items, lineFrac, lineLab) {
+  const cell = (it, inner) =>
+    '<div class="rovcell' + (it.cls ? " " + it.cls : "") + '">' + inner + "</div>";
+  const vals = items.map(it => cell(it, '<span class="rovval">' + esc(it.val) + "</span>")).join("");
+  const bars = items.map(it => cell(it,
+    '<div class="rovcol" style="height:' + clamp(it.frac * 100, 2, 100).toFixed(1) + '%"></div>')).join("");
+  const names = items.map(it => cell(it, '<span class="rovname">' + esc(it.name) + "</span>")).join("");
+  let line = "";
+  if (lineFrac != null) {
+    const pct = clamp(lineFrac * 100, 0, 100).toFixed(1) + "%";
+    line = '<div class="rovline" style="bottom:' + pct + '"></div>' +
+           '<div class="rovlinelab" style="bottom:' + pct + '">' + esc(lineLab) + "</div>";
+  }
+  return '<div class="rovvals">' + vals + "</div>" +
+         '<div class="rovplot">' + bars + line + "</div>" +
+         '<div class="rovnames">' + names + "</div>";
+}
+
+/* 조립한 막대를 화면에 올린다. 긴 별명은 좁은 폭에서 말줄임(…)으로 잘리므로, 전체 이름을
+   title로 덧붙인다 — setAttribute는 DOM API라 속성 이스케이프를 따로 하지 않아도 안전하다. */
+function paintOverlay(items, lineFrac, lineLab) {
+  const box = $("rovChart");
+  box.innerHTML = overlayBars(items, lineFrac, lineLab);
+  const nameEls = box.querySelectorAll(".rovname");
+  for (let i = 0; i < nameEls.length; i++) {
+    if (items[i]) nameEls[i].setAttribute("title", items[i].name);
+  }
+}
+
+/* 라운드 결과 — 참가자별 측정 압력을 세로 막대로, 목표는 가로 점선으로 */
+function renderResultOverlay() {
+  if (!G.data || !G.entries.length) return;
+  const target = G.data.target;
+  const sorted = G.entries.slice().sort((a, b) => a.seat - b.seat);
+  let peak = target;
+  for (const e of sorted) if (e.P > peak) peak = e.P;
+  const scale = peak * OVERLAY_HEADROOM;
+  const items = sorted.map(e => {
+    const broken = verdict(e.P, target) === "부서짐";
+    const win = e.seat === G.roundWinnerSeat;
+    return {
+      val: fmtInt(e.P) + (broken ? " ✕" : win ? " 승" : ""),
+      name: playerName(e.seat),
+      frac: e.P / scale,
+      cls: broken ? "bad" : win ? "win" : ""
+    };
+  });
+  $("rovHead").textContent = G.roundWinnerSeat !== null
+    ? "라운드 " + G.round + " 승자 — " + playerName(G.roundWinnerSeat)
+    : "라운드 " + G.round + " — 전원 부서짐, 승자 없음";
+  $("rovSub").textContent = "목표 " + fmtInt(target) + " kPa를 넘지 않고 가장 가까운 사람이 이깁니다 (단위 kPa)";
+  paintOverlay(items, target / scale, "목표 " + fmtInt(target));
+}
+
+/* 최종 결과 — 누적 승수를 세로 막대로. 목표선은 없다 */
+function renderFinalOverlay() {
+  if (!G.k) return;
+  let top = 0;
+  for (let i = 0; i < G.k; i++) if (G.wins[i] > top) top = G.wins[i];
+  const scale = Math.max(1, top) * OVERLAY_HEADROOM;
+  const items = Array.from({ length: G.k }, (_, i) => ({
+    val: G.wins[i] + "승" + (top > 0 && G.wins[i] === top ? " · 1위" : ""),
+    name: playerName(i),
+    frac: G.wins[i] / scale,
+    cls: top > 0 && G.wins[i] === top ? "win" : ""
+  }));
+  const winners = [];
+  for (let i = 0; i < G.k; i++) if (G.wins[i] === top) winners.push(i);
+  $("rovHead").textContent = top === 0
+    ? "최종 결과 — 승리한 사람이 없습니다"
+    : winners.length > 1
+      ? "공동 1위 — " + winners.map(i => playerName(i)).join(" · ")
+      : "최종 승자 — " + playerName(winners[0]);
+  $("rovSub").textContent = "총 " + G.totalRounds + "라운드 누적 승수";
+  paintOverlay(items, null, "");
 }
 
 /* ================= 버튼 ================= */

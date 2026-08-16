@@ -89,6 +89,44 @@
 
   .locknote{font-size:10.5px; color:var(--t3); margin-top:1px}
 
+  /* ── 결과 오버레이 — 장치 화면 위를 덮는 승패 비교(2026-08-16 요구) ──
+     상단 상태줄의 작은 글씨로는 교실 TV에서 승패가 읽히지 않는다. 라운드 결과·최종 결과를
+     무대 위에 세로 막대로 띄운다. 색만으로 구분하지 않는다(매뉴얼 §9) — 부서짐엔 ✕,
+     승자엔 「승」 글자를 값에 함께 붙인다. 새 색은 들이지 않는다(결과표 .pv-ok/.pv-bad와 같은 토큰). */
+  .stagecard .stage{position:relative}
+  .rov{display:none; position:absolute; inset:0; flex-direction:column; gap:2px;
+    padding:8px 10px 6px; background:rgba(255,255,255,0.95); border-radius:var(--radius)}
+  .rovhead{font-size:17px; font-weight:700; color:var(--t1); text-align:center; margin:0; line-height:1.25}
+  .rovsub{font-size:11px; color:var(--t3); text-align:center; margin:0}
+  .rovchart{flex:1; display:grid; grid-template-rows:auto minmax(0,1fr) auto; min-height:0; margin-top:4px}
+  .rovvals, .rovnames{display:flex; gap:10px; justify-content:center}
+  /* 막대의 height:N%는 「부모 높이가 확정돼 있을 때」만 계산된다 — 셀을 stretch로 늘려
+     플롯 높이를 그대로 물려주고, 바닥 정렬은 셀 안쪽에서 한다(flex-end를 여기 두면
+     셀이 콘텐츠 높이로 줄어 % 기준이 사라진다 — 실측으로 잡은 함정). */
+  .rovplot{position:relative; display:flex; gap:10px; justify-content:center; align-items:stretch;
+    border-bottom:2px solid var(--line)}
+  .rovcell{flex:1 1 0; max-width:110px; min-width:0; display:flex; justify-content:center; align-items:flex-end}
+  .rovval{font-size:13px; font-weight:700; color:var(--t1); font-variant-numeric:tabular-nums;
+    white-space:nowrap; line-height:1.5}
+  .rovcol{width:100%; background:var(--d-blue); border-radius:5px 5px 0 0; min-height:3px}
+  .rovcell.bad .rovcol{background:var(--d-red)}
+  .rovcell.bad .rovval{color:var(--d-red)}
+  .rovcell.win .rovcol{background:var(--d-green)}
+  .rovcell.win .rovval{color:var(--d-green)}
+  .rovname{font-size:12.5px; color:var(--t2); line-height:1.6; max-width:100%;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .rovcell.win .rovname{font-weight:700; color:var(--t1)}
+  .rovline{position:absolute; left:0; right:0; border-top:2px dashed var(--t1); pointer-events:none}
+  .rovlinelab{position:absolute; right:0; font-size:11px; font-weight:700; color:var(--t1);
+    background:rgba(255,255,255,0.92); padding:0 4px; transform:translateY(-100%); pointer-events:none}
+  @media(max-width:560px){
+    .rov{padding:6px 7px 5px}
+    .rovhead{font-size:14.5px}
+    .rovval{font-size:11.5px}
+    .rovname{font-size:10.5px}
+    .rovvals, .rovnames, .rovplot{gap:5px}
+  }
+
   .rtwrap{overflow:auto}
   .pv{font-weight:700; display:inline-block; border-radius:6px; padding:2px 7px; font-size:12.5px}
   .pv-ok{color:var(--d-green); background:rgba(21,128,61,0.10)}
@@ -204,6 +242,12 @@
     <h2>장치 <span class="cardsub" id="stageWho"></span></h2>
     <div class="stage stage--light">
       <canvas id="rig" aria-label="기체 실린더가 유압유를 밀어 아래에서 위로 램이 올라오며 고정판 밑의 물체를 누르는 유압 프레스 그림. 입자의 빽빽함과 움직임, 램이 올라오는 정도, 물체가 눌리거나 갈라지는 모습으로 누르는 세기를 짐작합니다. 압력 숫자는 제출 전까지 잠겨 있습니다."></canvas>
+      <!-- 결과 오버레이 — 라운드 결과·최종 결과를 장치 위에 덮어 승패를 한눈에 보여준다 -->
+      <div class="rov" id="resultOverlay" aria-live="polite">
+        <p class="rovhead" id="rovHead"></p>
+        <p class="rovsub" id="rovSub"></p>
+        <div class="rovchart" id="rovChart"></div>
+      </div>
     </div>
     <div class="legend">
       <span class="item"><span class="swatch" style="background:var(--d-blue)"></span>기체(입자)</span>
@@ -280,6 +324,6 @@
 <script src="../sims.js"></script>
 <script src="../shared/nav.js" data-base=".." data-current="press"></script>
 <script src="../shared/qr.js" data-base=".." data-current="press"></script>
-<script src="sim.js?v=20260816b"></script>
+<script src="sim.js?v=20260816c"></script>
 </body>
 </html>
