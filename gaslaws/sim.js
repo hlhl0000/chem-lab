@@ -14,9 +14,12 @@
 
    단위계
      · 2차원이므로 "부피"는 상자의 **넓이**다. 엔진 내부는 k_B = 1 인 임의 단위로 계산한다.
-       ⚠ 화면 표기만 kPa·L 로 붙여 준다(교사 지시 2026-08-17 — 학생이 크기를 가늠하게).
-         **배율은 1이라 숫자는 하나도 바뀌지 않는다** — 라벨만 바뀐다. 그래서 세 법칙의
-         관계도, 학습지 검증 게이트가 검사하는 표시값(3.57/7.14/10.71 L)도 그대로다.
+       ⚠ 화면 표기는 atm·L 이다(교과 협의 2026-08-17 — 학생 수준을 고려해 kPa 에서 바꿨다).
+         압력은 **PSCALE 한 곳에서만** 환산한다. 기준 상태가 1.00 atm 이 되도록 100 kPa = 1 atm
+         으로 맞췄다. 엔진이 쓰는 st.Pext 는 그대로이므로 부피·세 법칙·PV/NkT 는 하나도
+         안 바뀐다 — 학습지 게이트가 검사하는 표시값(3.57/7.14/10.71 L)도 그대로다.
+       ⚠ PSCALE 을 고치면 검증 스크립트 3개의 표시 단위 상수도 함께 고쳐야 한다:
+         검증스크립트/gaslaws_engine.js · gaslaws_check.js · 학습지 _자산/mf1_check.py
      · 평균 운동 에너지 <½mv²> = k_B·T  →  v_rms = √(2kT/m)
      · 압력 P = (벽에 준 총 충격량) / (둘레 길이 × 시간)
      · 이상 기체(2D):  P × (넓이) = N × k_B × T
@@ -40,14 +43,14 @@ const GAS = {
   W_MIN: 100, W_MAX: 440,  // 피스톤 이동 범위
   M: 1,                    // 입자 질량
   R: 1.4,                  // ★ 입자끼리 충돌하는 반지름. 벽에는 점으로 부딪힌다(가정 ⓐ)
-  PSCALE: 714.3,           // 표시용 압력 배율 — 기준 상태(N=35,T=300,W=250)에서 100.0 (화면 100 kPa)
+  PSCALE: 7.143,           // 표시용 압력 배율 — 기준 상태(N=35,T=300,W=250)에서 1.00 (화면 1.00 atm)
   DT: 0.05, SUBSTEPS: 2,
   EASE: 0.055              // 피스톤이 새 자리로 미끄러지는 속도 (τ ≈ 18프레임 ≈ 0.3초)
 };
 
 function makeGas() {
   const st = {
-    W: 250, Wshow: 250, T: 300, N: 0, Pext: 100 / GAS.PSCALE,
+    W: 250, Wshow: 250, T: 300, N: 0, Pext: 1 / GAS.PSCALE,
     parts: [], impulse: 0, tAcc: 0, P: 0, atStop: false
   };
 
@@ -220,14 +223,14 @@ const partColor = () => tab === "C" ? GASES[gasKind].color : C.sky;
 const TABS = {
   A: {
     title: "보일 법칙", mode: "iso", open: ["P"], set: { T: 300, N: 35 },
-    range: { P: [70, 200, 2] }, init: { P: 100 },
+    range: { P: [0.7, 2, 0.02] }, init: { P: 1 },
     cond: "[T 일정, N 일정]", law: "P × V = 일정",
     desc: "<b>바깥 압력만</b> 바꾼다. 피스톤이 스스로 움직여, 안쪽 압력이 바깥 압력과 같아지는 자리에서 멈춘다.",
     stage: "입자 상자 — 바깥 압력을 바꾸면 피스톤이 움직인다",
     graph: "보일 그래프 — 가로축을 1/V 로 바꾸면 직선이 된다"
   },
   B: {
-    title: "샤를 법칙", mode: "iso", open: ["T"], set: { P: 100, N: 30 },
+    title: "샤를 법칙", mode: "iso", open: ["T"], set: { P: 1, N: 30 },
     range: { T: [180, 600, 5] }, init: { T: 300 },
     cond: "[P 일정, N 일정]", law: "V ∝ T (절대 온도)",
     desc: "<b>온도만</b> 바꾼다. 바깥 압력이 일정하므로 피스톤이 움직여 부피가 달라진다.",
@@ -235,7 +238,7 @@ const TABS = {
     graph: "V–T 그래프 — 실선은 측정 구간, 점선은 늘려 그린(외삽) 구간"
   },
   C: {
-    title: "아보가드로 법칙", mode: "iso", open: ["N"], set: { T: 300, P: 150 },
+    title: "아보가드로 법칙", mode: "iso", open: ["N"], set: { T: 300, P: 1.5 },
     range: { N: [25, 90, 1] }, init: { N: 55 },
     cond: "[T 일정, P 일정]", law: "V ∝ N (입자 수)",
     desc: "<b>입자 수만</b> 바꾼다. 온도와 압력이 같으면 부피는 입자 수에만 비례한다. <b>기체 종류</b>도 바꿔 보고, 같은 T·P·N에서 부피가 달라지는지 관찰하자.",
@@ -310,7 +313,7 @@ function applyTab() {
 function syncLabels() {
   $("vT").textContent = S.T.value;
   $("vTc").textContent = (+S.T.value - 273);
-  $("vP").textContent = S.P.value;
+  $("vP").textContent = (+S.P.value).toFixed(2);   // atm 은 1.00 부근이라 소수 둘째 자리까지 (§8 유효숫자 고정)
   $("vN").textContent = S.N.value;
   $("vV").textContent = (gas.st.Wshow * GAS.H / 1e4).toFixed(2);
 }
@@ -340,7 +343,7 @@ function buildAxisBar() {
    종류를 바꿔도 엔진은 손대지 않는다(물리 동일). gas.reset() 도 부르지 않는다 —
    피스톤이 미동도 하지 않는 것 자체가 보여 주려는 내용이기 때문이다.
    ⚠ 다만 압력 표시값은 벽 충돌을 세는 값이라 **같은 기체에서도** 계속 흔들린다
-     (He 고정 실측 146.2~156.6 kPa). 종류를 바꾼 직후의 흔들림을 학생이 「종류 때문」으로
+     (He 고정 실측 1.46~1.57 atm). 종류를 바꾼 직후의 흔들림을 학생이 「종류 때문」으로
      오귀속할 수 있으므로, 버튼 바로 아래에 그렇지 않다는 안내를 띄운다(매뉴얼 §3 인과 근접). */
 function buildGasBar() {
   const host = $("gasbar");
@@ -443,7 +446,7 @@ function drawBox() {
   // 바깥에서 누르는 압력 — 화살표 길이 ∝ P외부
   let rodX = px + 14;
   if (TABS[tab].mode === "iso") {
-    const L = 9 + (+S.P.value / 200) * 15;
+    const L = 9 + (+S.P.value / 2) * 15;          // 화살표 길이 ∝ P외부 (슬라이더 최대 2 atm 기준)
     bctx.strokeStyle = C.orange; bctx.fillStyle = C.orange; bctx.lineWidth = 2;
     for (let i = 0; i < 3; i++) {
       const y = oy + boxH * (0.2 + i * 0.3);
@@ -456,10 +459,10 @@ function drawBox() {
        화살표와 같은 뜻이므로 같은 주황을 쓴다. 첫 화살표는 boxH×0.2 아래라 겹치지 않는다.
        피스톤이 오른쪽 끝까지 밀리면 자리가 없어지므로 짧은 표기 → 생략 순으로 물러선다. */
     if (tab === "A") {
-      const pv = Math.round(+S.P.value);
+      const pv = (+S.P.value).toFixed(2);
       bctx.font = "600 11.5px sans-serif"; bctx.textAlign = "left";
-      let lab = "P바깥 = " + pv + " kPa", tw = bctx.measureText(lab).width;
-      if (px + 14 + tw > cw - 3) { lab = pv + " kPa"; tw = bctx.measureText(lab).width; }
+      let lab = "P바깥 = " + pv + " atm", tw = bctx.measureText(lab).width;
+      if (px + 14 + tw > cw - 3) { lab = pv + " atm"; tw = bctx.measureText(lab).width; }
       if (px + 14 + tw <= cw - 3) { bctx.fillStyle = C.orange; bctx.fillText(lab, px + 14, oy + 13); }
     }
     rodX = px + 14 + L;
@@ -547,10 +550,10 @@ function drawEqBox() {
   const bar = (label, v, max, col) =>
     `<div class="eqrow"><span class="k">${label}</span>
       <span class="track"><span class="fill" style="width:${Math.max(0, Math.min(100, v / max * 100)).toFixed(1)}%;background:${col}"></span></span>
-      <span class="v">${v.toFixed(1)}</span></div>`;
+      <span class="v">${v.toFixed(2)}</span></div>`;
   const busy = measuring();
   if (t.mode === "iso") {
-    const max = Math.max(240, m.Pdisp * 1.08, m.PextDisp * 1.08);
+    const max = Math.max(2.4, m.Pdisp * 1.08, m.PextDisp * 1.08);
     $("eqBox").innerHTML =
       bar("P<sub>안쪽</sub> (측정)", m.Pdisp, max, C.blue) +
       bar("P<sub>바깥</sub> (설정)", m.PextDisp, max, C.amber) +
@@ -559,7 +562,7 @@ function drawEqBox() {
              : '<span class="ok">같다 → 평형</span>'}</div>`;
   } else {
     const ideal = m.Pideal;
-    const max = Math.max(220, m.Pdisp * 1.08, ideal * 1.08);
+    const max = Math.max(2.2, m.Pdisp * 1.08, ideal * 1.08);
     $("eqBox").innerHTML =
       bar("벽에서 잰 압력", m.Pdisp, max, C.blue) +
       bar("PV = NkT 계산값", ideal, max, C.gray) +
@@ -638,8 +641,8 @@ function drawGraph() {
     const xv = r => useInv ? 1e4 / r.V : r.V / 1e4;
     const all = [...mine, now];
     const x1 = Math.max(...all.map(xv)) * 1.25, y1 = Math.max(...all.map(r => r.P)) * 1.25;
-    frame(useInv ? "1 / V   (1/L)" : "부피 V   (L)", "압력 P (kPa)");
-    grid(0, x1, 0, y1, v => v.toFixed(useInv ? 2 : 1), v => v.toFixed(0));
+    frame(useInv ? "1 / V   (1/L)" : "부피 V   (L)", "압력 P (atm)");
+    grid(0, x1, 0, y1, v => v.toFixed(useInv ? 2 : 1), v => v.toFixed(2));
     const pvMean = mine.length ? mine.reduce((a, r) => a + r.P * r.V, 0) / mine.length : now.P * now.V;
     gctx.strokeStyle = C.gray; gctx.setLineDash([5, 4]); gctx.lineWidth = 1.8;
     gctx.beginPath();
@@ -702,8 +705,8 @@ function drawGraph() {
   } else {
     const all = [...mine, now];
     const hi = Math.max(...all.map(r => Math.max(r.P, r.Pideal))) * 1.2 || 1;
-    frame("PV = NkT 로 계산한 압력 (kPa)", "실제 측정 압력 (kPa)");
-    grid(0, hi, 0, hi, v => v.toFixed(0), v => v.toFixed(0));
+    frame("PV = NkT 로 계산한 압력 (atm)", "실제 측정 압력 (atm)");
+    grid(0, hi, 0, hi, v => v.toFixed(2), v => v.toFixed(2));
     seg(X(0, 0, hi), Y(0, 0, hi), X(hi, 0, hi), Y(hi, 0, hi), C.gray, [5, 4], 1.8);
     hint("점이 이 선 위에 놓인다 = 입자 운동에서 나온 압력이 PV=NkT 와 같다");
     mine.forEach(r => dot(X(r.Pideal, 0, hi), Y(r.P, 0, hi), true));
@@ -714,14 +717,14 @@ function drawGraph() {
 /* ── 측정값 ── */
 function updateReadouts() {
   const m = gas.measure();
-  $("rP").textContent = m.Pdisp ? m.Pdisp.toFixed(1) : "–";
+  $("rP").textContent = m.Pdisp ? m.Pdisp.toFixed(2) : "–";
   $("rV").textContent = (m.V / 1e4).toFixed(2);
   $("rT").textContent = m.T.toFixed(0);
   $("rN").textContent = m.N;
   const z = m.Z, ro = $("roZ"), busy = measuring();
   ro.classList.remove("is-ok", "is-warn");
   if (busy) {
-    $("rP").textContent = m.Pdisp ? m.Pdisp.toFixed(1) : "–";
+    $("rP").textContent = m.Pdisp ? m.Pdisp.toFixed(2) : "–";
     $("rZ").textContent = "…";
     $("rZnote").textContent = "압력을 재는 중 — 잠시 기다리세요";
   } else if (z) {
@@ -737,8 +740,8 @@ function updateReadouts() {
 }
 
 /* ── 기록 ── */
-const HEADERS = ["좌석번호", "법칙", "기체 종류", "온도 T (K)", "온도 t (℃)", "압력 P (kPa)",
-  "부피 V (L)", "입자 수 N", "P·V (kPa·L)", "PV/NkT", "PV=NkT 예측 압력 (kPa)"];
+const HEADERS = ["좌석번호", "법칙", "기체 종류", "온도 T (K)", "온도 t (℃)", "압력 P (atm)",
+  "부피 V (L)", "입자 수 N", "P·V (atm·L)", "PV/NkT", "PV=NkT 예측 압력 (atm)"];
 $("rec").onclick = () => {
   const m = gas.measure(), iso = TABS[tab].mode === "iso";
   if (iso && !m.settled) {
@@ -780,14 +783,14 @@ function renderTable() {
   const w = $("tableWrap");
   if (!mine.length) { w.innerHTML = '<div class="empty">아직 기록이 없습니다.</div>'; return; }
   const cols = {
-    A: [["P (kPa)", r => r.P.toFixed(1)], ["V (L)", r => (r.V / 1e4).toFixed(2)],
-        ["P·V", r => (r.P * r.V / 1e4).toFixed(0)]],
+    A: [["P (atm)", r => r.P.toFixed(2)], ["V (L)", r => (r.V / 1e4).toFixed(2)],
+        ["P·V", r => (r.P * r.V / 1e4).toFixed(2)]],
     B: [["T (K)", r => r.T], ["t (℃)", r => r.T - 273], ["V (L)", r => (r.V / 1e4).toFixed(2)],
         ["V/T ×100", r => (r.V / 1e4 / r.T * 100).toFixed(2)]],
     C: [["기체", r => r.kindHtml || "—"], ["N", r => r.N], ["V (L)", r => (r.V / 1e4).toFixed(2)],
         ["V/N ×100", r => (r.V / 1e4 / r.N * 100).toFixed(2)]],
     D: [["T (K)", r => r.T], ["N", r => r.N], ["V (L)", r => (r.V / 1e4).toFixed(2)],
-        ["P (kPa)", r => r.P.toFixed(1)], ["PV/NkT", r => r.Z.toFixed(3)]]
+        ["P (atm)", r => r.P.toFixed(2)], ["PV/NkT", r => r.Z.toFixed(3)]]
   }[tab];
   w.innerHTML = "<table><thead><tr><th>#</th>" + cols.map(c => `<th>${c[0]}</th>`).join("") +
     "</tr></thead><tbody>" +

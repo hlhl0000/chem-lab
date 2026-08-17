@@ -147,8 +147,8 @@
 
       <div class="ctl" id="cP">
         <div class="row"><span>바깥 압력 <em>P</em><sub>외부</sub> <span class="lockmark" id="lkP"></span></span>
-          <span class="val"><span id="vP">100</span> kPa</span></div>
-        <input type="range" class="rng-vol" id="sP" min="70" max="200" step="2" value="100" aria-label="바깥에서 누르는 압력">
+          <span class="val"><span id="vP">1.00</span> atm</span></div>
+        <input type="range" class="rng-vol" id="sP" min="0.7" max="2" step="0.02" value="1" aria-label="바깥에서 누르는 압력">
       </div>
 
       <div class="ctl" id="cN">
@@ -180,7 +180,7 @@
       <h2>측정값</h2>
       <div class="ros">
         <div class="readout"><div class="label">압력 P</div>
-          <div><span class="value" id="rP">–</span><span class="unit">kPa</span></div></div>
+          <div><span class="value" id="rP">–</span><span class="unit">atm</span></div></div>
         <div class="readout"><div class="label">부피 V (상자 넓이)</div>
           <div><span class="value" id="rV">–</span><span class="unit">L</span></div></div>
         <div class="readout"><div class="label">온도 T</div>
@@ -281,9 +281,9 @@
   ⑤ 그래서 <b>실제 기체의 비이상성(PV/nRT ≠ 1)은 이 화면으로 볼 수 없습니다.</b>
      그것은 실제 기체의 측정 자료로 다룹니다.<br>
   ⑥ 이 상자는 <b>2차원</b>입니다. "부피"는 실제로는 상자의 <b>넓이</b>입니다.
-     화면의 <b>kPa·L</b>는 크기를 가늠하도록 붙인 <b>교육용 눈금</b>입니다 — 100 kPa가 약 1기압쯤 되도록
-     맞춰 두었습니다. 세 법칙의 <b>관계</b>(P·V 일정, V ∝ T, V ∝ N)는 정확하지만,
-     이 눈금이 실제 기체 시료의 양과 정확히 대응하지는 않습니다.<br>
+     화면의 <b>atm·L</b>는 크기를 가늠하도록 붙인 <b>교육용 눈금</b>입니다 — 기준 상태가
+     <b>1.00 atm</b>이 되도록 맞춰 두었습니다. 세 법칙의 <b>관계</b>(P·V 일정, V ∝ T, V ∝ N)는
+     정확하지만, 이 눈금이 실제 기체 시료의 양과 정확히 대응하지는 않습니다.<br>
   ⑦ 화면의 압력은 식을 넣어 준 값이 아니라 <b>입자가 벽에 부딪힌 충격량을 실제로 세어 계산한 값</b>입니다.
      그래서 아주 조금(1~2 %) 흔들리고, 표시할 때 짧은 시간 평균을 씁니다.<br>
   ⑧ 절대 온도 환산은 로드맵에 맞춰 273.15가 아니라 <b>273</b>으로 통일했습니다.<br>
