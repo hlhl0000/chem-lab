@@ -39,6 +39,19 @@
       const closedRise = length0 - L;
       return { dh, L, closedRise, openRise: dh + closedRise };
     },
+    /* 대기압 → 대기 입자 «개수» 매핑. 등온이므로 P ∝ 밀도 ∝ 개수다 — 속력은 여기서 다루지 않는다.
+       하한 8은 저압에서도 「기체가 사라졌다」로 읽히지 않게 하는 표현 하한이다. */
+    airCountFor(atm, base) {
+      if (!Number.isFinite(atm) || !Number.isFinite(base) || atm < 0 || base <= 0) return NaN;
+      return Math.max(8, Math.round(base * atm));
+    },
+    /* 렌더 기둥 «시각 높이»를 학습자 표시용 실제 길이(m)로 되돌린다. 하강 중에도 같은 식 하나를 쓴다(F-1). */
+    columnDisplayMeters(currentHeight, tubeHeight, liquid) {
+      const tubeLength = this.TUBE_LENGTH[liquid];
+      if (!Number.isFinite(currentHeight) || !Number.isFinite(tubeHeight) || !Number.isFinite(tubeLength)) return NaN;
+      if (currentHeight < 0 || tubeHeight <= 0) return NaN;
+      return currentHeight / tubeHeight * tubeLength;
+    },
   });
   root.TORRICELLI_ENGINE = ENGINE;
   if (typeof module !== "undefined" && module.exports) module.exports = ENGINE;
@@ -65,7 +78,7 @@
   };
   if (!dom.canvas || !dom.stage) return;
 
-  const state = { scene: "barometer", liquid: "mercury", atmosphere: 1, added: 0, standing: 1, standingAt: 0, quality: "high", showAir: false, yaw: 0.58, pitch: 0.25, zoom: 1 };
+  const state = { scene: "barometer", liquid: "mercury", atmosphere: 1, added: 0, standing: 1, standingAt: 0, quality: "high", showAir: false, causalDirection: null, yaw: 0.58, pitch: 0.25, zoom: 1 };
   const MOTION = Object.freeze({ STAND_MS: 6500, CAMERA_MS: 520 });
   const reducedMotion = root.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let renderer = null;
@@ -155,6 +168,9 @@
       glassSilhouette: new THREE.MeshBasicMaterial({ color: "#4d8ba5", transparent: true, opacity: 0.3, side: THREE.BackSide, depthWrite: false }),
       // 매뉴얼 2부 §5 — 밝은 무대의 «유리 하이라이트는 흰색이 아니라 옅은 청색» rgba(160,200,228,0.75)
       glassHighlight: new THREE.MeshBasicMaterial({ color: "#a0c8e4", transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }),
+      /* 단계 5 — 닫힌 팔 마개. «불투명» 수지·고무 계열 단색이다. 유리(반투명 0.34)와 같은 재질을 쓰면
+         관이 뚫려 보인다(사용자 원문: "P기체가 담긴 관이 뚫려있는것처럼 보여서"). 반구·돔이 아니다(원칙 12). */
+      seal: new THREE.MeshStandardMaterial({ color: "#3c4247", metalness: 0.04, roughness: 0.86 }),
       ceramic: new THREE.MeshStandardMaterial({ color: assetPreview ? "#c8bda9" : "#e3e0d8", roughness: 0.5 }),
       ceramicEdge: new THREE.MeshStandardMaterial({ color: "#a8b2b5", metalness: 0.05, roughness: 0.55 }),
       stand: new THREE.MeshStandardMaterial({ color: "#26343c", metalness: 0.7, roughness: 0.32 }),
@@ -168,6 +184,9 @@
       airParticle: new THREE.SpriteMaterial({ map: getAirRingTexture(), color: cssValue("--d-amber", "#b45309"), transparent: true, depthWrite: false }),
       /* 액면 접촉 «상시» 표지 — 밝기가 변하지 않는다. 파문·점멸 섬광이 아니다(§5 금지 11-c). */
       airContact: new THREE.MeshBasicMaterial({ color: cssValue("--d-amber", "#b45309"), transparent: true, opacity: 0.13, depthWrite: false, side: THREE.DoubleSide }),
+      /* 단계 4 — 조작 «직전» 기둥 높이를 남기는 정적 기준선 링. 색은 토큰 --d-blue를 읽어 쓰고
+         밝기는 변하지 않는다(점멸·파문이 아니다 — §5 금지 3). 액면 표지 계열이 아니라 «기준선»이다. */
+      baselineMark: new THREE.MeshBasicMaterial({ color: cssValue("--d-blue", "#1d4ed8"), transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }),
       ruler: new THREE.MeshStandardMaterial({ color: "#e8eceb", metalness: 0.22, roughness: 0.38 }),
       rulerMark: new THREE.MeshBasicMaterial({ color: "#354c57" }),
     };
@@ -317,6 +336,10 @@
     meniscusRing.rotation.x = Math.PI / 2; meniscusRing.position.set(0, baseY, 0); meniscusRing.renderOrder = 5; group.add(meniscusRing);
     const columnSheen = new THREE.Mesh(new THREE.BoxGeometry(0.132 * 0.18, 1, 0.01), materials.mercurySheen);
     columnSheen.position.set(-0.132 * 0.34, baseY, 0.132 * 1.06); columnSheen.renderOrder = 5; group.add(columnSheen);
+    /* 단계 4-⑴ 기준선 마커 — 관 «바깥»에 두른 정적 링. 치수는 관 반지름에서 «유도»한다(원칙 13).
+       기본은 숨김이며 대기압을 조작하는 동안에만 «직전 평형 높이»에 나타난다. */
+    const baselineRing = new THREE.Mesh(new THREE.TorusGeometry(tubeRadius * 1.42, tubeRadius * 0.075, 10, 40), materials.baselineMark);
+    baselineRing.rotation.x = Math.PI / 2; baselineRing.position.set(0, baseY, 0); baselineRing.renderOrder = 7; baselineRing.visible = false; group.add(baselineRing);
     const arrows = [];
     for (let index = 0; index < 5; index += 1) {
       const arrow = new THREE.Group();
@@ -335,17 +358,21 @@
       bottom: dishLiquid.position.y - dishParams.height / 2,
     };
     visuals = {
-      type: "barometer", group, baseY, tubeHeight, column, meniscus, meniscusRing, columnSheen, arrows, currentHeight: tubeHeight,
+      type: "barometer", group, baseY, tubeHeight, column, meniscus, meniscusRing, columnSheen, baselineRing, arrows, currentHeight: tubeHeight,
       dish, dishLiquid, tubeOuter: tubeRadius, tubeInner: tubeRadius * 0.82,
     };
     scene.add(group); world = group; updateBarometerVisual();
+    resetCausalBaseline();   // 장면 진입·액체 전환 시 기준선을 현재 평형으로 초기화하고 마커는 숨긴다
     buildAirParticles(group, materials);
   }
+  /* 지금 대기압에서 «평형에 도달했을 때»의 시각 높이. 애니메이션 진행도(state.standing)를 타지 않는다.
+     기준선 스냅숏이 이 값을 쓴다 — currentHeight를 쓰면 하강 도중 화질 전환 시 중간 높이가
+     「평형」으로 커밋된다(S-검토 A-1 실측: 조작 범위 밖 값 924 mm가 「직전」으로 표시됨). */
+  const equilibriumVisualHeight = () =>
+    Math.min(visuals.tubeHeight, visuals.tubeHeight * barometerHeight() / ENGINE.TUBE_LENGTH[state.liquid]);
   function updateBarometerVisual() {
     if (visuals.type !== "barometer") return;
-    const height = barometerHeight();
-    const tubeLength = ENGINE.TUBE_LENGTH[state.liquid];
-    const targetHeight = Math.min(visuals.tubeHeight, visuals.tubeHeight * height / tubeLength);
+    const targetHeight = equilibriumVisualHeight();
     const currentHeight = visuals.tubeHeight + (targetHeight - visuals.tubeHeight) * state.standing;
     setColumn(visuals.column, visuals.baseY, currentHeight);
     visuals.meniscus.position.y = visuals.baseY + currentHeight;
@@ -370,7 +397,7 @@
     topL: 5.25,        // 닫힌 팔 상단
     topR: 6.80,        // 열린 팔 상단
     c: 0.12,           // 닫힌 팔 상단 여유(마개 두께 포함)
-    capT: 0.055,       // 마개 두께
+    capT: 0.16,        // 마개 두께 — 판정기(oracle v3.2 J.capT)와 «같은 값»으로 동기화한다(§5 금지 10)
     rOuter: 0.22, innerFactor: 0.8, rLiquid: 0.170,
   });
   const jtubeYArm = () => JT.yB + JT.R;                              // 0.80
@@ -423,12 +450,14 @@
     const path = buildJTubePath();
     jtubePath = path;
     addTubeGlass(group, path, JT.rOuter, materials);
-    [[JT.leftX, JT.topL], [JT.rightX, JT.topR]].forEach(([x, y]) => {
+    /* ★ 개구 링은 «열린 팔에만» 둔다. 닫힌 팔(topL)에도 두면 그쪽 관도 뚫린 것으로 읽힌다 —
+       사용자가 지적한 오독의 원인이다. 열린 팔 링을 함께 지우면 「양쪽 다 밀봉」이라는 역방향 오개념이 된다. */
+    [[JT.rightX, JT.topR]].forEach(([x, y]) => {
       const opening = new THREE.Mesh(new THREE.TorusGeometry(JT.rOuter * 0.91, 0.025, 10, 36), materials.glassEdge);
       opening.rotation.x = Math.PI / 2; opening.position.set(x, y, 0); opening.renderOrder = 6; group.add(opening);
     });
     // 마개: y = topL 에서 시작해 두께 capT 만큼 «위로». 판정기의 끝단 평면 배제와 같은 상수를 쓴다.
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(JT.rOuter, JT.rOuter, JT.capT, 36), materials.glass);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(JT.rOuter, JT.rOuter, JT.capT, 36), materials.seal);
     cap.position.set(JT.leftX, JT.topL + JT.capT / 2, 0); cap.renderOrder = 5; group.add(cap);
     // B-4 유리 세로 하이라이트 — 기압계와 같은 장치를 J자관 두 팔에도 둔다.
     [[JT.leftX, yArm, JT.topL], [JT.rightX, yArm, JT.topR]].forEach(([x, from, to]) => {
@@ -750,15 +779,46 @@
     sprite.position.set(data.fallback.x, data.fallback.y, data.fallback.z);
     return classifyPoint(data.position) === "atmosphere";
   }
+  /* ══ 단계 3 — 대기압↔입자 «개수» 연동 (장면 1 한정) ═══════════════════════════════
+     압력이 커지면 «같은 속력»의 입자가 «더 많이» 수면을 두드린다 — 등온이므로 개수만 늘린다.
+     속력·크기·색은 압력에 연동하지 않는다(§5 금지 2 — 온도 인코딩 = X-1).
+     ⚠ 장면 2는 풀 크기·makeAirPlan 입력·영역 배분을 그대로 둔다(§5 금지 5). 확장 풀은 장면 1에만 있다.
+     ⚠ 활성/비활성 분리의 «단일 진입점»은 setActiveAirCount 하나다 — seed·step·visibility·검증 훅이
+       전부 activeCount 앞부분만 다룬다. 불변식 activeCount ≤ list.length. */
+  const airBaseCount = () => AIR.COUNT[state.quality] || AIR.COUNT.high;
+  const airPoolCount = () => visuals.type === "barometer" ? ENGINE.airCountFor(1.10, airBaseCount()) : airBaseCount();
+  const airActiveTarget = () => visuals.type === "barometer" ? ENGINE.airCountFor(state.atmosphere, airBaseCount()) : airBaseCount();
+  function setActiveAirCount(next) {
+    const air = visuals.air;
+    if (!air) return;
+    const limit = air.list.length;
+    const target = Number.isFinite(next) ? Math.max(0, Math.min(limit, Math.round(next))) : limit;
+    const previous = air.activeCount;
+    air.activeCount = target;
+    for (let index = previous; index < target; index += 1) spawnAirParticle(air.list[index]);   // 새로 «활성»이 된 몫만 배치
+    applyAirVisibility();
+  }
   function seedAirParticles() {
-    if (!visuals.air) return;
-    visuals.air.list.forEach(spawnAirParticle);
-    visuals.air.lastTime = 0;
+    const air = visuals.air;
+    if (!air) return;
+    for (let index = 0; index < air.activeCount; index += 1) spawnAirParticle(air.list[index]);
+    air.lastTime = 0;
+  }
+  /* 계측 — §1-2 확정 2의 조작적 정의. confine 보정 «전» 후보 좌표가 아래 방향으로 접시 액면(floor)을
+     넘은 그 step만 1회 센다. 관 단면과 접시 바깥은 제외하고, classify 복구·재표본·법선 탐침 경로도 세지 않는다. */
+  function countLiquidHit(from, candidate) {
+    const air = visuals.air;
+    if (!air || visuals.type !== "barometer") return;
+    const floorY = visuals.dish.top;
+    if (!(from.y >= floorY && candidate.y < floorY)) return;
+    const radial = Math.hypot(candidate.x, candidate.z);
+    if (radial < visuals.tubeOuter || radial >= visuals.dish.radius) return;
+    air.liquidHits += 1;
   }
   function buildAirParticles(group, materials) {
     const THREE = root.THREE;
     if (visuals.type !== "barometer" && visuals.type !== "jtube") return;
-    const count = AIR.COUNT[state.quality] || AIR.COUNT.high;
+    const count = airPoolCount();
     const speed = AIR.SPEED[visuals.type];
     const plan = makeAirPlan(count);
     const list = [];
@@ -783,8 +843,8 @@
       band.rotation.x = -Math.PI / 2; band.position.set(JT.rightX, visuals.yO + 0.006, 0); band.renderOrder = 6; group.add(band); bands.push(band);
     }
     bands.forEach((band) => { band.visible = state.showAir; });
-    visuals.air = { list, bands, lastTime: 0 };
-    seedAirParticles();
+    visuals.air = { list, bands, lastTime: 0, activeCount: 0, liquidHits: 0, simulatedSeconds: 0 };
+    setActiveAirCount(airActiveTarget());   // 활성분 배치 + 가시성 — seed의 유일 진입점
   }
   /* C-2 되돌림 규칙 — 검사 순서가 규정의 핵심이다. «확인 전에 렌더하지 않는다». */
   function stepAirParticle(sprite, dt) {
@@ -792,6 +852,7 @@
     const velocity = data.velocity;
     copyPoint(airTmpA, data.position);
     airTmpA.x += velocity.x * dt; airTmpA.y += velocity.y * dt; airTmpA.z += velocity.z * dt;
+    countLiquidHit(data.position, airTmpA);                     // ★ confine «전» 후보 좌표로만 센다
     data.domain.confine(airTmpA, velocity);
     if (classifyPoint(airTmpA) === "atmosphere") {
       copyPoint(data.position, airTmpA);
@@ -827,18 +888,22 @@
     const previous = air.lastTime;
     air.lastTime = now;
     const dt = previous ? Math.min(AIR.DT_MAX, Math.max(0.001, (now - previous) / 1000)) : 0.016;
-    for (let index = 0; index < air.list.length; index += 1) stepAirParticle(air.list[index], dt);
+    air.simulatedSeconds += dt;                                // 벽시계가 아니라 «클램프된 dt»의 누적이다
+    for (let index = 0; index < air.activeCount; index += 1) stepAirParticle(air.list[index], dt);
   }
   function applyAirVisibility() {
-    if (!visuals.air) return;
-    visuals.air.list.forEach((sprite) => { sprite.visible = state.showAir; });
-    if (visuals.air.bands) visuals.air.bands.forEach((band) => { band.visible = state.showAir; });
+    const air = visuals.air;
+    if (!air) return;
+    air.list.forEach((sprite, index) => { sprite.visible = state.showAir && index < air.activeCount; });
+    if (air.bands) air.bands.forEach((band) => { band.visible = state.showAir; });
   }
   function toggleAir() {
     state.showAir = !state.showAir;
     if (state.showAir) seedAirParticles();
     applyAirVisibility();
     updateUI();
+    // ★ 기본 문구로 덮지 않는다 — 방향이 살아 있으면 ON/OFF 판만 바꿔 같은 인과 문구를 다시 그린다(2차 A-5).
+    if (state.causalDirection) renderCausalGuide();
   }
 
   function buildWorld() { if (!scene) return; clearWorld(); if (assetPreview) buildAssetPreview(assetPreview); else if (state.scene === "barometer") buildBarometer(); else buildJTube(); }
@@ -934,6 +999,92 @@
     if (width < 2 || height < 2) return;
     renderer.setPixelRatio(Math.min(root.devicePixelRatio || 1, state.quality === "high" ? 2 : 1)); renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix();
   }
+  /* ══ 단계 2 — 다시세우기 실시간 수치 · DOM 소유권 계약 ═══════════════════════════
+     기존 결함: updateUI()가 «평형값»을 수치 DOM에 직접 쓰고 animate()의 standing 분기는 수치 DOM을
+     건드리지 않아, 6.5초 하강 중에도 760 mm가 그대로 남아 있었다(2차 P-검토 A-1·A-2).
+     처방: 시각 높이 → 표시값 변환을 ENGINE.columnDisplayMeters 하나로 두고(F-1), 정상 3D 기압계
+     장면에서는 이 헬퍼가 네 DOM의 «유일한 writer»가 된다. */
+  const isLiveBarometer = () => !useFallback && visuals.type === "barometer";
+  function formatColumn(meters) {
+    const isMercury = state.liquid === "mercury";
+    return { value: isMercury ? Math.round(meters * 1000).toString() : meters.toFixed(3), unit: isMercury ? "mm" : "m" };
+  }
+  function renderBarometerReadout() {
+    if (!isLiveBarometer()) return;
+    const meters = ENGINE.columnDisplayMeters(visuals.currentHeight, visuals.tubeHeight, state.liquid);
+    if (!Number.isFinite(meters)) return;
+    const shown = formatColumn(meters);
+    dom.heightValue.textContent = shown.value;
+    dom.heightUnit.textContent = shown.unit;
+    dom.heightLabel.textContent = `${shown.value} ${shown.unit}`;
+    // ★ Δ 표시도 «이 헬퍼»가 함께 그린다 — 두 writer가 conditionReadout을 두고 경쟁하지 않게 한다(2차 A-2).
+    dom.conditionReadout.innerHTML = `<strong>[대기압 ${state.atmosphere.toFixed(2)} atm · ${liquidName()}]</strong> h = ${shown.value} ${shown.unit}${causalDeltaMarkup(shown)}`;
+  }
+
+  /* ══ 단계 4 — 「기압의 변화에 의해」 인과 강조 3종 (장면 1) ══════════════════════════
+     ⑴ 기준선 마커(직전 높이의 정적 링) ⑵ conditionReadout의 직전→현재 Δ ⑶ guideCurrent 인과 문구.
+     세 장치가 «같은» causalBase 하나를 읽는다(F-1).
+     상태 계약(2차 P-검토 A-5): committedEquilibrium은 «다음» 조작의 기준선이고, causalBase는 «지금 화면에
+     그려지고 있는» 비교의 출발점이다. 조작을 놓으면(change) 다음 기준선만 갱신하고 화면 비교는 남긴다 —
+     학생이 손을 뗀 뒤에도 무엇이 어떻게 변했는지 읽을 수 있어야 한다. */
+  let committedEquilibrium = null;   // { atmosphere, meters, visualHeight }
+  let causalBase = null;             // 화면에 그려지고 있는 비교의 출발점(committedEquilibrium의 스냅숏)
+  let causalRestart = true;          // 다음 input에서 새 기준선으로 다시 시작할 것인가
+  function snapshotEquilibrium() {
+    if (!isLiveBarometer()) return null;
+    const visualHeight = equilibriumVisualHeight();
+    const meters = ENGINE.columnDisplayMeters(visualHeight, visuals.tubeHeight, state.liquid);
+    if (!Number.isFinite(meters)) return null;
+    return { atmosphere: state.atmosphere, meters, visualHeight };
+  }
+  function hideBaselineMarker() { if (visuals.baselineRing) visuals.baselineRing.visible = false; }
+  function resetCausalBaseline() {
+    committedEquilibrium = snapshotEquilibrium();
+    causalBase = null;
+    causalRestart = true;
+    state.causalDirection = null;
+    hideBaselineMarker();
+  }
+  function commitEquilibrium() {
+    const snapshot = snapshotEquilibrium();
+    if (snapshot) committedEquilibrium = snapshot;
+    causalRestart = true;   // 다음 조작은 «이 새 평형»에서 다시 비교를 시작한다
+  }
+  function updateCausalState() {
+    if (!isLiveBarometer()) { state.causalDirection = null; hideBaselineMarker(); return; }
+    if (causalRestart || !causalBase) {
+      causalBase = committedEquilibrium || snapshotEquilibrium();
+      causalRestart = false;
+    }
+    if (!causalBase) { state.causalDirection = null; hideBaselineMarker(); return; }
+    // 방향은 «대기압»의 변화로 정한다(표시값의 반올림이 아니라). 기준선으로 정확히 되돌아오면 장치를 숨긴다.
+    if (state.atmosphere > causalBase.atmosphere) state.causalDirection = "up";
+    else if (state.atmosphere < causalBase.atmosphere) state.causalDirection = "down";
+    else state.causalDirection = null;
+    if (visuals.baselineRing) {
+      visuals.baselineRing.visible = state.causalDirection !== null;
+      visuals.baselineRing.position.y = visuals.baseY + causalBase.visualHeight;
+    }
+  }
+  function causalDeltaMarkup(shown) {
+    if (!state.causalDirection || !causalBase) return "";
+    const before = formatColumn(causalBase.meters);
+    const arrow = state.causalDirection === "down" ? "▼" : "▲";
+    return `<br><span class="causal-delta">직전 ${before.value} → 현재 ${shown.value} ${shown.unit} (${arrow})</span>`;
+  }
+  /* ⑶ 확정 문자열 — 「충돌이 압력을 거쳐 기둥을 움직인다」는 사슬을 지우지 않는다(1차 P-검토 A-10).
+     입자 표시가 꺼져 있으면 «보이지 않는» 충돌을 말하지 않고 압력만 남긴다. */
+  const CAUSAL_TEXT = Object.freeze({
+    onDown: "② 대기압 ↓ — 수면을 두드리는 입자 충돌이 줄어(속력은 그대로) 수면을 누르는 압력이 작아져 기둥이 내려갑니다",
+    onUp: "② 대기압 ↑ — 수면을 두드리는 입자 충돌이 늘어(속력은 그대로) 수면을 누르는 압력이 커져 기둥이 올라갑니다",
+    offDown: "② 대기압 ↓ — 수면을 누르는 압력이 작아져 기둥이 내려갑니다",
+    offUp: "② 대기압 ↑ — 수면을 누르는 압력이 커져 기둥이 올라갑니다",
+  });
+  function renderCausalGuide() {
+    if (state.causalDirection === "down") dom.guideCurrent.textContent = state.showAir ? CAUSAL_TEXT.onDown : CAUSAL_TEXT.offDown;
+    else if (state.causalDirection === "up") dom.guideCurrent.textContent = state.showAir ? CAUSAL_TEXT.onUp : CAUSAL_TEXT.offUp;
+    else dom.guideCurrent.textContent = state.liquid === "water" ? "③ 물 기둥의 높이를 사람 실루엣과 비교합니다." : "① 다시 세우기를 눌러 수은 기둥이 멈추는 모습을 봅니다.";
+  }
   function updateUI() {
     const isBarometer = state.scene === "barometer";
     dom.tabBarometer.setAttribute("aria-selected", String(isBarometer)); dom.tabJtube.setAttribute("aria-selected", String(!isBarometer));
@@ -946,9 +1097,17 @@
     dom.atmRange.value = state.atmosphere.toFixed(2); dom.atmNow.textContent = `${state.atmosphere.toFixed(2)} atm`; dom.liquidNow.textContent = liquidName();
     dom.mercuryButton.setAttribute("aria-pressed", String(state.liquid === "mercury")); dom.waterButton.setAttribute("aria-pressed", String(state.liquid === "water")); setHidden(dom.waterNote, state.liquid !== "water");
     if (isBarometer) {
-      const height = barometerHeight(); const isMercury = state.liquid === "mercury"; const value = isMercury ? Math.round(height * 1000).toString() : height.toFixed(3); const unit = isMercury ? "mm" : "m";
-      dom.heightValue.textContent = value; dom.heightUnit.textContent = unit; dom.heightLabel.textContent = `${value} ${unit}`; dom.conditionReadout.innerHTML = `<strong>[대기압 ${state.atmosphere.toFixed(2)} atm · ${liquidName()}]</strong> h = ${value} ${unit}`;
-      dom.tubeWarning.classList.toggle("is-hidden", height <= ENGINE.TUBE_LENGTH[state.liquid]); dom.guideCurrent.textContent = state.liquid === "water" ? "③ 물 기둥의 높이를 사람 실루엣과 비교합니다." : "① 다시 세우기를 눌러 수은 기둥이 멈추는 모습을 봅니다.";
+      const height = barometerHeight();
+      /* ★ DOM 소유권 — 정상 3D 기압계 장면에서 heightValue·heightUnit·heightLabel·conditionReadout의
+         «유일한 writer»는 renderBarometerReadout()이다. 여기서 직접 쓰면 하강 중 표시와 Δ가 평형값으로 덮인다.
+         폴백(및 3D 기압계가 아닌 상태)일 때만 아래 좁은 writer가 기존 평형식으로 직접 쓴다. */
+      if (isLiveBarometer()) renderBarometerReadout();
+      else {
+        const isMercury = state.liquid === "mercury"; const value = isMercury ? Math.round(height * 1000).toString() : height.toFixed(3); const unit = isMercury ? "mm" : "m";
+        dom.heightValue.textContent = value; dom.heightUnit.textContent = unit; dom.heightLabel.textContent = `${value} ${unit}`; dom.conditionReadout.innerHTML = `<strong>[대기압 ${state.atmosphere.toFixed(2)} atm · ${liquidName()}]</strong> h = ${value} ${unit}`;
+      }
+      // guideCurrent의 소유권도 renderCausalGuide()에 위임한다 — 여기서 기본 문구로 덮으면 인과 문구가 지워진다(2차 A-5).
+      dom.tubeWarning.classList.toggle("is-hidden", height <= ENGINE.TUBE_LENGTH[state.liquid]); renderCausalGuide();
     } else {
       const data = ENGINE.jtubeFromAdd(state.added, ENGINE.JT_L0); dom.addRange.value = String(state.added); dom.addNow.textContent = `${state.added} mm`; dom.dhValue.textContent = data.dh.toFixed(0); dom.deltaLabel.textContent = `Δh ${data.dh.toFixed(0)} mm`; dom.gasPressureValue.textContent = (ENGINE.MMHG_REF + data.dh).toFixed(0); dom.gasLengthReadout.innerHTML = `기체 기둥 길이: <strong>${data.L.toFixed(1)} mm</strong>`; dom.guideCurrent.textContent = "④ 수은을 더 넣어 높이차와 기체 기둥 길이를 비교합니다.";
     }
@@ -958,10 +1117,25 @@
     if (dom.airToggleJ) dom.airToggleJ.setAttribute("aria-pressed", String(state.showAir));
   }
   function refreshScene(rebuild) { if (rebuild && !useFallback) buildWorld(); if (useFallback) drawFallback(); updateUI(); }
-  function switchScene(next) { if (state.scene === next) return; state.scene = next; state.atmosphere = 1; state.standing = 1; buildWorld(); resetCamera(); refreshScene(false); }
-  function setLiquid(next) { if (state.liquid === next) return; state.liquid = next; state.standing = 1; buildWorld(); resetCamera(); refreshScene(false); }
+  // 장면·액체 전환은 인과 장치를 걷고 기준선을 새 평형으로 다시 잡는다(마커 숨김은 resetCausalBaseline이 한다).
+  function switchScene(next) { if (state.scene === next) return; state.scene = next; state.atmosphere = 1; state.standing = 1; state.causalDirection = null; causalBase = null; causalRestart = true; buildWorld(); resetCamera(); refreshScene(false); }
+  function setLiquid(next) { if (state.liquid === next) return; state.liquid = next; state.standing = 1; state.causalDirection = null; causalBase = null; causalRestart = true; buildWorld(); resetCamera(); refreshScene(false); }
   function setQuality() { state.quality = state.quality === "high" ? "normal" : "high"; if (renderer) { renderer.shadowMap.enabled = state.quality === "high"; resize(); } buildWorld(); refreshScene(false); }
-  function startStanding() { if (state.scene !== "barometer") return; state.standing = 0; state.standingAt = performance.now(); dom.guideCurrent.textContent = "① 관 속 액체가 내려가며 기둥 위에 진공부가 남습니다."; }
+  /* ★ 순서 계약(2차 P-검토 A-1·A-3) — standing=0만 세우고 헬퍼를 부르면 visuals.currentHeight가 아직
+     «직전 평형값»이라 첫 프레임이 760 mm로 나온다. 반드시 updateBarometerVisual()로 시각 높이를 먼저
+     0 진행 상태(= 관 가득)로 만든 뒤 표시를 그린다.
+     폴백·비3D에서는 standing을 «1로 유지»하고 고지만 쓴 뒤 즉시 return한다 — 폴백에 하강 연출을
+     이식하지 않는다(§5 금지 12). 조기 return이 없으면 animate()가 6.5초 뒤 완료 문구로 고지를 덮는다. */
+  function startStanding() {
+    if (state.scene !== "barometer") return;
+    if (!isLiveBarometer()) { dom.guideCurrent.textContent = "단면도 모드에서는 하강 과정 없이 결과만 표시됩니다."; return; }
+    state.causalDirection = null; causalBase = null; causalRestart = true; hideBaselineMarker();   // 다시세우기는 인과 장치를 걷는다
+    state.standing = 0;
+    state.standingAt = performance.now();
+    updateBarometerVisual();
+    renderBarometerReadout();
+    dom.guideCurrent.textContent = "① 관 속 액체가 내려가며 기둥 위에 진공부가 남습니다.";
+  }
   function updateSceneLabels() {
     if (!camera || !visuals.group || assetPreview) return;
     const THREE = root.THREE;
@@ -973,6 +1147,8 @@
       [".column-label", [0, visuals.baseY + visuals.currentHeight * 0.72, 0], [72, -16]],
     ] : [
       [".gas-label", [visuals.leftX, visuals.gasBase + visuals.gasHeight * 0.68, 0], [-84, -14]],
+      // 마개 상단(topL + capT)에 앵커한다 — 좌표를 상수로 박지 않고 JT에서 유도한다(원칙 13).
+      [".seal-label", [visuals.leftX, visuals.topY + JT.capT, 0], [26, -34]],
       [".outside-label", [visuals.rightX, JT.topR - 0.30, 0], [24, -14]],
       [".delta-label", [(visuals.leftX + visuals.rightX) / 2, (visuals.yC + visuals.yO) / 2, 0], [12, -14]],
     ];
@@ -992,7 +1168,8 @@
   }
   function animate(now) {
     if (cameraTween && camera) { const progress = Math.min(1, (now - cameraTween.started) / MOTION.CAMERA_MS); const eased = easeOut(progress); camera.position.lerpVectors(cameraTween.from, cameraTween.to, eased); camera.userData.lookAt = cameraTween.fromTarget.clone().lerp(cameraTween.toTarget, eased); camera.lookAt(camera.userData.lookAt); if (progress === 1) cameraTween = null; }
-    if (state.scene === "barometer" && state.standing < 1) { state.standing = Math.min(1, (now - state.standingAt) / MOTION.STAND_MS); updateBarometerVisual(); if (state.standing === 1) { dom.guideCurrent.textContent = "① 기둥은 멈추고 관 위에는 진공부가 남았습니다."; } }
+    // ★ 수치는 «시각 갱신 뒤»에 그린다 — 종료 프레임도 최종 visual 갱신 뒤 같은 헬퍼로 그려 updateUI 경로와 값이 일치한다.
+    if (state.scene === "barometer" && state.standing < 1) { state.standing = Math.min(1, (now - state.standingAt) / MOTION.STAND_MS); updateBarometerVisual(); renderBarometerReadout(); if (state.standing === 1) { dom.guideCurrent.textContent = "① 기둥은 멈추고 관 위에는 진공부가 남았습니다."; } }
     if (state.scene === "jtube") updateJTubeVisual(now);
     updateAirParticles(now);
     updateSceneLabels();
@@ -1003,7 +1180,10 @@
   function stopLoop() { if (rafId) root.cancelAnimationFrame(rafId); rafId = null; lastTime = 0; }
 
   dom.tabBarometer.addEventListener("click", () => switchScene("barometer")); dom.tabJtube.addEventListener("click", () => switchScene("jtube"));
-  dom.atmRange.addEventListener("input", (event) => { state.atmosphere = Number(event.target.value); state.standing = 1; updateBarometerVisual(); refreshScene(false); dom.guideCurrent.textContent = "② 접시 수면을 미는 대기압을 바꾸면 기둥 높이가 함께 바뀝니다."; });
+  /* 순서가 계약이다 — 시각 높이 갱신 → 활성 입자 수 갱신 → 인과 상태·마커 갱신 → refreshScene(수치·문구를 헬퍼가 그림).
+     끝에서 guideCurrent를 직접 쓰지 않는다(renderCausalGuide가 소유). */
+  dom.atmRange.addEventListener("input", (event) => { state.atmosphere = Number(event.target.value); state.standing = 1; updateBarometerVisual(); setActiveAirCount(ENGINE.airCountFor(state.atmosphere, airBaseCount())); updateCausalState(); refreshScene(false); });
+  dom.atmRange.addEventListener("change", () => { commitEquilibrium(); });   // 놓으면 «다음» 조작의 기준선만 갱신한다
   dom.mercuryButton.addEventListener("click", () => setLiquid("mercury")); dom.waterButton.addEventListener("click", () => setLiquid("water")); dom.standButton.addEventListener("click", startStanding); dom.cameraReset.addEventListener("click", resetCamera); dom.cameraResetJ.addEventListener("click", resetCamera);
   dom.addRange.addEventListener("input", (event) => { state.added = Number(event.target.value); updateJTubeVisual(performance.now()); refreshScene(false); });
   dom.addMercury.addEventListener("click", () => { state.added = Math.min(200, state.added + 25); updateJTubeVisual(performance.now()); refreshScene(false); }); dom.resetJtube.addEventListener("click", () => { state.added = 0; updateJTubeVisual(performance.now()); refreshScene(false); });
@@ -1052,14 +1232,28 @@
   root.__TORRICELLI_AIR__ = () => {
     const byClass = { atmosphere: 0, liquid: 0, vacuum: 0, sealedGas: 0, glass: 0 };
     const positions = [];
-    const list = state.showAir && visuals.air ? visuals.air.list : [];
-    for (let index = 0; index < list.length; index += 1) {
-      const point = list[index].userData.position;
+    const air = visuals.air;
+    // ★ 집계 대상은 «활성분»뿐이다. activeCount는 showAir OFF에도 실값을 낸다(§3 단계 3-⑵).
+    const activeCount = air ? air.activeCount : 0;
+    const counted = state.showAir && air ? activeCount : 0;
+    for (let index = 0; index < counted; index += 1) {
+      const point = air.list[index].userData.position;
       const kind = classifyPoint(point);
       byClass[kind] = (byClass[kind] || 0) + 1;
       positions.push([point.x, point.y, point.z]);
     }
-    return { scene: state.scene, count: list.length, byClass, violations: list.length - byClass.atmosphere, positions };
+    return {
+      scene: state.scene, count: counted, byClass, violations: counted - byClass.atmosphere, positions,
+      activeCount, poolSize: air ? air.list.length : 0,
+      liquidHits: air ? air.liquidHits : 0, simulatedSeconds: air ? air.simulatedSeconds : 0,
+    };
+  };
+  // 계측 창을 여는 리셋 — 누적 2종만 0으로 되돌린다(입자 배치·속도는 건드리지 않는다).
+  root.__TORRICELLI_AIR_RESET__ = () => {
+    const air = visuals.air;
+    if (!air) return false;
+    air.liquidHits = 0; air.simulatedSeconds = 0;
+    return true;
   };
   initRenderer(); updateUI(); startLoop();
 })(typeof globalThis !== "undefined" ? globalThis : this);

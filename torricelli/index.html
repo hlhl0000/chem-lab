@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:,">
-<title>토리첼리 실험 — 대기압과 수은 기둥 | 화학 탐구실</title>
+<title>토리첼리 실험 — 대기압과 수은 기둥 | 케미랩</title>
 <link rel="stylesheet" href="../shared/style.css">
 <style>
   .torricelli-page{padding:14px 0 40px}
@@ -27,6 +27,7 @@
   .gas-label{color:var(--d-cyan)}
   .outside-label{color:var(--d-blue)}
   .delta-label{color:#7a4b0b}
+  .seal-label{color:#3c4247}
   .camera-hint{position:absolute;left:12px;top:12px;z-index:3;padding:6px 9px;border:1px solid rgba(78,113,128,.38);border-radius:999px;background:rgba(244,249,250,.88);color:#345667;font-size:11px;font-weight:700;pointer-events:none;box-shadow:0 2px 7px rgba(28,53,64,.1)}
   .molecule-toggle{position:absolute;right:14px;bottom:15px;z-index:3;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;background:var(--panel)}
   .molecule-dots{display:flex;gap:3px}.molecule-dots i{display:block;width:7px;height:7px;border-radius:50%;background:var(--d-blue)}.molecule-dots i:nth-child(2){background:var(--d-cyan)}
@@ -46,6 +47,7 @@
   .action-row{display:flex;gap:7px;flex-wrap:wrap}.action-row .primary{font-weight:700}
   .readout-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.readout-grid .readout{min-width:0}.readout-grid .value{font-size:28px}.readout-grid .unit{font-size:12px}
   .subreadout{font-size:12px;color:var(--t2);line-height:1.5;margin:9px 0 0}.subreadout strong{color:var(--t1);font-variant-numeric:tabular-nums}
+  .causal-delta{display:inline-block;margin-top:3px;color:var(--d-blue);font-weight:700;font-variant-numeric:tabular-nums}
   .quality-button{font-size:12px}.quality-button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
   .safety-card{border-left:4px solid var(--d-amber);font-size:13px;color:var(--t2);line-height:1.65}.safety-card strong{color:var(--t1)}
   .assumption-card{font-size:12.5px;color:var(--t2);line-height:1.62}.assumption-card summary{cursor:pointer;font-weight:700;color:var(--t1)}.assumption-card ol{margin:8px 0 0;padding-left:20px}.assumption-card li+li{margin-top:4px}
@@ -76,7 +78,7 @@
         <canvas class="scene-canvas" id="sceneCanvas" aria-label="토리첼리 기압계 3D 장면"></canvas>
         <div class="camera-hint" aria-hidden="true">↔ 드래그: 회전 <span class="wheel-hint">· 휠: 확대</span></div>
         <div class="fallback-panel" id="fallbackPanel" role="status"><strong>3D 가속을 사용할 수 없어 단면도로 표시합니다.</strong><span>조절과 수치 패널은 동일하게 사용할 수 있습니다.</span><canvas class="fallback-canvas" id="fallbackCanvas" aria-label="토리첼리 실험 단면도"></canvas></div>
-        <span class="scene-label vacuum-label" data-scene="barometer">진공</span><span class="scene-label height-label" id="heightLabel" data-scene="barometer">760 mm</span><span class="scene-label pressure-label" data-scene="barometer">대기압</span><span class="scene-label column-label" data-scene="barometer">수은 기둥이<br>누르는 압력</span><span class="scene-label gas-label is-hidden" data-scene="jtube">P기체</span><span class="scene-label outside-label is-hidden" data-scene="jtube">대기압</span><span class="scene-label delta-label is-hidden" id="deltaLabel" data-scene="jtube">Δh 0 mm</span>
+        <span class="scene-label vacuum-label" data-scene="barometer">진공</span><span class="scene-label height-label" id="heightLabel" data-scene="barometer">760 mm</span><span class="scene-label pressure-label" data-scene="barometer">대기압</span><span class="scene-label column-label" data-scene="barometer">수은 기둥이<br>누르는 압력</span><span class="scene-label gas-label is-hidden" data-scene="jtube">P기체</span><span class="scene-label outside-label is-hidden" data-scene="jtube">대기압</span><span class="scene-label delta-label is-hidden" id="deltaLabel" data-scene="jtube">Δh 0 mm</span><span class="scene-label seal-label is-hidden" data-scene="jtube">밀폐</span>
         <button class="molecule-toggle" id="moleculeToggle" data-scene="barometer" aria-expanded="false"><span class="molecule-dots"><i></i><i></i></span>공기 분자 확대</button><div class="molecule-caption is-hidden" id="moleculeCaption" data-scene="barometer">접시 수면 위의 공기는 입자들이 움직이는 기체입니다. 아래 화살표는 수면에 수직으로 작용하는 성분만 나타냅니다.</div>
         <button class="direction-toggle" id="directionToggle" data-scene="barometer" aria-expanded="false">사방으로 미는 공기</button><div class="direction-badge is-hidden" id="directionBadge" data-scene="barometer"><span class="direction-mark">↖ ↑ ↗<br>← · →<br>↙ ↓ ↘</span>대기는 모든 방향으로 민다. 그림의 화살표는 수면에 수직인 성분만 그린 것이다.</div><div class="stage-warning is-hidden" id="tubeWarning">관이 짧아 측정되지 않습니다.</div>
       </div>
@@ -93,7 +95,7 @@
     </aside>
   </div>
 </main>
-<div class="site-foot">화학 탐구실</div>
+<div class="site-foot">케미랩</div>
 <script src="../vendor/three.min.js"></script>
 <script src="../sims.js"></script>
 <script src="../shared/nav.js" data-base=".." data-current="torricelli"></script>
