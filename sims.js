@@ -54,7 +54,7 @@ const SIMS = [
   },
   {
     id: "gaslaws",
-    title: "기체 법칙 — 보일·샤를·아보가드로·이상 기체 방정식",
+    title: "이상기체방정식",
     cat: "물질의 상태",
     path: "gaslaws/",
     icon: "gaslaws",
