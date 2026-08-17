@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>기체 법칙 — 보일·샤를·아보가드로·이상 기체 방정식 | 화학 탐구실</title>
+<title>기체 법칙 — 보일·샤를·아보가드로·이상 기체 방정식 | 케미랩</title>
 <link rel="stylesheet" href="../shared/style.css">
 <style>
   /* 이 페이지에만 필요한 스타일.
@@ -123,7 +123,7 @@
     <div class="card">
       <h2 id="stageTitle">입자 상자</h2>
       <div class="stage stage--dark">
-        <canvas id="box" aria-label="기체 입자가 든 상자와 피스톤. 입자 지름과 입자 수는 상자 왼쪽 위에 항상 표시되며, 어떤 조작에도 변하지 않습니다."></canvas>
+        <canvas id="box" aria-label="기체 입자가 든 상자와 피스톤. 상자 왼쪽 위에 입자 수와 부피가, 탭에 따라 온도가 함께 표시됩니다. 보일 법칙 탭에서는 피스톤 위쪽에 바깥 압력이 표시됩니다."></canvas>
       </div>
       <div class="legend" style="margin-top:7px">
         <span class="item"><span class="swatch" id="legPart" style="background:#56b4e9"></span><span id="legPartLb">기체 입자</span></span>
@@ -147,7 +147,7 @@
 
       <div class="ctl" id="cP">
         <div class="row"><span>바깥 압력 <em>P</em><sub>외부</sub> <span class="lockmark" id="lkP"></span></span>
-          <span class="val"><span id="vP">100</span> a.u.</span></div>
+          <span class="val"><span id="vP">100</span> kPa</span></div>
         <input type="range" class="rng-vol" id="sP" min="70" max="200" step="2" value="100" aria-label="바깥에서 누르는 압력">
       </div>
 
@@ -168,7 +168,7 @@
 
       <div class="ctl" id="cV">
         <div class="row"><span>부피 <em>V</em> — 피스톤을 직접 민다 <span class="lockmark" id="lkV"></span></span>
-          <span class="val"><span id="vV">7.50</span> ×10<sup>4</sup></span></div>
+          <span class="val"><span id="vV">7.50</span> L</span></div>
         <input type="range" class="rng-vol" id="sW" min="100" max="440" step="2" value="250" aria-label="상자 부피 (피스톤 위치)">
       </div>
 
@@ -180,9 +180,9 @@
       <h2>측정값</h2>
       <div class="ros">
         <div class="readout"><div class="label">압력 P</div>
-          <div><span class="value" id="rP">–</span><span class="unit">a.u.</span></div></div>
+          <div><span class="value" id="rP">–</span><span class="unit">kPa</span></div></div>
         <div class="readout"><div class="label">부피 V (상자 넓이)</div>
-          <div><span class="value" id="rV">–</span><span class="unit">×10⁴</span></div></div>
+          <div><span class="value" id="rV">–</span><span class="unit">L</span></div></div>
         <div class="readout"><div class="label">온도 T</div>
           <div><span class="value" id="rT">–</span><span class="unit">K</span></div></div>
         <div class="readout"><div class="label">입자 수 N — 변하지 않음</div>
@@ -280,8 +280,10 @@
   ④ ⓑ 때문에 <b>아무리 압축하거나 냉각해도 액화가 일어나지 않습니다.</b> 실제 기체와 결정적으로 다른 점입니다.<br>
   ⑤ 그래서 <b>실제 기체의 비이상성(PV/nRT ≠ 1)은 이 화면으로 볼 수 없습니다.</b>
      그것은 실제 기체의 측정 자료로 다룹니다.<br>
-  ⑥ 이 상자는 <b>2차원</b>입니다. "부피"는 상자의 <b>넓이</b>이고, 단위는 실제 단위가 아닌
-     <b>임의 단위(a.u.)</b>입니다. 압력 100 a.u.는 1 atm이 아닙니다.<br>
+  ⑥ 이 상자는 <b>2차원</b>입니다. "부피"는 실제로는 상자의 <b>넓이</b>입니다.
+     화면의 <b>kPa·L</b>는 크기를 가늠하도록 붙인 <b>교육용 눈금</b>입니다 — 100 kPa가 약 1기압쯤 되도록
+     맞춰 두었습니다. 세 법칙의 <b>관계</b>(P·V 일정, V ∝ T, V ∝ N)는 정확하지만,
+     이 눈금이 실제 기체 시료의 양과 정확히 대응하지는 않습니다.<br>
   ⑦ 화면의 압력은 식을 넣어 준 값이 아니라 <b>입자가 벽에 부딪힌 충격량을 실제로 세어 계산한 값</b>입니다.
      그래서 아주 조금(1~2 %) 흔들리고, 표시할 때 짧은 시간 평균을 씁니다.<br>
   ⑧ 절대 온도 환산은 로드맵에 맞춰 273.15가 아니라 <b>273</b>으로 통일했습니다.<br>
@@ -293,7 +295,7 @@
 
 </div>
 
-<div class="site-foot">화학 탐구실</div>
+<div class="site-foot">케미랩</div>
 
 <script src="../sims.js"></script>
 <script src="../shared/nav.js" data-base=".." data-current="gaslaws"></script>

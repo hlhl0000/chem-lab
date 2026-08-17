@@ -13,7 +13,10 @@
      ⚠ 실제 기체의 비이상성을 이 화면으로 가르치려 하지 말 것. 로드맵이 금지한다.
 
    단위계
-     · 2차원이므로 "부피"는 상자의 **넓이**다. k_B = 1 인 임의 단위(a.u.).
+     · 2차원이므로 "부피"는 상자의 **넓이**다. 엔진 내부는 k_B = 1 인 임의 단위로 계산한다.
+       ⚠ 화면 표기만 kPa·L 로 붙여 준다(교사 지시 2026-08-17 — 학생이 크기를 가늠하게).
+         **배율은 1이라 숫자는 하나도 바뀌지 않는다** — 라벨만 바뀐다. 그래서 세 법칙의
+         관계도, 학습지 검증 게이트가 검사하는 표시값(3.57/7.14/10.71 L)도 그대로다.
      · 평균 운동 에너지 <½mv²> = k_B·T  →  v_rms = √(2kT/m)
      · 압력 P = (벽에 준 총 충격량) / (둘레 길이 × 시간)
      · 이상 기체(2D):  P × (넓이) = N × k_B × T
@@ -37,7 +40,7 @@ const GAS = {
   W_MIN: 100, W_MAX: 440,  // 피스톤 이동 범위
   M: 1,                    // 입자 질량
   R: 1.4,                  // ★ 입자끼리 충돌하는 반지름. 벽에는 점으로 부딪힌다(가정 ⓐ)
-  PSCALE: 714.3,           // 표시용 압력 배율 — 기준 상태(N=35,T=300,W=250)에서 100.0 a.u.
+  PSCALE: 714.3,           // 표시용 압력 배율 — 기준 상태(N=35,T=300,W=250)에서 100.0 (화면 100 kPa)
   DT: 0.05, SUBSTEPS: 2,
   EASE: 0.055              // 피스톤이 새 자리로 미끄러지는 속도 (τ ≈ 18프레임 ≈ 0.3초)
 };
@@ -188,11 +191,21 @@ const BOX_EDGE  = "rgba(203,213,225,0.55)";   // 상자 테두리
      ★★★ 오개념이 「분자 자체의 부피가 변한다」이다(매뉴얼 1부 P5 단원 표).
      크기를 종류별로 다르게 그리면 "부피가 분자 크기에 달렸다"를 새로 심는다.
    색은 화학적 의미가 없는 구분용 임의 색이다(매뉴얼 P5-M6 — 범례에 명시).
-   어두운 무대 대비비는 style.css 실측 주석 기준 sky 7.74 · mint 9.29 · violet 6.56. */
+   ★ 색 배정 근거 (실측 · 매뉴얼 §9 · 검토.js 와 같은 알고리즘)
+     무대에 동시에 있는 색은 언제나 3개다 — 입자 1종 + 주황(바깥 압력) + 은색(피스톤).
+     그 3색 조합의 최악 ΔE 는 sky 28.9 / mint 24.8 / violet 20.1 로 셋 다 20 이상이다.
+     노랑은 주황과 ΔE 9.9 라 입자색 후보에서 탈락했다. 그래서 쓸 수 있는 색이 이 셋뿐이다.
+     남는 문제는 «버튼을 눌러 바꿀 때» 순차 비교되는 쌍이다. 실측:
+       sky↔violet 15.9 · violet↔mint 27.9 · sky↔mint 10.6(청색약 혼동)
+     → 가장 약한 sky↔mint 가 **인접 전환에 오지 않도록** He–N₂–O₂ 순서에
+       sky–violet–mint 를 배정한다. 버튼 순서대로 누르면 15.9 → 27.9 를 지난다.
+     ⚠ 색만으로는 여전히 부족하므로 두 번째 채널을 반드시 함께 둔다(§9) —
+       범례 글자가 기체 이름으로 바뀌고, 선택된 버튼이 채움/윤곽으로 갈린다.
+       두 채널 다 색상이 아니라 «글자와 명도»라 색각과 무관하게 읽힌다. */
 const GASES = {
   He: { html: "헬륨 He",          text: "He", mass: 4,  color: CSSV("--p-sky") },
-  N2: { html: "질소 N<sub>2</sub>", text: "N₂", mass: 28, color: CSSV("--p-mint") },
-  O2: { html: "산소 O<sub>2</sub>", text: "O₂", mass: 32, color: CSSV("--p-violet") }
+  N2: { html: "질소 N<sub>2</sub>", text: "N₂", mass: 28, color: CSSV("--p-violet") },
+  O2: { html: "산소 O<sub>2</sub>", text: "O₂", mass: 32, color: CSSV("--p-mint") }
 };
 let gasKind = "He";
 const rgbaOf = (hex, a) => {
@@ -327,7 +340,7 @@ function buildAxisBar() {
    종류를 바꿔도 엔진은 손대지 않는다(물리 동일). gas.reset() 도 부르지 않는다 —
    피스톤이 미동도 하지 않는 것 자체가 보여 주려는 내용이기 때문이다.
    ⚠ 다만 압력 표시값은 벽 충돌을 세는 값이라 **같은 기체에서도** 계속 흔들린다
-     (He 고정 실측 146.2~156.6 a.u.). 종류를 바꾼 직후의 흔들림을 학생이 「종류 때문」으로
+     (He 고정 실측 146.2~156.6 kPa). 종류를 바꾼 직후의 흔들림을 학생이 「종류 때문」으로
      오귀속할 수 있으므로, 버튼 바로 아래에 그렇지 않다는 안내를 띄운다(매뉴얼 §3 인과 근접). */
 function buildGasBar() {
   const host = $("gasbar");
@@ -439,6 +452,16 @@ function drawBox() {
       bctx.beginPath(); bctx.moveTo(x1, y); bctx.lineTo(x1 + 6, y - 4.5); bctx.lineTo(x1 + 6, y + 4.5);
       bctx.closePath(); bctx.fill();
     }
+    /* 보일 탭만 — 바깥 압력 값을 피스톤 위쪽에 적는다 (교사 지시 2026-08-17).
+       화살표와 같은 뜻이므로 같은 주황을 쓴다. 첫 화살표는 boxH×0.2 아래라 겹치지 않는다.
+       피스톤이 오른쪽 끝까지 밀리면 자리가 없어지므로 짧은 표기 → 생략 순으로 물러선다. */
+    if (tab === "A") {
+      const pv = Math.round(+S.P.value);
+      bctx.font = "600 11.5px sans-serif"; bctx.textAlign = "left";
+      let lab = "P바깥 = " + pv + " kPa", tw = bctx.measureText(lab).width;
+      if (px + 14 + tw > cw - 3) { lab = pv + " kPa"; tw = bctx.measureText(lab).width; }
+      if (px + 14 + tw <= cw - 3) { bctx.fillStyle = C.orange; bctx.fillText(lab, px + 14, oy + 13); }
+    }
     rodX = px + 14 + L;
   }
   // 피스톤 손잡이 — 화살표 뒤쪽에 둔다 (겹치지 않게)
@@ -447,38 +470,50 @@ function drawBox() {
     bctx.fillRect(rodX, oy + boxH / 2 - 7, cw - rodX - 2, 14);
   }
 
-  /* ★★★ 오개념 반박 장치 ★★★
-     "부피를 줄이면 분자가 찌그러진다 / 개수가 줄어든다"를 화면으로 막는다.
-     아래 두 줄은 어떤 조작을 해도 절대 바뀌지 않는다.
-     ⚠ 글자가 상자를 넘치지 않도록 **실제 글자 폭을 재서** 판을 만든다.
-       좁은 화면(휴대폰)에서는 짧은 문구로 바꾼다. */
-  /* ③ 탭에서는 첫 줄 앞에 기체 이름을 붙인다 — 줄 수는 늘리지 않는다.
-     색만으로는 종류를 구분할 수 없다(3종 색끼리 청색약 ΔE 10.6). 매뉴얼 P6-C3
-     「두 번째 채널 필수」를 이 문자 표기로 충족한다. 게다가 이름을 무대 안에 두면
-     화면만 보고도 지금 무엇을 고른 상태인지 읽힌다(P4-B1 3초 규칙). */
-  bctx.font = "600 11.5px sans-serif"; bctx.textAlign = "left";
-  const gp = tab === "C" ? GASES[gasKind].text + " — " : "";
-  const wide = [gp + "입자 크기는 어떤 조작에도 안 변함", "입자 수 N = " + gas.st.N + " 개 — 안 변함"];
-  const narrow = [gp + "크기 안 변함", "N = " + gas.st.N + " 개"];
-  const need = t => Math.max(...t.map(x => bctx.measureText(x).width));
-  let lines = wide, panW = need(wide) + pr * 2 + 30;
-  if (panW > boxW - 12) { lines = narrow; panW = need(narrow) + pr * 2 + 30; }
-  const panH = 44;
-  if (panW <= boxW - 12 && boxH > panH + 16) {
+  /* ── 상자 안 왼쪽 위 값 표시 ──
+     ★ 교사 지시(2026-08-17)에 따른 **매뉴얼 예외**다. 4부 함정 ⑦은 "상태·설명 문구는 캔버스에
+       그리지 말고 HTML 로 캔버스 밖에 둔다"를 권고하지만, 조작 결과를 무대 «안»에서 바로 읽게
+       하는 쪽을 택했다. 대신 함정 ⑧의 처방은 그대로 지킨다 — measureText 로 실제 폭을 재고,
+       좁으면 짧은 표기로, 그래도 안 들어가면 아예 그리지 않는다.
+     ⚠ 값은 전부 gas.measure() 한 번의 결과를 쓴다. 따로 재면 오른쪽 측정값 카드와
+       숫자가 어긋난다(4부 함정 ⑭ — 한 가지 판정을 두 곳이 따로 내리면 안 된다).
+     탭마다 줄이 다른 것은 「그 탭에서 무엇을 보라」가 다르기 때문이다(P0-⑤ 변인 표).
+       ① 보일 N·V (압력은 피스톤 위에 따로) ② 샤를 N·V·T ③ 아보가드로 N·V ④ 이상 기체 N 만
+     ③ 탭 첫 줄의 기체 이름은 장식이 아니다 — 입자 3색끼리 청색약 ΔE 10.6(혼동)이라
+       색만으로는 종류가 안 갈린다. §9 「두 번째 채널 필수」를 이 문자 표기로 충족한다. */
+  bctx.textAlign = "left";
+  const mv = gas.measure();
+  const Vn = (mv.V / 1e4).toFixed(2), Tn = Math.round(mv.T);
+  /* 표기는 3단으로 물러선다. 상자는 슬라이더 끝값에서 폭이 64px 까지 줄어드는데(360px 화면),
+     한 단만 두면 그때 값이 통째로 사라진다 — 하필 ③ 탭 N=25 가 학습지 지정값이라
+     휴대폰에서 활동이 불가능해진다. 실측으로 확인하고 3단째를 넣었다. */
+  const gA = tab === "C" ? GASES[gasKind].text + " — " : "";
+  const gB = tab === "C" ? GASES[gasKind].text + " " : "";
+  const nRow = [gA + "입자 수 N = " + mv.N, gA + "N = " + mv.N, gB + "N=" + mv.N];
+  const vRow = ["부피 V = " + Vn + " L", "V = " + Vn + " L", "V=" + Vn + "L"];
+  const tRow = ["온도 T = " + Tn + " K", "T = " + Tn + " K", "T=" + Tn + "K"];
+  const ROWS = { A: [nRow, vRow], B: [nRow, vRow, tRow], C: [nRow, vRow], D: [nRow] }[tab];
+  /* [글꼴, 좌우 여백 합, 줄 높이, 첫 줄 기준선] */
+  const TIERS = [["600 11.5px sans-serif", 18, 15, 18],
+                 ["600 11.5px sans-serif", 18, 15, 18],
+                 ["600 10px sans-serif", 12, 13, 16]];
+  let lines = null, panW = 0, tier = null;
+  for (let k = 0; k < TIERS.length; k++) {
+    bctx.font = TIERS[k][0];
+    const cand = ROWS.map(r => r[k]);
+    const w = Math.max(...cand.map(x => bctx.measureText(x).width)) + TIERS[k][1];
+    if (w <= boxW - 12) { lines = cand; panW = w; tier = TIERS[k]; break; }
+  }
+  const panH = lines ? lines.length * tier[2] + 11 : 0;
+  if (lines && boxH > panH + 14) {                 // 셋 다 안 들어가면 그리지 않는다(넘치는 것보다 낫다)
     const bx = ox + 6, by = oy + 6;
     bctx.fillStyle = "rgba(6,12,26,0.80)";
     bctx.strokeStyle = "rgba(203,213,225,0.34)"; bctx.lineWidth = 1;
     bctx.beginPath();
     if (bctx.roundRect) bctx.roundRect(bx, by, panW, panH, 6); else bctx.rect(bx, by, panW, panH);
     bctx.fill(); bctx.stroke();
-    const cx = bx + 10 + pr, cy = by + 13;
-    bctx.fillStyle = pcHalo;    // 견본 입자도 지금 색을 따른다 — 무대 입자와 어긋나면 안 된다
-    bctx.beginPath(); bctx.arc(cx, cy, pr + 2.6, 0, 6.2832); bctx.fill();
-    bctx.fillStyle = pc;
-    bctx.beginPath(); bctx.arc(cx, cy, pr, 0, 6.2832); bctx.fill();
-    bctx.fillStyle = C.silver;
-    bctx.fillText(lines[0], cx + pr + 8, cy + 4);
-    bctx.fillText(lines[1], bx + 9, by + 34);
+    bctx.font = tier[0]; bctx.fillStyle = C.silver;
+    lines.forEach((t, i) => bctx.fillText(t, bx + tier[1] / 2, by + tier[3] + i * tier[2]));
   }
 
   // 피스톤 오른쪽은 "상자 바깥"이다 — 상자의 일부로 오해하지 않게 이름을 붙인다
@@ -603,7 +638,7 @@ function drawGraph() {
     const xv = r => useInv ? 1e4 / r.V : r.V / 1e4;
     const all = [...mine, now];
     const x1 = Math.max(...all.map(xv)) * 1.25, y1 = Math.max(...all.map(r => r.P)) * 1.25;
-    frame(useInv ? "1 / V   (×10⁻⁴)" : "부피 V   (×10⁴)", "압력 P (a.u.)");
+    frame(useInv ? "1 / V   (1/L)" : "부피 V   (L)", "압력 P (kPa)");
     grid(0, x1, 0, y1, v => v.toFixed(useInv ? 2 : 1), v => v.toFixed(0));
     const pvMean = mine.length ? mine.reduce((a, r) => a + r.P * r.V, 0) / mine.length : now.P * now.V;
     gctx.strokeStyle = C.gray; gctx.setLineDash([5, 4]); gctx.lineWidth = 1.8;
@@ -624,7 +659,7 @@ function drawGraph() {
   } else if (tab === "B") {
     const all = [...mine, now];
     const x1 = 640, y1 = Math.max(...all.map(r => r.V / 1e4)) * 1.25;
-    frame("온도 T (K)", "부피 V (×10⁴)");
+    frame("온도 T (K)", "부피 V (L)");
     gctx.fillStyle = BAND_LIGHT;
     gctx.fillRect(X(0, 0, x1), pad.t, X(90, 0, x1) - X(0, 0, x1), PH);
     grid(0, x1, 0, y1, v => v.toFixed(0), v => v.toFixed(1));
@@ -651,7 +686,7 @@ function drawGraph() {
   } else if (tab === "C") {
     const all = [...mine, now];
     const x1 = Math.max(...all.map(r => r.N)) * 1.25, y1 = Math.max(...all.map(r => r.V / 1e4)) * 1.25;
-    frame("입자 수 N", "부피 V (×10⁴)");
+    frame("입자 수 N", "부피 V (L)");
     grid(0, x1, 0, y1, v => v.toFixed(0), v => v.toFixed(1));
     const f = fitLine(mine.map(r => r.N), mine.map(r => r.V / 1e4));
     if (f) {
@@ -667,7 +702,7 @@ function drawGraph() {
   } else {
     const all = [...mine, now];
     const hi = Math.max(...all.map(r => Math.max(r.P, r.Pideal))) * 1.2 || 1;
-    frame("PV = NkT 로 계산한 압력 (a.u.)", "실제 측정 압력 (a.u.)");
+    frame("PV = NkT 로 계산한 압력 (kPa)", "실제 측정 압력 (kPa)");
     grid(0, hi, 0, hi, v => v.toFixed(0), v => v.toFixed(0));
     seg(X(0, 0, hi), Y(0, 0, hi), X(hi, 0, hi), Y(hi, 0, hi), C.gray, [5, 4], 1.8);
     hint("점이 이 선 위에 놓인다 = 입자 운동에서 나온 압력이 PV=NkT 와 같다");
@@ -702,8 +737,8 @@ function updateReadouts() {
 }
 
 /* ── 기록 ── */
-const HEADERS = ["좌석번호", "법칙", "기체 종류", "온도 T (K)", "온도 t (℃)", "압력 P (a.u.)",
-  "부피 V (×10⁴)", "입자 수 N", "P·V (×10⁴)", "PV/NkT", "PV=NkT 예측 압력 (a.u.)"];
+const HEADERS = ["좌석번호", "법칙", "기체 종류", "온도 T (K)", "온도 t (℃)", "압력 P (kPa)",
+  "부피 V (L)", "입자 수 N", "P·V (kPa·L)", "PV/NkT", "PV=NkT 예측 압력 (kPa)"];
 $("rec").onclick = () => {
   const m = gas.measure(), iso = TABS[tab].mode === "iso";
   if (iso && !m.settled) {
@@ -745,14 +780,14 @@ function renderTable() {
   const w = $("tableWrap");
   if (!mine.length) { w.innerHTML = '<div class="empty">아직 기록이 없습니다.</div>'; return; }
   const cols = {
-    A: [["P (a.u.)", r => r.P.toFixed(1)], ["V (×10⁴)", r => (r.V / 1e4).toFixed(2)],
+    A: [["P (kPa)", r => r.P.toFixed(1)], ["V (L)", r => (r.V / 1e4).toFixed(2)],
         ["P·V", r => (r.P * r.V / 1e4).toFixed(0)]],
-    B: [["T (K)", r => r.T], ["t (℃)", r => r.T - 273], ["V (×10⁴)", r => (r.V / 1e4).toFixed(2)],
+    B: [["T (K)", r => r.T], ["t (℃)", r => r.T - 273], ["V (L)", r => (r.V / 1e4).toFixed(2)],
         ["V/T ×100", r => (r.V / 1e4 / r.T * 100).toFixed(2)]],
-    C: [["기체", r => r.kindHtml || "—"], ["N", r => r.N], ["V (×10⁴)", r => (r.V / 1e4).toFixed(2)],
+    C: [["기체", r => r.kindHtml || "—"], ["N", r => r.N], ["V (L)", r => (r.V / 1e4).toFixed(2)],
         ["V/N ×100", r => (r.V / 1e4 / r.N * 100).toFixed(2)]],
-    D: [["T (K)", r => r.T], ["N", r => r.N], ["V (×10⁴)", r => (r.V / 1e4).toFixed(2)],
-        ["P (a.u.)", r => r.P.toFixed(1)], ["PV/NkT", r => r.Z.toFixed(3)]]
+    D: [["T (K)", r => r.T], ["N", r => r.N], ["V (L)", r => (r.V / 1e4).toFixed(2)],
+        ["P (kPa)", r => r.P.toFixed(1)], ["PV/NkT", r => r.Z.toFixed(3)]]
   }[tab];
   w.innerHTML = "<table><thead><tr><th>#</th>" + cols.map(c => `<th>${c[0]}</th>`).join("") +
     "</tr></thead><tbody>" +
