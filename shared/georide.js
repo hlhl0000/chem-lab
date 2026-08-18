@@ -180,13 +180,15 @@ window.GeoRide = (function () {
 
   /* ★ 표시 크기 — 교과 데이터(sizeM = 실제 크기)는 건드리지 않는다.
      교실 TV에서 작은 생물이 안 보인다는 실사용 피드백에 대한 대응(사용자 확정).
-     압축 곡선 disp = sizeM^0.55 × 1.8 — «작은 것을 많이, 큰 것을 조금» 키운다.
-       조개 0.30 → 0.93m (3.1배) · 삼엽충 0.46 → 1.17m (2.5배)
-       부채산호 1.5 → 2.25m (1.5배) · 수장룡 3.00 → 3.29m (1.1배)
-     크기 «순서» 는 그대로 보존된다(단조 증가 함수다).
+     압축 곡선 disp = sizeM^0.45 × 2.34 — «작은 것을 많이, 큰 것을 조금» 키운다.
+       조개 0.30 → 1.36m (4.5배) · 삼엽충 0.46 → 1.65m (3.6배)
+       부채산호 1.5 → 4.77m (3.2배) · 수장룡 3.00 → 3.84m (1.3배)
+     modelScale 이 곱해지므로 종끼리의 크기 순서가 항상 보존되지는 않는다 —
+     역전 33쌍(압축 지수 0.45 기준. 지수 0.55일 때는 30쌍이었다).
+     압축 곡선 sizeM^0.45 자체는 단조 증가다.
      화면에는 「추정입니다」 카드로 과장 사실을 밝힌다(TEXT.lieCardFull).
      ※ GEO.species[].sizeM 은 여전히 실제 크기다. 검증 스크립트가 그걸 본다. */
-  const SIZE_POW = 0.55, SIZE_MUL = 1.8;
+  const SIZE_POW = 0.45, SIZE_MUL = 2.34;
   function dispSizeM(sp) { return Math.pow(sp.sizeM, SIZE_POW) * SIZE_MUL * (sp.modelScale || 1); }
   function rimFor(sp) { return !sp.animal ? RIM.photo : (sp.hard ? RIM.hard : RIM.soft); }
   const GEO = { eras: ERAS, env: ENV, species: SPECIES, eraLengthPercent: ERA_LENGTH_PERCENT, text: TEXT, stops: STOPS_U };
