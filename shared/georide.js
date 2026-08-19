@@ -819,6 +819,22 @@ window.GeoRide = (function () {
   }
 
   /* ===== 환경 구성물 ===== */
+
+  /* ★ 선캄브리아 「오존층 없음」 연출 강화 계수 — 이 블록이 유일한 원천이다(F-1).
+     검증 프로브(georide_surface_probe.js)와 게이트(georide_check.js)가 이 블록을
+     그대로 파싱해 목표 달성 여부를 판정한다. 여기 값을 바꾸면 판정도 함께 바뀐다.
+     적용 대상은 env.harshSun 인 시대(선캄브리아)뿐이다 — 고생대·중생대는 불변.
+     화질 「보통」에서는 applyQuality() 가 uEnhance=0 · uBoost=1 로 되돌리고
+     추가 빛기둥 메시를 visible=false 로 끈다(알파 0으로 끄지 않는다). */
+  const UV = {
+    haze: 0.12,       // 수면 전역 눈부심(태양 방향과 무관) — 평상시 시선(조건 A)을 올린다
+    alphaAdd: 0.10,   // 수면 알파 가산 — 어두운 물색 배경이 비치는 비중을 줄인다
+    sunGain: 2.4,     // 태양 반사항 진폭 가산 — 태양 정면(조건 B) 절대 포화도를 올린다
+    sunPow: 16.0,     // 태양 반사항 지수(현행 60) — 눈부심의 «폭»을 넓힌다
+    beamBoost: 1.45,  // 빛기둥 알파 배수
+    beamExtra: 6      // 추가 빛기둥 개수. InstancedMesh 1개로 묶어 draw call 은 +1
+  };
+
   function buildWaterSurface(env) {
     const geo = new T.PlaneGeometry(460, 460, 190, 190); geo.rotateX(-Math.PI / 2);
     const mat = new T.ShaderMaterial({
@@ -826,7 +842,9 @@ window.GeoRide = (function () {
       uniforms: {
         uTime: UNI.time, uColor: { value: COL(env.water).lerp(COL(0xffffff), 0.16) },
         uBright: { value: env.surfaceBright }, uSun: { value: new T.Vector3(-env.lightDir[0], -env.lightDir[1], -env.lightDir[2]).normalize() },
-        uSunCol: { value: COL(env.sun) }
+        uSunCol: { value: COL(env.sun) },
+        uEnhance: { value: env.harshSun ? 1 : 0 },
+        uUV: { value: new T.Vector4(UV.haze, UV.alphaAdd, UV.sunGain, UV.sunPow) }
       },
       vertexShader: `uniform float uTime; varying vec3 vWP; varying vec2 vUv;
         void main(){ vUv=uv; vec3 p=position;
@@ -834,15 +852,18 @@ window.GeoRide = (function () {
           p.y += w; vWP=(modelMatrix*vec4(p,1.0)).xyz;
           gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0); }`,
       fragmentShader: `precision highp float; uniform vec3 uColor; uniform float uBright; uniform float uTime;
-        uniform vec3 uSun; uniform vec3 uSunCol; varying vec3 vWP; varying vec2 vUv;
+        uniform vec3 uSun; uniform vec3 uSunCol; uniform float uEnhance; uniform vec4 uUV;
+        varying vec3 vWP; varying vec2 vUv;
         void main(){
           vec3 V = normalize(cameraPosition - vWP);
           float fres = pow(1.0 - abs(V.y), 3.0);
-          float sun = pow(max(dot(V, uSun), 0.0), 60.0);
+          float sun = pow(max(dot(V, uSun), 0.0), mix(60.0, uUV.w, uEnhance));
           float rip = sin(vWP.x*0.30+uTime*1.1)*sin(vWP.z*0.34-uTime*0.9) + 0.5*sin((vWP.x+vWP.z)*0.19+uTime*1.5);
           float caustic = smoothstep(0.15,1.0, rip*0.35+0.5);
-          vec3 c = uColor*(0.5+0.6*uBright) + caustic*0.12*uBright + uSunCol*sun*1.5*uBright;
-          gl_FragColor = vec4(c, clamp(0.32 + 0.42*uBright + fres*0.3, 0.0, 0.92));
+          vec3 c = uColor*(0.5+0.6*uBright) + caustic*0.12*uBright
+                 + uSunCol*sun*(1.5 + uUV.z*uEnhance)*uBright
+                 + uSunCol*uEnhance*uUV.x*(0.55+0.45*caustic)*uBright;
+          gl_FragColor = vec4(c, clamp(0.32 + 0.42*uBright + fres*0.3 + uUV.y*uEnhance, 0.0, 0.92));
         }`
     });
     const m = new T.Mesh(geo, mat); m.position.x = 97; m.renderOrder = 2; return m;
@@ -852,15 +873,24 @@ window.GeoRide = (function () {
     const grp = new T.Group();
     const dir = new T.Vector3(env.lightDir[0], env.lightDir[1], env.lightDir[2]).normalize();
     const sharp = env.harshSun ? 0.62 : 0.4;   // 오존층 없음 → 더 선명하고 강한 빛기둥
+    /* ★ 역순 smoothstep 정정 — 이전 판은 smoothstep(1.0, 1.0-uS, x) 처럼 edge0 > edge1 로
+       불렀다. GLSL 명세는 edge0 >= edge1 을 undefined 로 규정하므로 기기에 따라 빛기둥이
+       사라질 수 있었다. 1.0 - smoothstep(작은쪽, 큰쪽, x) 로 바꾼다 — 값은 수학적으로 같다. */
+    const FRAG = `precision highp float; uniform vec3 uColor; uniform float uI; uniform float uTime;
+        uniform float uS; uniform float uBoost; varying vec2 vUv;
+        void main(){ float e=smoothstep(0.0,uS,vUv.x)*(1.0-smoothstep(1.0-uS,1.0,vUv.x));
+          float f=smoothstep(0.0,0.28,vUv.y)*(1.0-smoothstep(0.45,1.0,vUv.y));
+          float k=0.82+0.18*sin(uTime*0.7+vUv.y*5.0+vUv.x*3.0);
+          gl_FragColor=vec4(uColor, e*f*0.15*uI*k*uBoost); }`;
+    const uniforms = {
+      uTime: UNI.time, uColor: { value: COL(env.sun) }, uI: { value: env.sunbeam }, uS: { value: sharp },
+      uBoost: { value: env.harshSun ? UV.beamBoost : 1.0 }
+    };
     const mat = new T.ShaderMaterial({
       transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
-      uniforms: { uTime: UNI.time, uColor: { value: COL(env.sun) }, uI: { value: env.sunbeam }, uS: { value: sharp } },
+      uniforms,
       vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
-      fragmentShader: `precision highp float; uniform vec3 uColor; uniform float uI; uniform float uTime; uniform float uS; varying vec2 vUv;
-        void main(){ float e=smoothstep(0.0,uS,vUv.x)*smoothstep(1.0,1.0-uS,vUv.x);
-          float f=smoothstep(0.0,0.28,vUv.y)*smoothstep(1.0,0.45,vUv.y);
-          float k=0.82+0.18*sin(uTime*0.7+vUv.y*5.0+vUv.x*3.0);
-          gl_FragColor=vec4(uColor, e*f*0.15*uI*k); }`
+      fragmentShader: FRAG
     });
     const rng = makeRng(777); const nB = env.harshSun ? 14 : 9;
     for (let i = 0; i < nB; i++) {
@@ -870,6 +900,32 @@ window.GeoRide = (function () {
       grp.add(beam);
     }
     grp.userData.mats = [mat];
+    /* 추가 빛기둥(선캄브리아 전용) — uniform 객체를 공유해 원천을 하나로 둔다(F-1).
+       개별 Mesh 를 늘리면 draw call 이 그만큼 늘어나므로 InstancedMesh 1개로 묶는다. */
+    if (env.harshSun && UV.beamExtra > 0) {
+      const matI = new T.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+        uniforms,
+        vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.0);} `,
+        fragmentShader: FRAG
+      });
+      const geoI = new T.PlaneGeometry(1, 1);
+      const im = new T.InstancedMesh(geoI, matI, UV.beamExtra);
+      im.frustumCulled = false; im.renderOrder = 1;
+      const d = new T.Object3D();
+      for (let i = 0; i < UV.beamExtra; i++) {
+        const w = 2.8 + rng() * 2.4, h = Math.abs(env.seafloorY) * 2.6;
+        d.position.set(13 + i * 33 + rng() * 10, env.seafloorY * 0.5, (rng() - 0.5) * 30);
+        d.lookAt(d.position.clone().add(dir)); d.rotateX(Math.PI / 2);
+        d.scale.set(w, h, 1); d.updateMatrix();
+        im.setMatrixAt(i, d.matrix);
+      }
+      im.instanceMatrix.needsUpdate = true;
+      const extra = new T.Group(); extra.add(im); grp.add(extra);
+      grp.userData.extra = extra;
+      grp.userData.mats.push(matI);
+      grp.userData.geos = [geoI];
+    }
     return grp;
   }
 
@@ -1425,6 +1481,7 @@ window.GeoRide = (function () {
     let quality = "high";   // high | med  — 교사가 버튼으로 전환
 
     let eraRoot = null, env = null, track = null, eraKey = null, disposal = null, vents = null, bubbles = null;
+    let water = null, godrays = null;   // 화질 전환에서 다시 만져야 하는 연출 메시(§ applyQuality)
     let sIndex = 0, dist = 0, vel = V_MIN, mode = "idle", paused = false, yaw = 0, pitch = 0, roll = 0, shake = 0;
     const built = [];
     const raycaster = new T.Raycaster();
@@ -1445,7 +1502,7 @@ window.GeoRide = (function () {
         disposal.mats.forEach(m => m.dispose());
         if (disposal.mixers) disposal.mixers.forEach(mx => mx.stopAllAction());
       }
-      built.length = 0; vents = null; bubbles = null;
+      built.length = 0; vents = null; bubbles = null; water = null; godrays = null;
     }
 
     function buildEra(key) {
@@ -1470,8 +1527,11 @@ window.GeoRide = (function () {
       envSrc.dispose();
 
       track = makeTrack(env);
-      eraRoot.add(buildWaterSurface(env));
-      eraRoot.add(buildGodrays(env));
+      /* 수면·빛기둥은 화질 전환에서 다시 만져야 하므로 참조를 붙잡아 둔다.
+         재질은 disposal.mats 에도 등록한다(수면 재질이 그동안 미등록이었다). */
+      water = buildWaterSurface(env); eraRoot.add(water); disposal.mats.push(water.material);
+      godrays = buildGodrays(env); eraRoot.add(godrays);
+      godrays.userData.mats.forEach(m => disposal.mats.push(m));
       const floorMesh = buildSeafloor(env); floorMesh.receiveShadow = true; eraRoot.add(floorMesh);
       const rocks = buildRocks(env, track, disposal); if (rocks) eraRoot.add(rocks);
       eraRoot.add(buildMarineSnow(env));
@@ -1497,10 +1557,21 @@ window.GeoRide = (function () {
       $("stopNow").textContent = "–"; $("btnPause").textContent = TEXT.pauseButton;
     }
 
+    /* 화질 전환. buildEra 말미에서도 호출되므로 시대 전환 시 자동 재적용된다 —
+       호출 훅을 새로 추가하지 마라. 「보통」에서는 선캄브리아 자외선 강화분을
+       실제로 끈다: uniform 을 개선 전 값으로 되돌리고, 추가 메시는 visible=false 로
+       그리기 자체를 건너뛴다(알파 0으로 두면 채움률 비용이 남는다). */
     function applyQuality() {
       const high = quality === "high";
       renderer.shadowMap.enabled = high;
       sun.castShadow = high;
+      const uvOn = high && !!(env && env.harshSun);
+      if (water && water.material.uniforms.uEnhance) water.material.uniforms.uEnhance.value = uvOn ? 1 : 0;
+      if (godrays) {
+        const gm = godrays.userData.mats[0];
+        if (gm && gm.uniforms.uBoost) gm.uniforms.uBoost.value = uvOn ? UV.beamBoost : 1.0;
+        if (godrays.userData.extra) godrays.userData.extra.visible = uvOn;
+      }
       if (eraRoot) eraRoot.traverse(o => { if (o.material) o.material.needsUpdate = true; });
     }
     function switchEra(key) {
