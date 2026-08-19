@@ -944,9 +944,15 @@ window.GeoRide = (function () {
      ⚠ 하늘 아래·안에 육상 생물·식생·초록을 그리지 않는다 — 육상 진출 표현은
        이번 범위 밖이다. 하늘을 나는 실루엣도 그리지 않는다(M3 익룡≠공룡 방어선).
      황량함은 「그리지 않음」으로 표현한다. */
+  /* ★ 선캄브리아 하늘의 «배경»을 너무 밝게 두면 태양 원반이 그 안에 묻힌다 —
+     화면휘도 상한이 1.0 이라 배경이 포화에 가까울수록 원반이 튀어나올 여지가 없다.
+     첫 판(top #efe6c6 · 7° · I9 · 넓은 헤일로)에서 원반 대비가 0.167 로 세 시대 중
+     «가장 낮았다»(고생 0.226 · 중생 0.235) — 지시안의 「크고 날카로운 태양」에
+     어긋난다. 배경을 한 단계 낮추고 헤일로를 좁히고 원반을 키워 되돌렸다. */
   const SKY = {
     y: 14, size: 520,
-    precambrian: { top: 0xefe6c6, horizon: 0xfff8e4, sun: 0xfffbe0, sunDeg: 7.0, sunI: 9.0 },
+    haloPow: 200.0, haloK: 0.08,   // 헤일로 — 형상은 세 시대 공유(F-1)
+    precambrian: { top: 0xdccfa4, horizon: 0xf2e8cc, sun: 0xfffbe0, sunDeg: 10.0, sunI: 12.0 },
     paleozoic: { top: 0x8fb6d6, horizon: 0xd9e9f3, sun: 0xffffff, sunDeg: 4.5, sunI: 3.0 },
     mesozoic: { top: 0x8fb6d6, horizon: 0xd9e9f3, sun: 0xffffff, sunDeg: 4.5, sunI: 3.0 }
   };
@@ -963,22 +969,23 @@ window.GeoRide = (function () {
       uniforms: {
         uTop: { value: COL(S.top) }, uHorizon: { value: COL(S.horizon) },
         uSunCol: { value: COL(S.sun) }, uSunDir: { value: sunDir },
-        uSunR: { value: Math.cos(S.sunDeg * Math.PI / 180) }, uSunI: { value: S.sunI }
+        uSunR: { value: Math.cos(S.sunDeg * Math.PI / 180) }, uSunI: { value: S.sunI },
+        uHalo: { value: new T.Vector2(SKY.haloPow, SKY.haloK) }
       },
       vertexShader: `varying vec3 vWP;
         void main(){ vWP=(modelMatrix*vec4(position,1.0)).xyz;
           gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
       fragmentShader: `precision highp float;
         uniform vec3 uTop; uniform vec3 uHorizon; uniform vec3 uSunCol; uniform vec3 uSunDir;
-        uniform float uSunR; uniform float uSunI; varying vec3 vWP;
+        uniform float uSunR; uniform float uSunI; uniform vec2 uHalo; varying vec3 vWP;
         void main(){
           vec3 D = normalize(vWP - cameraPosition);        // 시선이 하늘로 향하는 방향
           float el = clamp(D.y, 0.0, 1.0);                 // 0 = 수평선 쪽 · 1 = 머리 위
           vec3 c = mix(uHorizon, uTop, pow(el, 0.65));
           float d = max(dot(D, uSunDir), 0.0);
           float disc = smoothstep(uSunR-0.004, uSunR+0.004, d);
-          float halo = pow(d, 90.0);
-          c += uSunCol * (disc*uSunI + halo*uSunI*0.30);
+          float halo = pow(d, uHalo.x);                    // 좁은 헤일로 — 원반 경계를 흐리지 않는다
+          c += uSunCol * (disc*uSunI + halo*uSunI*uHalo.y);
           gl_FragColor = vec4(c, 1.0);
         }`
     });
