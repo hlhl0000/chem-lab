@@ -827,9 +827,17 @@ window.GeoRide = (function () {
      화질 「보통」에서는 applyQuality() 가 uEnhance=0 · uBoost=1 로 되돌리고
      추가 빛기둥 메시를 visible=false 로 끈다(알파 0으로 끄지 않는다). */
   const UV = {
-    haze: 0.12,       // 수면 전역 눈부심(태양 방향과 무관) — 평상시 시선(조건 A)을 올린다
-    alphaAdd: 0.10,   // 수면 알파 가산 — 어두운 물색 배경이 비치는 비중을 줄인다
-    sunGain: 2.4,     // 태양 반사항 진폭 가산 — 태양 정면(조건 B) 절대 포화도를 올린다
+    haze: 0.42,       // 수면 «가산» 눈부심(태양 방향과 무관) — 평상시 시선(조건 A)을 올린다
+    /* ★ alphaAdd 는 «음수»다 — 수면을 더 투명하게 만든다. 이유:
+         수면은 하늘보다 «앞»에 있으므로 알파를 올리면 조건 A 는 오르지만 그 뒤의
+         하늘이 함께 가려진다. 실제로 v1 에서 alphaAdd = +0.10 을 쓴 결과
+         선캄브리아 하늘 가시도가 22.3% 로 떨어져 고생대(42.8%)·중생대(53.7%)보다
+         «흐려졌다» — 의도와 정반대였다(육안 반려).
+         그래서 조건 A 상승분은 전부 haze(가산 항)가 맡고, 알파는 오히려 낮춰
+         하늘 가시도를 선캄 54.3% > 중생 53.7% > 고생 42.8% 로 뒤집었다.
+         georide_surface_probe.js 의 「하늘 가시도」 판정이 이 순서를 강제한다. */
+    alphaAdd: -0.22,  // 수면 알파 가산(음수) — 물 밖 하늘이 더 많이 비치게 한다
+    sunGain: 5.0,     // 태양 반사항 진폭 가산 — 태양 정면(조건 B) 절대 포화도를 올린다
     sunPow: 16.0,     // 태양 반사항 지수(현행 60) — 눈부심의 «폭»을 넓힌다
     beamBoost: 1.45,  // 빛기둥 알파 배수
     beamExtra: 6      // 추가 빛기둥 개수. InstancedMesh 1개로 묶어 draw call 은 +1
@@ -1625,7 +1633,10 @@ window.GeoRide = (function () {
         if (gm && gm.uniforms.uBoost) gm.uniforms.uBoost.value = uvOn ? UV.beamBoost : 1.0;
         if (godrays.userData.extra) godrays.userData.extra.visible = uvOn;
       }
-      if (sky) sky.visible = high;
+      /* ★ 하늘은 「보통」에서도 켜 둔다. 비용이 삼각형 2 · draw call 1 로 실측됐고
+         (성능 방어의 근거가 되지 않는다), 끄면 finishHint 의 「물 밖에는 무엇이
+         있나요?」가 보통 화질에서 답 없는 질문이 된다. */
+      if (sky) sky.visible = true;
       if (eraRoot) eraRoot.traverse(o => { if (o.material) o.material.needsUpdate = true; });
     }
     function switchEra(key) {
