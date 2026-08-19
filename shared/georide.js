@@ -929,6 +929,58 @@ window.GeoRide = (function () {
     return grp;
   }
 
+  /* ★ 물 밖(하늘) — 「위를 올려다보세요. 물 밖에는 무엇이 있나요?」에 답을 준다.
+     절차적 생성만 한다 — 이미지·HDRI·외부 URL 없음(절대규칙 1·4).
+     형상은 세 시대가 공유하고 «색과 태양 크기»만 다르다(F-1).
+     선캄브리아 = 창백한 흰-노랑에 크고 날카로운 태양 / 고생·중생 = 온화한 톤 1종.
+     ⚠ 하늘 아래·안에 육상 생물·식생·초록을 그리지 않는다 — 육상 진출 표현은
+       이번 범위 밖이다. 하늘을 나는 실루엣도 그리지 않는다(M3 익룡≠공룡 방어선).
+     황량함은 「그리지 않음」으로 표현한다. */
+  const SKY = {
+    y: 14, size: 520,
+    precambrian: { top: 0xefe6c6, horizon: 0xfff8e4, sun: 0xfffbe0, sunDeg: 7.0, sunI: 9.0 },
+    paleozoic: { top: 0x8fb6d6, horizon: 0xd9e9f3, sun: 0xffffff, sunDeg: 4.5, sunI: 3.0 },
+    mesozoic: { top: 0x8fb6d6, horizon: 0xd9e9f3, sun: 0xffffff, sunDeg: 4.5, sunI: 3.0 }
+  };
+
+  function buildSky(env, eraKey) {
+    const S = SKY[eraKey];
+    const geo = new T.PlaneGeometry(SKY.size, SKY.size, 1, 1); geo.rotateX(-Math.PI / 2);
+    const sunDir = new T.Vector3(-env.lightDir[0], -env.lightDir[1], -env.lightDir[2]).normalize();
+    /* 카메라는 언제나 하늘 평면 아래에 있다 — 트랙 최고점은 railY(-8.0) + amp(2.6)×0.82
+       ≈ -5.9 이고 SKY.y 는 +14 다. 그래서 뒷면만 그린다(DoubleSide 는 투명 재질에서
+       앞·뒤 두 번 그려 draw call 이 2배가 된다 — 실측). */
+    const mat = new T.ShaderMaterial({
+      transparent: true, depthWrite: false, side: T.BackSide,
+      uniforms: {
+        uTop: { value: COL(S.top) }, uHorizon: { value: COL(S.horizon) },
+        uSunCol: { value: COL(S.sun) }, uSunDir: { value: sunDir },
+        uSunR: { value: Math.cos(S.sunDeg * Math.PI / 180) }, uSunI: { value: S.sunI }
+      },
+      vertexShader: `varying vec3 vWP;
+        void main(){ vWP=(modelMatrix*vec4(position,1.0)).xyz;
+          gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+      fragmentShader: `precision highp float;
+        uniform vec3 uTop; uniform vec3 uHorizon; uniform vec3 uSunCol; uniform vec3 uSunDir;
+        uniform float uSunR; uniform float uSunI; varying vec3 vWP;
+        void main(){
+          vec3 D = normalize(vWP - cameraPosition);        // 시선이 하늘로 향하는 방향
+          float el = clamp(D.y, 0.0, 1.0);                 // 0 = 수평선 쪽 · 1 = 머리 위
+          vec3 c = mix(uHorizon, uTop, pow(el, 0.65));
+          float d = max(dot(D, uSunDir), 0.0);
+          float disc = smoothstep(uSunR-0.004, uSunR+0.004, d);
+          float halo = pow(d, 90.0);
+          c += uSunCol * (disc*uSunI + halo*uSunI*0.30);
+          gl_FragColor = vec4(c, 1.0);
+        }`
+    });
+    const m = new T.Mesh(geo, mat);
+    m.position.set(97, SKY.y, 0);
+    m.renderOrder = 0;               // 빛기둥(1)·수면(2)보다 먼저 그린다
+    m.frustumCulled = false;
+    return m;
+  }
+
   function makeSandTexture(env) {
     /* 실사 지면 사진이 있으면 그것을 쓴다. 없으면 아래 절차적 캔버스로 되돌아간다(폴백). */
     const G = window.GEO_TEXTURES;
@@ -1481,7 +1533,7 @@ window.GeoRide = (function () {
     let quality = "high";   // high | med  — 교사가 버튼으로 전환
 
     let eraRoot = null, env = null, track = null, eraKey = null, disposal = null, vents = null, bubbles = null;
-    let water = null, godrays = null;   // 화질 전환에서 다시 만져야 하는 연출 메시(§ applyQuality)
+    let water = null, godrays = null, sky = null;   // 화질 전환에서 다시 만져야 하는 연출 메시(§ applyQuality)
     let sIndex = 0, dist = 0, vel = V_MIN, mode = "idle", paused = false, yaw = 0, pitch = 0, roll = 0, shake = 0;
     const built = [];
     const raycaster = new T.Raycaster();
@@ -1502,7 +1554,7 @@ window.GeoRide = (function () {
         disposal.mats.forEach(m => m.dispose());
         if (disposal.mixers) disposal.mixers.forEach(mx => mx.stopAllAction());
       }
-      built.length = 0; vents = null; bubbles = null; water = null; godrays = null;
+      built.length = 0; vents = null; bubbles = null; water = null; godrays = null; sky = null;
     }
 
     function buildEra(key) {
@@ -1532,6 +1584,7 @@ window.GeoRide = (function () {
       water = buildWaterSurface(env); eraRoot.add(water); disposal.mats.push(water.material);
       godrays = buildGodrays(env); eraRoot.add(godrays);
       godrays.userData.mats.forEach(m => disposal.mats.push(m));
+      sky = buildSky(env, key); eraRoot.add(sky); disposal.mats.push(sky.material);
       const floorMesh = buildSeafloor(env); floorMesh.receiveShadow = true; eraRoot.add(floorMesh);
       const rocks = buildRocks(env, track, disposal); if (rocks) eraRoot.add(rocks);
       eraRoot.add(buildMarineSnow(env));
@@ -1572,6 +1625,7 @@ window.GeoRide = (function () {
         if (gm && gm.uniforms.uBoost) gm.uniforms.uBoost.value = uvOn ? UV.beamBoost : 1.0;
         if (godrays.userData.extra) godrays.userData.extra.visible = uvOn;
       }
+      if (sky) sky.visible = high;
       if (eraRoot) eraRoot.traverse(o => { if (o.material) o.material.needsUpdate = true; });
     }
     function switchEra(key) {
