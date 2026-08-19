@@ -277,6 +277,16 @@ const RANGE = { N: PRESS.N, T: PRESS.T, V: PRESS.V };
 const NICKS = [$("nick0"), $("nick1"), $("nick2"), $("nick3")];
 
 function fmtInt(x) { return Math.round(x).toLocaleString("ko-KR"); }
+
+/* ── 임시 단위 전환 (2026-08-17 사용자 지시) ─────────────────────────────
+   다음 수업의 학생들이 atm 단위만 배운 상태라 「화면 표시만」 atm으로 바꾼다.
+   내부 계산·목표 생성·판정·검증 스크립트는 전부 kPa 그대로다(계산부 무변경).
+   ★ 수업이 끝나면 UNIT_ATM = false 로 되돌리고 캐시버스터만 올리면 복원 끝. */
+const UNIT_ATM = true;
+const KPA_PER_ATM = 101.325;
+/* 압력 표시 문자열 — atm 모드는 소수 둘째 자리(범위 0.41~196.9), kPa 모드는 정수 */
+function fmtP(kpa) { return UNIT_ATM ? (kpa / KPA_PER_ATM).toFixed(2) : fmtInt(kpa); }
+function unitLabel() { return UNIT_ATM ? "atm" : "kPa"; }
 function seatLabel(i) { return SEATS[i] || ("#" + (i + 1)); }
 /* 기본 닉네임 — 빈칸이면 ①~④번(확정 3) */
 function defaultName(i) { return seatLabel(i) + "번"; }
@@ -528,8 +538,8 @@ function renderStatic() {
     ? Array.from({ length: G.k }, (_, i) => playerName(i) + " " + G.wins[i]).join(" · ")
     : "–";
 
-  $("goalVal").textContent = G.data ? fmtInt(G.data.target) : "–";
-  if (G.data) $("startVal").textContent = fmtInt(G.data.P0);
+  $("goalVal").textContent = G.data ? fmtP(G.data.target) : "–";
+  if (G.data) $("startVal").textContent = fmtP(G.data.P0);
   $("goalCard").classList.toggle("brief", G.phase === "targetBrief");
 
   $("nextRoundBtn").textContent = G.round >= G.totalRounds ? "최종 결과 보기" : "다음 라운드";
@@ -580,8 +590,8 @@ function pressureInfo() {
 }
 function renderDynamic() {
   const pi = pressureInfo();
-  $("rP").textContent = pi.locked ? "🔒 잠김" : fmtInt(pi.value);
-  $("rPUnit").textContent = pi.locked ? "" : "kPa";
+  $("rP").textContent = pi.locked ? "🔒 잠김" : fmtP(pi.value);
+  $("rPUnit").textContent = pi.locked ? "" : unitLabel();
   $("lockNote").textContent = pi.locked
     ? (G.phase === "playing" ? "조절하는 동안 잠깁니다 — 제출하면 다음 사람에게 열립니다"
       : G.phase === "allSubmitted" || G.phase === "reveal" ? "공개하면 열립니다" : "")
@@ -620,7 +630,7 @@ function renderResultTable() {
     const win = e.seat === G.roundWinnerSeat ? ' class="winrow"' : "";
     /* 닉네임은 학생이 친 문자열이다 — innerHTML에 넣기 전 반드시 esc()를 거친다 */
     return "<tr" + win + "><td>" + esc(playerName(e.seat)) + "</td><td>" + e.N + "</td><td>" + e.T +
-      " K</td><td>" + e.V.toFixed(2) + " L</td><td>" + fmtInt(e.P) + " kPa</td><td>" + pct +
+      " K</td><td>" + e.V.toFixed(2) + " L</td><td>" + fmtP(e.P) + " " + unitLabel() + "</td><td>" + pct +
       " %</td><td>" + verdictCell(v) + "</td></tr>";
   }).join("");
   /* 다섯째 열 이름은 학습지 기록표의 열 이름을 그대로 따른다(개선 v1 확정 16 — 학습지 연계 B) */
@@ -697,7 +707,7 @@ function renderResultOverlay() {
     const broken = verdict(e.P, target) === "부서짐";
     const win = e.seat === G.roundWinnerSeat;
     return {
-      val: fmtInt(e.P) + (broken ? " ✕" : win ? " 승" : ""),
+      val: fmtP(e.P) + (broken ? " ✕" : win ? " 승" : ""),
       name: playerName(e.seat),
       frac: e.P / scale,
       cls: broken ? "bad" : win ? "win" : ""
@@ -706,8 +716,8 @@ function renderResultOverlay() {
   $("rovHead").textContent = G.roundWinnerSeat !== null
     ? "라운드 " + G.round + " 승자 — " + playerName(G.roundWinnerSeat)
     : "라운드 " + G.round + " — 전원 부서짐, 승자 없음";
-  $("rovSub").textContent = "목표 " + fmtInt(target) + " kPa를 넘지 않고 가장 가까운 사람이 이깁니다 (단위 kPa)";
-  paintOverlay(items, target / scale, "목표 " + fmtInt(target));
+  $("rovSub").textContent = "목표 " + fmtP(target) + " " + unitLabel() + " — 넘지 않으면서 가장 가까운 사람이 이깁니다 (단위 " + unitLabel() + ")";
+  paintOverlay(items, target / scale, "목표 " + fmtP(target));
 }
 
 /* 최종 결과 — 누적 승수를 세로 막대로. 목표선은 없다 */
@@ -1029,7 +1039,7 @@ function draw() {
   const lockedNow = G.phase === "playing" && meterMode(G.phase, G.turnLocked) === "none";
   if ((ds.meter !== "none" && G.data) || lockedNow) {
     const broken = ds.judged && ds.verdict === "부서짐";
-    const core = fmtInt(ds.dispP) + " kPa";
+    const core = fmtP(ds.dispP) + " " + unitLabel();
     /* 색만으로 구분하지 않는다(색각 이상 대응) — 부서지면 숫자 옆에 항상 "✕"(또는 "✕ 부서짐")를 붙인다. */
     const cands = lockedNow
       ? ["🔒 조절 중 — 압력 잠김", "🔒 압력 잠김", "🔒 잠김"]
@@ -1249,8 +1259,10 @@ function draw() {
   ctx.setLineDash([]);
   ctx.textAlign = "left"; ctx.font = "10px sans-serif"; ctx.fillStyle = C.t3;
   /* 재작업 B-3⑵ — 대기압 숫자를 PRESS.PATM(단일 원천)에서 만든다. 텍스트를 다시 타이핑하지 않는다. */
-  const atmRound = Math.round(PRESS.PATM);
-  ctx.fillText(fitText("대기압 ≈ " + atmRound + " kPa", "≈" + atmRound + "kPa", midW - 100), M, top - 8);
+  /* 단위 전환 대응 — atm 모드에서는 PATM/KPA_PER_ATM = 정확히 1이므로 "≈ 1 atm"이 된다.
+     값은 여전히 PRESS.PATM(단일 원천)에서 만든다. */
+  const atmRound = UNIT_ATM ? Math.round(PRESS.PATM / KPA_PER_ATM) : Math.round(PRESS.PATM);
+  ctx.fillText(fitText("대기압 ≈ " + atmRound + " " + unitLabel(), "≈" + atmRound + unitLabel(), midW - 100), M, top - 8);
 
   ctx.textAlign = "left";
 }
@@ -1308,6 +1320,8 @@ try {
   syncSliderDom();
   syncLimitTxt();
   syncNickRow();
+  /* 임시 단위 전환 — 정적 HTML의 단위 라벨(목표·시작 압력 옆 "kPa")도 플래그 하나로 따라온다(F-1) */
+  document.querySelectorAll(".goalunit, .startunit").forEach(el => { el.textContent = unitLabel(); });
   setControlsEnabled(false);   // idle은 슬라이더 비활성이다(★ 상태 전이표) — 로드 직후에도 같다
   renderStatic();   // syncHowto()는 renderStatic 안에서 국면과 함께 처리된다
   resize();
