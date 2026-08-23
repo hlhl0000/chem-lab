@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>자연선택과 획득 형질 | 케미랩</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 이 페이지에만 필요한 스타일. 색은 shared/style.css 의 토큰만 쓴다.
+     요소 선택자(button{}, input{}) 는 쓰지 않는다 — 공통 CSS 의 터치 규칙(44px·16px)을
+     덮어쓰기 때문이다. (매뉴얼 §12①) */
+  .page{padding:18px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0}
+
+  /* ── 탭 (gaslaws 골격 승계) ── */
+  .tabs{display:flex; gap:6px; margin-top:14px; flex-wrap:wrap}
+  .tab{font-family:inherit; font-size:13.5px; padding:9px 14px; border-radius:9px 9px 0 0;
+    border:1px solid var(--line); border-bottom-color:transparent; background:#eef1f5;
+    color:var(--t2); cursor:pointer; min-height:44px; font-weight:600}
+  .tab[aria-selected="true"]{background:var(--panel); color:var(--t1);
+    box-shadow:inset 0 3px 0 var(--accent)}
+  .tabdesc{background:var(--panel); border:1px solid var(--line); border-radius:0 10px 10px 10px;
+    padding:11px 13px; font-size:13.5px; color:var(--t2); box-shadow:var(--shadow); margin-bottom:14px}
+  .tabdesc b{color:var(--t1)}
+  .tabdone{display:none; background:#eef7ee; color:var(--d-green);
+    border:1px solid #cfe8cf; border-radius:6px; padding:1px 7px; font-size:12px; font-weight:700; margin-left:6px}
+  .tabdone.is-done{display:inline-block}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1.5fr) minmax(270px,1fr); gap:14px}
+  @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+
+  /* ── 무대 + 그 «위에» 덮이는 조작 오버레이 ──
+     조별 게임이라 여럿이 한 화면을 보므로, 지시가 도마뱀 옆이 아니라 그 «위»에 있어야 한다. */
+  .stagewrap{position:relative}
+  .stagewrap canvas{display:block; width:100%}
+  .overlay{position:absolute; left:0; top:0; right:0; bottom:0;
+    display:flex; align-items:center; justify-content:center; padding:14px;
+    background:rgba(247,249,251,.94); border-radius:var(--radius); overflow-y:auto}
+  /* ★ slim 오버레이는 «클릭을 통과»시킨다 — 이 국면에서는 학생이 무대의 도마뱀을 눌러야 한다.
+     통과시키지 않으면 오버레이가 캔버스를 통째로 가려 한 마리도 클릭할 수 없다(실측으로 확인). */
+  .overlay.slim{align-items:flex-end; pointer-events:none; padding:10px;
+    background:linear-gradient(to top, rgba(247,249,251,.98) 34%, rgba(247,249,251,0) 46%)}
+  .overlay.slim .opanel{pointer-events:auto}
+  .opanel{width:100%; max-width:540px; background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:13px 15px; box-shadow:var(--shadow-lg)}
+  .opanel h3{margin:0 0 8px; font-size:15.5px; color:var(--t1)}
+  .opanel p{margin:0 0 7px; font-size:13.5px; color:var(--t2); line-height:1.65}
+  .opanel p:last-of-type{margin-bottom:0}
+  .opanel .big{font-size:15.5px; color:var(--t1); font-weight:700}
+  .opanel .hint{font-size:12.5px; color:var(--t3)}
+
+  .btns{display:flex; gap:7px; flex-wrap:wrap; margin-top:11px}
+
+  /* ── 인원·별명 입력 ── */
+  .cntrow{display:flex; gap:7px; flex-wrap:wrap; margin:8px 0 4px}
+  .cntbtn{font-family:inherit; font-size:14px; font-weight:700; min-width:58px; min-height:44px;
+    border:1px solid var(--line); border-radius:9px; background:#eef1f5; color:var(--t2); cursor:pointer}
+  .cntbtn[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:#fff}
+  .nickrow{display:flex; align-items:center; gap:8px; margin:7px 0}
+  .nickrow .dot{width:16px; height:16px; border-radius:50%; flex:none}
+  .nickrow .nick{flex:1; min-width:0; border:1px solid var(--line); border-radius:8px;
+    padding:9px 10px; font-size:16px; font-family:inherit; color:var(--t1); min-height:44px}
+
+  /* ── 점수판 ── */
+  .board{border:1px solid var(--line); border-radius:10px; background:var(--panel);
+    box-shadow:var(--shadow); padding:11px 13px; margin-bottom:12px}
+  .board h3{margin:0 0 8px; font-size:14px; color:var(--t1)}
+  .prow{display:flex; align-items:center; gap:8px; padding:6px 0;
+    border-top:1px solid var(--line); font-size:13.5px}
+  .prow:first-of-type{border-top:0}
+  .prow .dot{width:14px; height:14px; border-radius:50%; flex:none}
+  .prow .nm{flex:1; min-width:0; color:var(--t1); font-weight:600;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .prow .ct{font-variant-numeric:tabular-nums; font-weight:700; color:var(--t1)}
+  .prow.now{background:#f1f5fb; margin:0 -13px; padding-left:13px; padding-right:13px}
+  .prow.out .nm,.prow.out .ct{color:var(--t3); font-weight:400}
+  .board .empty{color:var(--t3); font-size:12.5px; padding:6px 0}
+
+  .ros{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:11px}
+  .ros .readout{padding:8px 10px}
+  .ros .value{font-size:18px; font-variant-numeric:tabular-nums}
+
+  .causal{background:#f8fafc; border:1px solid var(--line); border-left:3px solid var(--d-gray);
+    border-radius:8px; padding:9px 11px; font-size:13px; color:var(--t2); line-height:1.65; margin-bottom:11px}
+
+  /* ── 기록 카드 ── */
+  .cards{display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto; margin-top:8px}
+  .cardrow{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--t2);
+    border:1px solid var(--line); border-radius:7px; padding:6px 9px; background:#fbfcfd}
+  .cardrow .no{font-weight:700; color:var(--t1); min-width:26px}
+  .cardrow .tagsame{color:var(--d-green); font-weight:700}
+  .cardrow .tagdiff{color:var(--d-amber); font-weight:700}
+  .cards .empty{color:var(--t3); font-size:12.5px; padding:8px 0; text-align:center}
+
+  /* ── 결과·판정 ── */
+  .rank{display:flex; align-items:center; gap:10px; padding:9px 11px; border:1px solid var(--line);
+    border-radius:9px; margin-bottom:7px; background:#fbfcfd}
+  .rank .pos{font-weight:800; font-size:15px; color:var(--t1); min-width:26px}
+  .rank .dot{width:18px; height:18px; border-radius:50%; flex:none}
+  .rank .nm{flex:1; min-width:0; color:var(--t1); font-weight:700}
+  .rank .ct{font-variant-numeric:tabular-nums; font-weight:800; font-size:15px; color:var(--t1)}
+  .rank.top{background:#f2f8f2; border-color:#cfe8cf}
+  .ranktitle{font-size:14px; font-weight:700; color:var(--t1); margin:12px 0 7px}
+
+  .vtable{width:100%; border-collapse:collapse; font-size:13px; margin:10px 0}
+  .vtable th,.vtable td{border:1px solid var(--line); padding:8px 9px; text-align:left; vertical-align:top}
+  .vtable th{background:#f4f6f8; color:var(--t1); font-weight:700}
+  .vtable td b{color:var(--t1)}
+  .vscroll{overflow-x:auto}
+  .aside{background:#fbfcfd; border:1px dashed var(--line); border-radius:8px;
+    padding:10px 12px; font-size:12.5px; color:var(--t2); line-height:1.7; margin:10px 0}
+  .aside b{color:var(--t1)}
+  .lie{background:#fffdf5; border:1px solid #f0e6c8; border-radius:8px;
+    padding:10px 12px; font-size:12.5px; color:var(--t2); line-height:1.75; margin-top:11px}
+  .lie b{color:var(--t1)}
+  .realbox{background:#f5f8fb; border:1px solid #d8e3ec; border-radius:8px;
+    padding:10px 12px; font-size:12.5px; color:var(--t2); line-height:1.7; margin:10px 0}
+  .realbox b{color:var(--t1)}
+  .legend{display:flex; gap:12px; flex-wrap:wrap; font-size:12.5px; color:var(--t2); margin-top:7px}
+</style>
+</head>
+<body>
+
+<div class="wrap page">
+
+<div class="head">
+  <h1>자연선택과 획득 형질</h1>
+  <p class="sub">2~4인 조별 게임. 각자 도마뱀 한 마리를 맡고, 네 번의 폭풍이 지나간 뒤 내 도마뱀이 몇 마리로 늘었는지 겨룹니다.</p>
+</div>
+
+<div class="tabs" role="tablist">
+  <button class="tab" id="tabL" role="tab" aria-selected="true"  data-tab="lamarck">용불용설<span class="tabdone" id="doneL">완료</span></button>
+  <button class="tab" id="tabN" role="tab" aria-selected="false" data-tab="natural">자연선택<span class="tabdone" id="doneN">완료</span></button>
+</div>
+<div class="tabdesc" id="tabdesc"></div>
+
+<div class="cols">
+  <!-- ───────── 왼쪽: 무대 + 조작 오버레이 ───────── -->
+  <div>
+    <div class="card">
+      <h2 id="stageTitle">섬의 도마뱀 무리</h2>
+      <div class="stage stage--light stagewrap">
+        <canvas id="stage" aria-label="섬에 사는 도마뱀 무리. 각 도마뱀은 몸통과 발바닥 원으로 그려지고, 등에 계보 번호가 적혀 있습니다. 발바닥 원이 클수록 발바닥 면적이 넓습니다. 조원이 맡은 계보에는 테두리와 별명이 표시됩니다."></canvas>
+
+        <!-- ★ 조작 패널은 무대 «위»에 덮인다. 표시 여부는 sim.js 의 SHOW 표 하나가 정한다. -->
+        <div class="overlay" id="ovIdle"><div class="opanel">
+          <h3>조별 게임 — 자연선택과 획득 형질</h3>
+          <p>각자 도마뱀을 한 마리씩 맡습니다. 네 번의 폭풍이 지나간 뒤 <b>내 도마뱀이 몇 마리로 늘었는지</b>로 겨룹니다.</p>
+          <p>같은 무리를 <b>두 가설로 각각</b> 돌려 봅니다. 두 번 다 하면 판정이 열립니다.</p>
+          <div class="btns"><button class="btn primary" id="btnToSetup">게임 시작</button></div>
+        </div></div>
+
+        <div class="overlay" id="ovSetup"><div class="opanel">
+          <h3>1단계 — 인원과 별명</h3>
+          <p>몇 명이 하나요?</p>
+          <div class="cntrow" id="cntRow"></div>
+          <div id="nickBox"></div>
+          <p class="hint">실명 대신 별명을 쓰세요. 빈칸은 「1번」처럼 자동으로 채워집니다.</p>
+          <div class="btns">
+            <button class="btn" id="btnSetupBack">이전</button>
+            <button class="btn primary" id="btnToRules">다음</button>
+          </div>
+        </div></div>
+
+        <div class="overlay" id="ovRules"><div class="opanel">
+          <h3>2단계 — 게임 방법</h3>
+          <div id="rulesBody"></div>
+          <div class="btns">
+            <button class="btn" id="btnRulesBack">이전</button>
+            <button class="btn primary" id="btnToPick">도마뱀 고르러 가기</button>
+          </div>
+        </div></div>
+
+        <div class="overlay slim" id="ovPick"><div class="opanel">
+          <h3 id="pickTitle">3단계 — 도마뱀 고르기</h3>
+          <div id="pickBody"></div>
+          <p class="hint">무대에서 도마뱀을 눌러 고르세요. 한 번 고르면 그 도마뱀의 <b>계보</b>가 끝까지 내 팀입니다.</p>
+        </div></div>
+
+        <div class="overlay slim" id="ovAdopt"><div class="opanel">
+          <h3>계보가 사라졌습니다 — 새 도마뱀 맡기</h3>
+          <div id="adoptBody"></div>
+          <p class="hint">회색 야생 도마뱀을 눌러 새로 맡으세요. <b>사라진 계보는 돌아오지 않습니다</b> — 기록에 남습니다.</p>
+        </div></div>
+
+        <div class="overlay slim" id="ovAct"><div class="opanel">
+          <h3 id="actTitle">조작</h3>
+          <div id="actBody"></div>
+          <div class="btns">
+            <button class="btn" id="btnTurnDone">차례 넘기기</button>
+            <button class="btn primary" id="btnStorm">폭풍 발생</button>
+          </div>
+        </div></div>
+
+        <div class="overlay" id="ovStormWarn"><div class="opanel">
+          <h3>폭풍이 옵니다</h3>
+          <p class="big">이번 폭풍 세기: <span id="warnStrength">–</span></p>
+          <p>어느 도마뱀이 살아남을까요?</p>
+          <div class="btns"><button class="btn primary" id="btnFace">폭풍 맞이하기</button></div>
+        </div></div>
+
+        <div class="overlay slim" id="ovStormResult"><div class="opanel">
+          <h3>폭풍이 지나갔습니다</h3>
+          <div id="stormResultBody"></div>
+          <div class="btns"><button class="btn primary" id="btnBreed">번식</button></div>
+        </div></div>
+
+        <div class="overlay slim" id="ovGenResult"><div class="opanel">
+          <h3 id="genResultTitle">세대 결산</h3>
+          <div id="genResultBody"></div>
+          <div class="btns"><button class="btn primary" id="btnNextGen">다음 세대</button></div>
+        </div></div>
+
+        <div class="overlay" id="ovEnv"><div class="opanel">
+          <h3 id="envTitle">환경이 바뀝니다</h3>
+          <p id="envIntro">–</p>
+          <p class="big">도마뱀이 강해져서 폭풍이 세진 것이 아닙니다.</p>
+          <p>폭풍 일정은 게임을 시작할 때 이미 정해져 있었고, 폭풍은 도마뱀을 보고 있지 않습니다.</p>
+          <div class="btns"><button class="btn primary" id="btnEnvNext">3세대 시작</button></div>
+        </div></div>
+
+        <div class="overlay" id="ovExtinct"><div class="opanel">
+          <h3>무리가 사라졌습니다</h3>
+          <div id="extinctBody"></div>
+          <div class="btns"><button class="btn primary" id="btnRestart">이 탭 다시 시작</button></div>
+        </div></div>
+
+        <div class="overlay" id="ovTabDone"><div class="opanel">
+          <h3 id="tabDoneTitle">이 탭 결과</h3>
+          <div id="tabDoneBody"></div>
+          <div class="btns">
+            <button class="btn" id="btnOtherTab">다른 탭 하기</button>
+            <button class="btn primary" id="btnVerdict">판정 보기</button>
+          </div>
+        </div></div>
+      </div>
+      <div class="legend">
+        <span>발바닥 원 — 넓을수록 큽니다</span>
+        <span>등의 숫자 = 계보 번호 (자손이 물려받습니다)</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>발바닥 면적 분포</h2>
+      <div class="stage stage--light">
+        <canvas id="dist" aria-label="개체군의 발바닥 면적 분포 막대그래프. 가로축은 발바닥 면적 지수, 세로축은 개체 수입니다."></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h2>관찰 기록 카드</h2>
+      <p style="font-size:12.5px;color:var(--t2);margin:6px 0 0">조원이 맡은 도마뱀이 죽거나 수명을 다하면 카드가 남습니다. <b>태어날 때와 죽을 때의 발바닥을 비교하세요.</b></p>
+      <!-- 용불용설 탭에도 「한 번도 변하지 않음」 카드가 섞여 나온다(실측: 전체 카드의 32.6%).
+           그 카드가 무슨 뜻인지 밝히지 않으면 「두 탭이 똑같다」로 읽힌다 — 판정 ②가 무너진다. -->
+      <p style="font-size:12.5px;color:var(--t2);margin:4px 0 0">용불용설 탭에서 「한 번도 변하지 않음」이 나오는 카드는 <b>훈련을 받은 적도, 폭풍을 견뎌 본 적도 없이</b> 첫 폭풍에 죽은 도마뱀입니다. 판정에 쓰는 것은 <b>폭풍을 겪고 살아남은</b> 도마뱀의 카드입니다.</p>
+      <div class="cards" id="cardList"><div class="empty">아직 카드가 없습니다</div></div>
+    </div>
+  </div>
+
+  <!-- ───────── 오른쪽: 점수판·측정값 ───────── -->
+  <div>
+    <div class="board" id="boardBox">
+      <h3 id="boardTitle">우리 조 도마뱀</h3>
+      <div id="boardRows"><div class="empty">게임을 시작하면 표시됩니다</div></div>
+    </div>
+
+    <div class="ros">
+      <div class="readout"><div class="label">세대</div><div class="value" id="roGen">–</div></div>
+      <div class="readout"><div class="label">전체 개체수</div><div class="value" id="roN">–</div></div>
+      <div class="readout"><div class="label">평균 발바닥 면적</div><div class="value" id="roMean">–</div></div>
+      <div class="readout"><div class="label">표준편차 (변이의 폭)</div><div class="value" id="roSd">–</div></div>
+      <div class="readout"><div class="label">직전 생존율</div><div class="value" id="roSurv">–</div></div>
+      <div class="readout"><div class="label">폭풍 세기</div><div class="value" id="roStorm">–</div></div>
+    </div>
+
+    <div class="causal" id="causalBox"></div>
+  </div>
+</div>
+
+<!-- ───────── 판정 화면 ───────── -->
+<div class="card" id="verdictBox" style="margin-top:14px">
+  <h2>최종 판정</h2>
+
+  <div id="finalRanks"></div>
+
+  <div class="vscroll">
+    <table class="vtable">
+      <thead><tr><th style="width:26%">확인 방법</th><th>용불용설 탭</th><th>자연선택 탭</th></tr></thead>
+      <tbody>
+        <tr>
+          <th>① 변이 없는 개체군</th>
+          <td>변이가 하나도 없는데 <b>진화합니다</b> (1.03 → <span id="vZeroL">–</span>)</td>
+          <td>진화가 <b>일어나지 않습니다</b> (<span id="vZeroNMean">–</span> 고정). 환경이 바뀌자 <span id="vZeroNDead">–</span>가 소멸했습니다</td>
+        </tr>
+        <tr>
+          <th>② 기록 카드<br><span style="font-weight:400;color:var(--t2)">폭풍을 겪고 살아남은 개체</span></th>
+          <td><b><span id="vCardL">–</span>가 변했습니다</b></td>
+          <td><b><span id="vCardN">–</span>가 변했습니다</b> — 한 마리도 변하지 않았습니다</td>
+        </tr>
+        <tr>
+          <th>③ 이 모형에서<br>개체군이 죽는가</th>
+          <td><span id="vDeadL">–</span></td>
+          <td><span id="vDeadN">–</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="aside">
+    ③에 대하여 — <b>이 숫자는 우리가 정한 설정이 만든 결과입니다.</b> 가설의 옳고 그름도, 실제 도마뱀의 생존율도 뜻하지 않습니다.
+  </div>
+  <div class="aside">
+    ①과 ② 사이 — 용불용설 쪽이 이렇게 나오는 까닭은, 살면서 얻은 변화가 자손에게 전달된다고 <b>가정했기 때문</b>입니다.
+  </div>
+  <div class="aside">
+    ②의 0%에 대하여 — 이 모형에서 비교를 위해 <b>한 가지 형질을 고정한 결과</b>입니다. 실제 생물의 몸이 평생 전혀 변하지 않는다는 뜻은 아닙니다.
+  </div>
+  <div class="aside" id="winReason"></div>
+
+  <div class="realbox">
+    <b>실제 연구가 관측한 것</b><br>
+    2017년 허리케인 어마·마리아가 지나간 뒤, 연구자들이 터크스케이커스의 같은 경로에서 아놀도마뱀을 다시 조사했습니다.
+    폭풍 후 표본은 <b>가장 긴 발가락 흡착판 면적이 앞발 +9.2% · 뒷발 +6.1%</b>, 상완골 +1.8%, 대퇴골 −6.0%였고,
+    <b>12개 형질 중 10개에서 개체 간 차이(분산)가 줄었습니다.</b><br>
+    개체에 표지를 붙이지 않았으므로 이것은 표지 없는 전후 <b>표본 분포</b>의 차이이고,
+    <b>같은 개체가 어떻게 변했는지도, 실제로 얼마나 죽었는지도 이 연구는 관찰하지 못했습니다.</b>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <h2>변이 없는 개체군 — 자동 재생</h2>
+    <div class="aside" style="margin-top:8px">
+      <b>실제 연구를 재현한 것이 아니라, 돌연변이와 이주를 없앤 가상의 점검입니다.</b>
+    </div>
+    <div class="stage stage--light">
+      <canvas id="replay" aria-label="변이 없는 개체군을 두 가설로 각각 돌린 결과를 나란히 보여 주는 그래프입니다."></canvas>
+    </div>
+    <!-- 캔버스 안의 글자는 화면 낭독기로 읽히지 않는다. 그래프의 «결론»을 글로도 남긴다.
+         이 줄은 anolis_check.js C29 가 모형과 대조하는 대상이기도 하다. -->
+    <p class="replaynote" id="replayNote">–</p>
+    <div class="btns"><button class="btn" id="btnReplay">다시 재생</button></div>
+  </div>
+
+  <div class="lie" id="lieVerdict"></div>
+  <div class="btns"><button class="btn primary" id="btnFromStart">처음부터</button></div>
+</div>
+
+<div class="lie" id="lieBox"></div>
+
+</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="anolis"></script>
+<script src="../shared/qr.js" data-base=".." data-current="anolis"></script>
+<script src="sim.js"></script>
+</body>
+</html>

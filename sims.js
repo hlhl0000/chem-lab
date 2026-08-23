@@ -93,6 +93,16 @@ const SIMS = [
     tags: ["연속 스펙트럼","흡수 스펙트럼","방출 스펙트럼","흡수선","방출선","수소","헬륨","나트륨","원소의 생성"]
   },
   {
+    id: "anolis",
+    title: "자연선택과 획득 형질",
+    cat: "통합과학",
+    path: "anolis/",
+    icon: "anolis",
+    ready: true,
+    desc: "같은 도마뱀 무리에 같은 폭풍을 두 가설로 각각 돌립니다. 용불용설 탭에서는 훈련한 만큼 발바닥이 넓어지고 그 값이 자손에게 가고, 자연선택 탭에서는 개체가 태어날 때 값 그대로입니다. 관찰 기록 카드와 「변이 없는 개체군」이 두 가설을 가릅니다.",
+    tags: ["자연선택","변이","획득 형질","용불용설","개체군","진화","아놀도마뱀"]
+  },
+  {
     id: "titration",
     title: "산-염기 적정",
     cat: "산과 염기",
@@ -183,6 +193,10 @@ const ICONS = {
               <path d="M10 45h42" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
               <path d="M16 51c4 5 28 5 32 0" fill="none" stroke="currentColor" stroke-width="3" opacity=".55"/>
               <path d="M48 10v15M43 20l5 5 5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`,
+  anolis:`<ellipse cx="30" cy="27" rx="14" ry="9" fill="currentColor"/>
+          <path d="M44 27c9-2 11-9 9-16" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+          <circle cx="16" cy="44" r="7" fill="currentColor"/>
+          <circle cx="44" cy="44" r="7" fill="currentColor"/>`,
   flask:`<path d="M26 8v18L12 50a4 4 0 0 0 3.5 6h33A4 4 0 0 0 52 50L38 26V8" fill="none"
          stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
          <path d="M22 8h20" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
