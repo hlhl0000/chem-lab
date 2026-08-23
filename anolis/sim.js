@@ -381,7 +381,7 @@ function anolisAssetStormCreature(ctx, x, y, color, padArea, angle, alpha) {
 function drawLizard(ctx, x, y, opt) {
   var padArea, scale, facing, color, ink, paper, padRoot, padLong, padShort;
   var dead, owned, label, alpha, labelSize, ownerName, hasOwnerName, isTurn;
-  var ownerSize, ownerY, ownerWidth;
+  var ownerSize, ownerY, ownerWidth, subLabel, hasSubLabel, subSize, subY;
 
   if (!ctx) return;
   opt = opt || {};
@@ -400,6 +400,8 @@ function drawLizard(ctx, x, y, opt) {
   hasOwnerName = opt.ownerName !== null && opt.ownerName !== undefined && opt.ownerName !== "";
   ownerName = hasOwnerName ? String(opt.ownerName).slice(0, 8) : "";
   isTurn = opt.isTurn === true;
+  hasSubLabel = opt.subLabel !== null && opt.subLabel !== undefined && opt.subLabel !== "";
+  subLabel = hasSubLabel ? String(opt.subLabel) : "";
   /* 이전 초안의 owned 호출도 받아, 통합 전후 어느 쪽에서도 소유 원이 사라지지 않게 한다. */
   owned = hasOwnerName || !!opt.owned || isTurn;
   alpha = dead ? 0.28 : 1;
@@ -491,6 +493,25 @@ function drawLizard(ctx, x, y, opt) {
     ctx.strokeText(String(label), x, y);
     anolisAssetFill(ctx, paper);
     ctx.fillText(String(label), x, y);
+    ctx.restore();
+  }
+
+  /* 발바닥 면적 지수를 몸 아래에 작게 적는다 — 스탯을 보고 훈련·예측 대상을
+     고를 수 있어야 하므로(사용자 지시 2026-08-23 ①) 도마뱀을 그리는 모든 자리에 함께 나간다.
+     소유 테두리 타원(세로 17)과 다리(12)를 피해 y+26 에 둔다. */
+  if (hasSubLabel) {
+    subSize = Math.max(10, Math.round(10 * scale));
+    subY = y + Math.max(26, 26 * scale);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = subSize + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    anolisAssetStroke(ctx, paper);
+    ctx.lineWidth = 2.4;
+    ctx.strokeText(subLabel, x, subY);
+    anolisAssetFill(ctx, ink);
+    ctx.fillText(subLabel, x, subY);
     ctx.restore();
   }
 
@@ -802,6 +823,7 @@ var G = {
   results: { lamarck: null, natural: null },
   lost: { lamarck: [], natural: [] },   /* 탭별 — 조원이 계보를 잃은 횟수 */
   reseeded: { lamarck: 0, natural: 0 }, /* 탭별 — 소멸 후 «새 무리»로 다시 시작한 횟수 */
+  ghost: { lamarck: {}, natural: {} },  /* 탭별 — 자손 id → 어미의 {born, given} (유령 원, 지시 ②) */
   turn: 0,
   lastMsg: "",
   rafId: null,
@@ -867,12 +889,12 @@ var TEXT = {
              "<p>② 자기 차례에 내 계보 도마뱀을 <b>눌러서 훈련</b>시킵니다 — 사람마다 세대당 {T}회.</p>" +
              "<p>③ 폭풍이 옵니다. 발바닥이 넓을수록 살아남기 쉽습니다.</p>" +
              "<p>④ 살아남은 도마뱀은 <b>폭풍을 겪으며 발바닥이 더 넓어지고</b>, 그 값이 자손에게 전달됩니다.</p>" +
-             "<p>⑤ {N}번의 폭풍 뒤, <b>내 계보가 몇 마리로 늘었는지</b>가 점수입니다.</p>",
+             "<p>⑤ {N}번의 폭풍 뒤, 점수는 <b>내 계보 마릿수 × 1점</b>입니다.</p>",
     natural: "<p>① 각자 도마뱀을 한 마리씩 맡습니다. 그 도마뱀의 <b>계보(등의 번호)</b>가 내 팀입니다.</p>" +
              "<p>② 자기 차례에 내 계보 도마뱀 하나를 눌러 <b>「살아남을 것 같다」고 예측</b>합니다 — 사람마다 세대당 1회.</p>" +
              "<p>③ 폭풍이 옵니다. 발바닥이 넓을수록 살아남기 쉽습니다.</p>" +
              "<p>④ 개체의 발바닥은 <b>태어날 때 값 그대로</b>입니다. 눌러도 훈련해도 변하지 않습니다.</p>" +
-             "<p>⑤ {N}번의 폭풍 뒤, <b>내 계보가 몇 마리로 늘었는지</b>가 점수입니다.</p>"
+             "<p>⑤ {N}번의 폭풍 뒤, 점수는 <b>내 계보 마릿수 × 1점 + 예측 적중 × 3점</b>입니다.</p>"
   },
   lie: "<b>이 도구가 감추는 것</b><br>" +
     "형질을 발바닥 면적 하나로 줄였습니다. 실제로는 수십 가지가 함께 다르고, 폭풍 말고도 먹이·포식자·질병이 작용합니다.<br>" +
@@ -899,6 +921,29 @@ function predAccuracy(r, i) {
     n++; if (r.predictLog[q].survived) hit++;
   }
   return { n: n, hit: hit };
+}
+/* 점수 산식 — 도마뱀 1마리 = 1점, 예측 적중 1회 = 3점 (사용자 지시 2026-08-23 ③).
+   용불용설 탭에는 예측 단계가 없어 hit = 0, 점수 = 마릿수 그대로다(사용자 확정 — 표기 통일).
+   예측 점수는 «무리를 잘 관찰했는가»에 대한 보상이지 형질을 바꾸는 조작에 대한 보상이
+   아니다 — 금지 2 에 저촉하지 않음을 사용자가 확정했다(2026-08-23).
+   화면(점수판·순위)과 검산(C30)이 이 함수 하나를 쓴다(F-1).
+   ★ C30 이 이 함수를 sim.js 에서 잘라내 실행하므로 한 줄로 줄이지 말 것(잘라내기가 「함수 시작~열 0 의 }」다). */
+function scoreOf(n, hit) {
+  return n * 1 + hit * 3;
+}
+/* 조원 i 의 «지금» 점수 — 마릿수는 현재 개체군, 적중은 predictLog 누적 */
+function scoreNow(i) {
+  var r = run();
+  var hit = (G.tab === "natural" && r) ? predAccuracy(r, i).hit : 0;
+  return scoreOf(aliveOf(i), hit);
+}
+/* 무리 «전체» 평균 발바닥 — 처음 무리 → 지금 (사용자 요청 2026-08-23).
+   tabDone 과 verdict 가 이 함수 하나를 쓴다(F-1). 값은 stats() 실계산 — 손글씨 아님(금지 16). */
+function meanSpanText(r) {
+  if (!r) return "";
+  var s0 = stats(r.scenario.initialPop), s1 = stats(r.pop);
+  if (s0.mean === null || s1.mean === null) return "";
+  return "무리 평균 발바닥 <b>" + s0.mean.toFixed(2) + " → " + s1.mean.toFixed(2) + "</b>";
 }
 function pickedCount(i) { var c = 0, ps = picks(); for (var k = 0; k < ps.length; k++) if (ps[k] === i + 1) c++; return c; }
 function pickDone() { for (var i = 0; i < G.count; i++) if (pickedCount(i) < perPlayer()) return false; return true; }
@@ -936,9 +981,26 @@ function ownerOfLineage(ln) {
   return (ln >= 1 && ln <= G.count) ? ln - 1 : -1;   /* 0 = 야생 */
 }
 
+/* slim 패널의 «실제» 높이 — 고정 168 예약은 문구가 늘면 모자라서
+   아랫줄 도마뱀이 패널에 덮여 터치가 안 된다(2026-08-23 사용자 실기기 보고).
+   applyPhaseVisibility → renderBodies 가 먼저 돌므로 여기서 재면 최신 내용의 높이다. */
+function slimPanelReserve() {
+  var ids = { pick: "ovPick", adopt: "ovAdopt", act: "ovAct",
+              stormResult: "ovStormResult", genResult: "ovGenResult" };
+  var ov = ids[G.phase] ? $(ids[G.phase]) : null;
+  var panel = ov ? ov.querySelector(".opanel") : null;
+  var h = panel ? panel.offsetHeight : 0;
+  return h > 0 ? h + 22 : 168;   /* 22 = 오버레이 padding 10 + 여유 12 */
+}
+
 function drawStage() {
   var cv = $("stage"); if (!cv) return;
-  var f = fitCanvas(cv, 430), ctx = f.ctx, W = f.w, H = f.h;
+  /* slim 국면에서는 패널이 커진 만큼 캔버스 자체를 키워, 도마뱀 배치 공간을
+     항상 262px 이상으로 보장한다 — 배치 밀도가 변하지 않아 터치 판정도 그대로다 */
+  var slim = (G.phase === "pick" || G.phase === "adopt" || G.phase === "act" ||
+              G.phase === "stormResult" || G.phase === "genResult");
+  var reserve = slim ? slimPanelReserve() : 0;
+  var f = fitCanvas(cv, 430 + Math.max(0, reserve - 168)), ctx = f.ctx, W = f.w, H = f.h;
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = CSSV("--stage-light") || "#f7f9fb";
   ctx.fillRect(0, 0, W, H);
@@ -957,14 +1019,13 @@ function drawStage() {
   }
 
   /* slim 패널이 덮는 아래쪽을 비워 둔다 — 그 국면에서는 도마뱀을 눌러야 하므로 가리면 안 된다 */
-  var slim = (G.phase === "pick" || G.phase === "adopt" || G.phase === "act" ||
-              G.phase === "stormResult" || G.phase === "genResult");
-  var usableH = slim ? H - 168 : H;
+  var usableH = slim ? H - reserve : H;
   var cols = Math.min(6, Math.max(3, Math.ceil(Math.sqrt(all.length * 1.6))));
   var rows = Math.ceil(all.length / cols);
   var cw = W / cols, ch = Math.min(usableH / rows, 96);
   var top = Math.max(6, (usableH - rows * ch) / 2);
   var turnLine = (G.phase === "act" || G.phase === "pick" || G.phase === "adopt") ? lineageOf(G.turn) : null;
+  var anyGhost = false;
 
   for (var i = 0; i < all.length; i++) {
     var a = all[i], isDead = pop.indexOf(a) < 0;
@@ -973,25 +1034,62 @@ function drawStage() {
     var owner = ownerOfLineage(a.lineage);
     var color = owner >= 0 ? LINE_COLORS[owner % LINE_COLORS.length] : (CSSV("--d-gray") || "#94a3b8");
 
-    /* 도마뱀 한 마리 = drawLizard 한 번. 테두리·별명도 그 함수가 그린다(시각 규격 단일 원천) */
+    /* 어미 정보(지시 ②) — 이번 세대 신생아만 갖는다. 수치는 자손의 수치 라벨과 «한 줄»로 합친다
+       (별도 줄로 두면 자손 라벨과 같은 y 에서 겹친다 — 2026-08-23 스크린샷 실측). */
+    var gh = (!isDead && a.bornGen === r.gen) ? G.ghost[G.tab][a.id] : null;
+
+    /* 도마뱀 한 마리 = drawLizard 한 번. 테두리·별명도 그 함수가 그린다(시각 규격 단일 원천)
+       subLabel = 발바닥 면적 지수 — 스탯을 보고 고르게 한다(사용자 지시 2026-08-23 ①).
+       값 자체는 확률·문턱이 아니므로 금지 9 에 저촉하지 않는다. 확률로 바꿔 주는 표시는 계속 금지. */
     drawLizard(ctx, cx, cy, {
       padArea: a.padArea, color: color, label: owner >= 0 ? String(a.lineage) : null,
       owned: owner >= 0, dead: isDead, facing: (a.id % 2) ? 1 : -1, scale: 1,
       ownerName: owner >= 0 ? playerName(owner) : null,
-      isTurn: owner >= 0 && a.lineage === turnLine
+      isTurn: owner >= 0 && a.lineage === turnLine,
+      subLabel: a.padArea.toFixed(2) +
+        (gh ? " (어미 " + gh.born.toFixed(2) + "→" + gh.given.toFixed(2) + ")" : "")
     });
     /* 등의 계보 번호 — 색각 두 번째 채널 (매뉴얼 §9) */
 
-    /* 예측 표식 — 자연선택 탭의 «유일한» 조작 성공 표시 */
+    /* 어미 원 — 이번 세대에 태어난 자손 옆에 어미의 «태어날 때(점선)»와 «물려줄 때(실선)» 원을
+       겹쳐 그린다(사용자 지시 2026-08-23 ②). 두 탭이 같은 요소를 그리므로 장식 대칭(금지 3)을
+       지키고, 인과 차이만 남는다 — 자연선택 탭은 두 원이 정확히 겹치고(태어난 값 그대로 물려줌),
+       용불용설 탭은 훈련·폭풍으로 커진 실선 원이 점선 원 밖으로 나온다(획득분까지 물려줌).
+       반경 차이는 작으므로 수치(subLabel의 「어미 a→b」)가 주 채널이고 원은 시각 앵커다. */
+    if (gh) {
+      var gx = cx - Math.min(34, cw / 2 - 12), gy = cy + 6;
+      var R = function (pad) { return 9 * Math.sqrt(pad); };
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = CSSV("--t2") || "#57606a";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(gx, gy, R(gh.given), 0, Math.PI * 2); ctx.stroke();
+      if (typeof ctx.setLineDash === "function") ctx.setLineDash([2.6, 2.4]);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(gx, gy, R(gh.born), 0, Math.PI * 2); ctx.stroke();
+      if (typeof ctx.setLineDash === "function") ctx.setLineDash([]);
+      ctx.restore();
+      anyGhost = true;
+    }
+
+    /* 예측 표식 — 자연선택 탭의 «유일한» 조작 성공 표시. 발바닥 수치(y+26)와 겹치지 않게 y+38 */
     if (!isDead && G.tab === "natural") {
       for (var q in r.predictBy) if (r.predictBy[q] === a.id) {
         ctx.globalAlpha = 1; ctx.fillStyle = CSSV("--t1") || "#1f2328";
-        ctx.font = "bold 11px sans-serif"; ctx.fillText("예측", cx, cy + 34);
+        ctx.font = "bold 11px sans-serif"; ctx.fillText("예측", cx, cy + 38);
       }
     }
     ctx.globalAlpha = 1;
     lizardBoxes.push({ id: a.id, lineage: a.lineage, x: cx, y: cy, r: 32,
                        color: color, padArea: a.padArea, dead: isDead });
+  }
+  /* 어미 원 범례 — 유령 원이 하나라도 그려질 때만, 두 탭 «같은 문장»으로 (장식 대칭) */
+  if (anyGhost) {
+    ctx.save();
+    ctx.fillStyle = CSSV("--t2") || "#57606a";
+    ctx.font = "11px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("겹친 원 = 어미의 발바닥 — 점선: 태어날 때 · 실선: 물려줄 때. 두 원이 같으면 태어난 값 그대로 물려준 것입니다.", W / 2, 14);
+    ctx.restore();
   }
   ctx.textBaseline = "alphabetic";
 }
@@ -1039,7 +1137,7 @@ function renderBoard() {
     html += '<div class="prow' + (now ? " now" : "") + (out ? " out" : "") + '">' +
       '<span class="dot" style="background:' + playerColor(i) + '"></span>' +
       '<span class="nm">' + esc(playerName(i)) + '</span>' +
-      '<span class="ct">' + n + '마리' + (lost ? '<span class="sub"> (계보 ' + lost + '회 소실)</span>' : '') + '</span></div>';
+      '<span class="ct">' + n + '마리 · ' + scoreNow(i) + '점' + (lost ? '<span class="sub"> (계보 ' + lost + '회 소실)</span>' : '') + '</span></div>';
   }
   box.innerHTML = html;
   $("boardTitle").textContent = "우리 조 도마뱀 — " + (G.tab === "lamarck" ? "용불용설" : "자연선택");
@@ -1112,7 +1210,8 @@ function renderBodies() {
       line += '<span style="color:' + playerColor(q) + ';font-weight:700">' + esc(playerName(q)) + "</span> " +
               pickedCount(q) + "/" + per + "마리 &nbsp; ";
     $("pickBody").innerHTML = '<p class="big" style="color:' + playerColor(G.turn) + '">' +
-      esc(playerName(G.turn)) + " 차례 — 회색 도마뱀을 한 마리 고르세요 (한 사람당 " + per + "마리)</p><p>" + line + "</p>";
+      esc(playerName(G.turn)) + " 차례 — 회색 도마뱀을 한 마리 고르세요 (한 사람당 " + per + "마리)</p><p>" + line + "</p>" +
+      '<p class="hint">도마뱀 아래 숫자는 <b>발바닥 면적 지수</b>입니다 — 숫자를 보고 고르세요.</p>';
   }
 
   if (G.phase === "adopt") {
@@ -1127,12 +1226,14 @@ function renderBodies() {
     var body = '<p class="big" style="color:' + col + '">' + esc(playerName(G.turn)) + " 차례</p>";
     if (G.tab === "lamarck") {
       $("actTitle").textContent = "훈련 (내 도마뱀만, 세대당 " + P.TOUCH_MAX + "회)";
-      body += "<p>내 계보(#" + lineageOf(G.turn) + ") 도마뱀을 <b>반복해서 눌러</b> 훈련시키세요.</p>";
+      body += "<p>내 계보(#" + lineageOf(G.turn) + ") 도마뱀을 <b>반복해서 눌러</b> 훈련시키세요." +
+              ' <span class="hint">아래 숫자(발바닥 면적 지수)를 보고 어느 도마뱀을 훈련할지 고르세요.</span></p>';
       body += '<p class="big">훈련 ' + (P.TOUCH_MAX - touchesLeftOf(r, G.turn)) + " / " + P.TOUCH_MAX + "회" +
               ' &nbsp; <span style="color:var(--t2);font-weight:400">내 도마뱀 ' + mine.length + "마리</span></p>";
     } else {
       $("actTitle").textContent = "예측 (내 도마뱀 하나, 세대당 1회)";
-      body += "<p>내 계보(#" + lineageOf(G.turn) + ") 도마뱀 하나를 눌러 <b>살아남을지 예측</b>하세요.</p>";
+      body += "<p>내 계보(#" + lineageOf(G.turn) + ") 도마뱀 하나를 눌러 <b>살아남을지 예측</b>하세요." +
+              ' <span class="hint">아래 숫자(발바닥 면적 지수)를 보고 예측하세요 — 적중하면 3점입니다.</span></p>';
       body += '<p class="big">예측 ' + (r.predictBy[G.turn] !== undefined ? 1 : 0) + " / 1회" +
               ' &nbsp; <span style="color:var(--t2);font-weight:400">내 도마뱀 ' + mine.length + "마리</span></p>";
     }
@@ -1180,8 +1281,14 @@ function renderBodies() {
             "표준편차 <b>" + cur.stats.sd.toFixed(3) + "</b>" + (prev ? d(cur.stats.sd, prev.stats.sd, 3) : "") + "</p>";
     g += "<p>";
     for (i = 0; i < G.count; i++)
-      g += '<span style="color:' + playerColor(i) + ';font-weight:700">' + esc(playerName(i)) + "</span> " + aliveOf(i) + "마리 &nbsp; ";
+      g += '<span style="color:' + playerColor(i) + ';font-weight:700">' + esc(playerName(i)) + "</span> " +
+           aliveOf(i) + "마리 · " + scoreNow(i) + "점 &nbsp; ";
     g += "</p>";
+    /* 유령 원 안내 — 캔버스 글자는 낭독기가 못 읽으므로 같은 문장을 글로도 남긴다.
+       두 탭 «같은 문장»이다(장식 대칭) — 차이는 화면의 원이 스스로 말한다. */
+    g += '<p class="hint">이번 세대 자손 옆의 겹친 원은 <b>어미의 발바닥</b>입니다 — 점선: 태어날 때 · 실선: 물려줄 때. ' +
+         "두 원이 같으면 <b>태어난 값 그대로</b> 물려준 것입니다. " +
+         "자손의 값은 <b>두 부모의 평균</b>에 작은 변이를 더한 것이라, 어미가 물려준 값과 똑같지는 않습니다.</p>";
     $("genResultBody").innerHTML = g;
     $("btnNextGen").textContent = (r.gen >= P.GENS) ? "이 탭 마치기" : "다음 세대";
   }
@@ -1208,7 +1315,9 @@ function renderBodies() {
       }
       if (parts.length) accHtml = '<p class="hint">예측 적중률 — ' + parts.join(" · ") + "</p>";
     }
-    $("tabDoneBody").innerHTML = rankHtml(G.results[G.tab]) + accHtml +
+    $("tabDoneBody").innerHTML =
+      (r && meanSpanText(r) ? "<p>" + meanSpanText(r) + "</p>" : "") +
+      rankHtml(G.results[G.tab]) + accHtml +
       (!(G.completed.lamarck && G.completed.natural) ? '<p class="hint">다른 탭도 마치면 판정을 볼 수 있습니다.</p>' : "");
   }
 
@@ -1216,14 +1325,18 @@ function renderBodies() {
   $("doneN").className = "tabdone" + (G.completed.natural ? " is-done" : "");
 }
 
-/* ── 순위 ── */
+/* ── 순위 — 점수(scoreOf)로 겨룬다 (사용자 지시 2026-08-23 ③) ── */
 function makeResult() {
-  var out = [], i;
-  for (i = 0; i < G.count; i++) out.push({ i: i, name: playerName(i), color: playerColor(i), n: aliveOf(i),
-                                           lineage: lineageOf(i), lost: G.lost[G.tab][i] || 0 });
-  out.sort(function (a, b) { return b.n - a.n; });
+  var out = [], i, r = run();
+  for (i = 0; i < G.count; i++) {
+    var n = aliveOf(i);
+    var hit = (G.tab === "natural" && r) ? predAccuracy(r, i).hit : 0;
+    out.push({ i: i, name: playerName(i), color: playerColor(i), n: n, hit: hit,
+               score: scoreOf(n, hit), lineage: lineageOf(i), lost: G.lost[G.tab][i] || 0 });
+  }
+  out.sort(function (a, b) { return b.score - a.score; });
   var pos = 0, prev = null;
-  for (i = 0; i < out.length; i++) { if (out[i].n !== prev) { pos = i + 1; prev = out[i].n; } out[i].pos = pos; }
+  for (i = 0; i < out.length; i++) { if (out[i].score !== prev) { pos = i + 1; prev = out[i].score; } out[i].pos = pos; }
   return out;
 }
 function rankHtml(res) {
@@ -1234,8 +1347,10 @@ function rankHtml(res) {
       '<span class="pos">' + res[i].pos + "위</span>" +
       '<span class="dot" style="background:' + res[i].color + '"></span>' +
       '<span class="nm">' + esc(res[i].name) + ' 도마뱀</span>' +
-      '<span class="ct">' + res[i].n + "마리 생존" +
-      (res[i].lost ? '<span class="sub"> · 계보 ' + res[i].lost + "회 소실</span>" : "") + "</span></div>";
+      '<span class="ct">' + res[i].score + "점" +
+      '<span class="sub"> (' + res[i].n + "마리 × 1" +
+      (res[i].hit ? " + 적중 " + res[i].hit + "회 × 3" : "") + ")" +
+      (res[i].lost ? " · 계보 " + res[i].lost + "회 소실" : "") + "</span></span></div>";
   return h;
 }
 
@@ -1410,10 +1525,48 @@ function drawStormScene(t) {
   drawStorm(ctx, W, H, t, A.strength, { falling: A.falling, holding: A.holding });
 }
 function afterStorm() { if (G.phase !== "storm") return; setPhase("stormResult"); }
+
+/* ── 어미 유도 — 유령 원(지시 ②)의 데이터. ──
+   코어는 자손에 부모 id 를 남기지 않고, 코어는 고칠 수 없다(금지 11).
+   keyed 난수는 (seed, gen, id, salt) 결정론이므로 breed() 와 «같은 식»으로 부모를
+   다시 뽑을 수 있다 — 단, 절차 복제는 원본이 바뀌면 조용히 틀리는 함정이라(C27 내력)
+   재계산한 자손 값이 실제 자손과 다르면 그 자손의 유령 원은 «그리지 않는다»(fail-safe).
+   C31 이 이 유도가 코어와 일치하는지를 검사한다. */
+function computeGhosts(r) {
+  var surv = r.pop, seed = r.scenario.seed, gen = r.gen;
+  var out = {}, i, mi, fi, m, f, pd, cid;
+  if (surv.length < P.MIN_BREED) return out;
+  var want = Math.min(P.CAP, surv.length + Math.ceil(surv.length * P.MUL)) - surv.length;
+  for (i = 0; i < want; i++) {
+    cid = r.nextId + i;
+    mi = Math.floor(keyed(seed, gen, cid, SALT.PA) * surv.length);
+    if (mi >= surv.length) mi = surv.length - 1;
+    fi = Math.floor(keyed(seed, gen, cid, SALT.PB) * (surv.length - 1));
+    if (fi >= surv.length - 1) fi = surv.length - 2;
+    if (fi >= mi) fi += 1;
+    m = surv[mi]; f = surv[fi];
+    pd = clampPad((m.padArea + f.padArea) / 2
+                  + keyedGauss(seed, gen, cid, SALT.MUT, 0, r.scenario.sigm));
+    out[cid] = { expect: pd, born: m.bornPad, given: m.padArea };
+  }
+  return out;
+}
+
 function doBreed() {
   if (G.phase !== "stormResult") return;
   setPhase("breed");
-  breed(run());
+  var r = run();
+  var gh = computeGhosts(r);       /* breed «전»의 생존자 배열로 유도한다 */
+  var res = breed(r);              /* born = 이번 번식의 «진짜» 신생아 목록 — bornGen 비교보다 정확하다
+                                      (소멸 시 gen 이 안 올라 기존 개체가 신생아로 오인될 수 있다) */
+  G.ghost[G.tab] = {};
+  for (var i = 0; i < res.born.length; i++) {
+    var k = res.born[i];
+    if (!gh[k.id]) continue;
+    /* fail-safe — 재계산 값이 실제 자손과 같을 때만 채택한다 */
+    if (Math.abs(gh[k.id].expect - k.padArea) < 1e-12)
+      G.ghost[G.tab][k.id] = { born: gh[k.id].born, given: gh[k.id].given };
+  }
   setTimeout(afterBreed, 1500);
 }
 function afterBreed() {
@@ -1449,6 +1602,7 @@ function restartTab() {
   for (zz = 0; zz < rt.pop.length; zz++) rt.pop[zz].lineage = 0;
   G.picks[G.tab] = [];
   G.lost[G.tab] = [];
+  G.ghost[G.tab] = {};
   G.completed[G.tab] = false;
   G.results[G.tab] = null;
   G.turn = 0; G.lastMsg = "";
@@ -1463,6 +1617,7 @@ function restartAll() {
   G.results = { lamarck: null, natural: null };
   G.phaseByTab = { lamarck: "idle", natural: "idle" };
   G.reseeded = { lamarck: 0, natural: 0 };
+  G.ghost = { lamarck: {}, natural: {} };
   G.scenario = null; G.players = []; G.turn = 0;
   setPhase("idle");
 }
@@ -1538,8 +1693,12 @@ function onStageClick(ev) {
 /* ── 판정 화면 ── */
 function renderVerdict() {
   var h = "";
-  h += '<div class="ranktitle">용불용설 탭 결과</div>' + rankHtml(G.results.lamarck);
-  h += '<div class="ranktitle">자연선택 탭 결과</div>' + rankHtml(G.results.natural);
+  h += '<div class="ranktitle">용불용설 탭 결과</div>';
+  if (meanSpanText(G.runs.lamarck)) h += '<p class="hint">' + meanSpanText(G.runs.lamarck) + "</p>";
+  h += rankHtml(G.results.lamarck);
+  h += '<div class="ranktitle">자연선택 탭 결과</div>';
+  if (meanSpanText(G.runs.natural)) h += '<p class="hint">' + meanSpanText(G.runs.natural) + "</p>";
+  h += rankHtml(G.results.natural);
 
   /* 소멸로 다시 시작한 탭이 있으면 «두 탭의 처음 무리가 다르다»고 밝힌다.
      기본은 두 탭이 같은 무리·같은 폭풍이지만, 재시작은 새 무리를 뽑기 때문이다. */
@@ -1554,7 +1713,8 @@ function renderVerdict() {
      그래서 재시작이 있을 때만 띄우던 경고를 «항상» 띄운다. */
   var warn = '<p class="hint"><b>순위는 «같은 탭 안에서만» 겨루는 것입니다.</b>' +
     ' 두 탭의 마릿수를 곧바로 견주지 마세요 — 어느 탭에서 더 많이 늘어나는지는' +
-    ' <b>우리가 정한 숫자가 정합니다.</b> 그것으로 어느 가설이 맞는지 판단할 수 없습니다.';
+    ' <b>우리가 정한 숫자가 정합니다.</b> 그것으로 어느 가설이 맞는지 판단할 수 없습니다.' +
+    ' 점수 계산도 두 탭이 다릅니다 — 예측 적중 점수는 자연선택 탭에만 있습니다.';
   if (re.length) warn += ' 또한 무리가 사라져 다시 시작했습니다(' + re.join(" · ") +
     ') — <b>그 탭은 처음 무리가 다른 무리입니다.</b> 폭풍 일정은 두 탭이 같습니다.';
   warn += '</p>';
@@ -1577,12 +1737,17 @@ function renderVerdict() {
      「노력을 더 하면 형질이 더 생긴다」 = M7 을 그대로 강화한다.
      C28 이 이 자리를 지킨다. */
   var wn = G.results.natural[0];
+  /* 이긴 까닭의 두 번째 갈래(예측 적중)는 «실제로 적중이 있을 때만» 말한다 —
+     화면 문장을 손으로 단정하면 데이터와 어긋나는 날이 온다(X-4). */
+  var wnWhy = wn.hit
+    ? "<b>처음에 고른 도마뱀이 이미 그런 도마뱀이었고, 살아남을 개체를 잘 맞혔기 때문</b>"
+    : "<b>처음에 고른 도마뱀이 이미 그런 도마뱀이었기 때문</b>";
   $("winReason").innerHTML =
     "이긴 까닭 — 조작 횟수는 <b>조원마다 똑같았습니다</b>(용불용설 세대당 " + P.TOUCH_MAX + "회 · 자연선택 세대당 1회). " +
     "<b>더 많이 노력해서 이긴 사람은 어느 탭에도 없습니다.</b> " +
     "용불용설 탭에서는 그 훈련이 발바닥을 실제로 넓혔고, 그 값이 자손에게 전달됐습니다. " +
-    "자연선택 탭에서 <b>" + esc(wn.name) + "</b>이(가) 앞선 것은 <b>처음에 고른 도마뱀이 이미 그런 도마뱀이었기 때문</b>입니다 — " +
-    "그 탭에서는 아무리 눌러도 발바닥이 변하지 않았습니다. " +
+    "자연선택 탭의 점수는 <b>마릿수 × 1점 + 예측 적중 × 3점</b>입니다. <b>" + esc(wn.name) + "</b>이(가) 앞선 것은 " + wnWhy + "입니다 — " +
+    "예측은 관찰일 뿐, 그 탭에서는 아무리 눌러도 발바닥이 변하지 않았습니다. " +
     /* ★ 자연선택 탭을 «아무 일도 안 일어난 쪽»으로 두면 M5 를 깨는 알맹이가 빠진다(P-검토 2차 B-21).
        개체는 그대로인데 무리의 구성이 바뀌었다 — 그것이 진화다. */
     "<b>그렇다고 아무 일도 없었던 것은 아닙니다.</b> 개체 하나하나는 그대로인데 " +
