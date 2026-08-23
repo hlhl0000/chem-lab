@@ -173,10 +173,10 @@
       for (i = 0; i < surv.length; i++) if (surv[i].id === pid) hit = true;
       run.predictLog.push({ gen: gen + 1, actor: act, id: pid, survived: hit });
     }
-    /* 라마르크 가설의 「폭풍을 겪고 살아남으면 넓어진다」 — lamarck 에서만 */
-    if (run.mode === "lamarck") {
-      for (i = 0; i < surv.length; i++) surv[i].padArea = clampPad(surv[i].padArea + P.BONUS);
-    }
+    /* 「폭풍을 겪고 살아남으면 넓어진다」 = 획득.
+       ★ v3(2026-08-23): 두 탭 «모두» 적용한다. 몸이 변하는 것은 두 가설이 다투는 지점이 아니다.
+         다투는 것은 그 변화가 자손에게 가느냐이고, 그건 breed() 가 정한다. */
+    for (i = 0; i < surv.length; i++) surv[i].padArea = clampPad(surv[i].padArea + P.BONUS);
     run.lastStorm = {
       gen: gen + 1, threshold: th,
       strength: th <= 0.95 ? "약함" : (th <= 1.03 ? "보통" : "강함"),
@@ -196,7 +196,7 @@
     if (surv.length < P.MIN_BREED) { run.extinct = true; return { extinct: true, born: [] }; }
 
     var want = Math.min(P.CAP, surv.length + Math.ceil(surv.length * P.MUL)) - surv.length;
-    var kids = [], i, mi, fi, m, f, pd, cid;
+    var kids = [], i, mi, fi, m, f, pd, cid, mv, fv;
     for (i = 0; i < want; i++) {
       cid = run.nextId + i;
       mi = Math.floor(keyed(seed, gen, cid, SALT.PA) * surv.length);
@@ -206,7 +206,13 @@
       if (fi >= surv.length - 1) fi = surv.length - 2;
       if (fi >= mi) fi += 1;
       m = surv[mi]; f = surv[fi];
-      pd = clampPad((m.padArea + f.padArea) / 2
+      /* ★ 여기가 두 가설이 갈리는 «유일한» 자리다 (v3, 2026-08-23).
+           용불용설 — 부모가 «지금 가진» 값을 물려준다 → 살면서 얻은 것까지 간다
+           자연선택 — 부모가 «태어날 때» 값을 물려준다 → 살면서 얻은 것은 안 간다
+         이 두 줄을 바꾸면 C1·C3·C5·C6~C10·C12·C16·C27·C29·C31·C32 가 전부 무효가 된다. */
+      mv = run.mode === "lamarck" ? m.padArea : m.bornPad;
+      fv = run.mode === "lamarck" ? f.padArea : f.bornPad;
+      pd = clampPad((mv + fv) / 2
                     + keyedGauss(seed, gen, cid, SALT.MUT, 0, run.scenario.sigm));
       kids.push({ id: cid, padArea: pd, bornPad: pd, lineage: m.lineage, age: 0, bornGen: gen + 1 });
     }
@@ -788,14 +794,18 @@ var MAX_PLAYERS = 4, MIN_PLAYERS = 2;
    6세대판 수치(1.257 / 96.6% / 0.4% / 16.6%)가 4세대 빌드에 그대로 남아
    판정 화면이 틀린 숫자를 보여 주고 있었다(2026-08-23 실측·수정). */
 var VERDICT = {
-  zeroVarLamarckEnd: 1.166,   /* 「변이 없는 개체군」 재생(seed 20260822)의 용불용설 최종 평균 */
-  zeroVarNaturalDead: 66.6,   /* 같은 조건 자연선택 소멸률 (800회) */
+  zeroVarLamarckEnd: 1.148,   /* 「변이 없는 개체군」 재생(seed 20260822) 용불용설 «물려받은 값» 최종 */
+  zeroVarNaturalDead: 41.8,   /* 같은 조건 자연선택 소멸률 (800회) */
   deadLamarck: 1.4,           /* 통상 조건 용불용설 전멸률 (800회) */
-  deadNatural: 12.3,          /* 통상 조건 자연선택 전멸률 (800회) */
-  zeroVarNaturalMean: 1.030,  /* 변이 없는 개체군의 자연선택 평균 — 존속 세대 내내 고정 */
-  cardChangeLamarck: 100.0,   /* 폭풍 생존 경험 개체의 기록카드 변화 — 용불용설 (800회) */
-  cardChangeNatural: 0.0,     /* 같은 것 — 자연선택 (800회) */
-  selShift: 5.8               /* 1세대 선택 상승률 중앙값 — 「도구의 거짓말」이 실제 9.2%와 대조한다 */
+  deadNatural: 7.5,           /* 통상 조건 자연선택 전멸률 (800회) */
+  zeroVarNaturalMean: 1.030,  /* 변이 없는 개체군의 자연선택 «물려받은 값» — 이탈 정확히 0 */
+  zeroVarNaturalBody: 1.060,  /* 같은 조건 자연선택 «몸값» 종점 — 몸은 넓어졌다는 증거 (재생 시드) */
+  /* ★ 판정 ② (v3) — 어미가 «살면서 얻은 것» 중 자손에게 전달된 몫.
+       전달률 = (자손평균 − 부모의 태어날때 평균) / (부모의 물려줄때 평균 − 부모의 태어날때 평균)
+       옛 판(기록카드 100%/0%)은 자연선택 탭에서 «획득 자체»가 없던 모형의 값이라 폐기됐다. */
+  transmitLamarck: 99.45,     /* 800회 실측 — 100 이 아닌 까닭은 상한 처리·변이 잡음 */
+  transmitNatural: -0.08,     /* 800회 실측 — 구조상 0 (breed 가 bornPad 만 읽는다) */
+  selShift: 8.9               /* 자연선택 탭 폭풍 1회 상승률 중앙값 — 「도구의 거짓말」이 실제 9.2%와 대조 */
 };
 var SEATS = ["①", "②", "③", "④"];
 
@@ -878,7 +888,7 @@ function applyPhaseVisibility() {
 var TEXT = {
   tabdesc: {
     lamarck: "<b>용불용설 탭.</b> 각자 맡은 도마뱀을 <b>훈련</b>시킵니다. 이 가설이 맞다면 훈련한 만큼 발바닥이 넓어지고, 그 넓어진 발바닥이 자손에게 전달됩니다.",
-    natural: "<b>자연선택 탭.</b> 각자 맡은 도마뱀이 살아남을지 <b>예측</b>합니다. 이 가설에서는 개체의 발바닥이 태어날 때 값 그대로입니다 — 훈련해도 변하지 않습니다."
+    natural: "<b>자연선택 탭.</b> 각자 맡은 도마뱀이 살아남을지 <b>예측</b>합니다. 이 탭에서도 폭풍을 견딘 도마뱀은 발바닥이 넓어집니다 — 다만 그렇게 <b>얻은 넓이는 자손에게 전달되지 않습니다.</b>"
   },
   causal: {
     lamarck: "이 탭은 <b>200년 전 가설</b>로 돌아가는 곳입니다. 이 가설이 맞다면, 노력한 만큼 발바닥이 넓어지고 그 넓어진 발바닥이 자손에게 전달됩니다. 정말 그런지 확인해 봅시다.",
@@ -893,7 +903,8 @@ var TEXT = {
     natural: "<p>① 각자 도마뱀을 한 마리씩 맡습니다. 그 도마뱀의 <b>계보(등의 번호)</b>가 내 팀입니다.</p>" +
              "<p>② 자기 차례에 내 계보 도마뱀 하나를 눌러 <b>「살아남을 것 같다」고 예측</b>합니다 — 사람마다 세대당 1회.</p>" +
              "<p>③ 폭풍이 옵니다. 발바닥이 넓을수록 살아남기 쉽습니다.</p>" +
-             "<p>④ 개체의 발바닥은 <b>태어날 때 값 그대로</b>입니다. 눌러도 훈련해도 변하지 않습니다.</p>" +
+             "<p>④ 폭풍을 견딘 도마뱀은 발바닥이 <b>넓어집니다</b>(용불용설 탭과 똑같습니다). 그런데 그렇게 얻은 넓이는 " +
+             "<b>자손에게 전달되지 않습니다</b> — 자손은 부모가 <b>태어날 때</b> 가졌던 값을 물려받습니다.</p>" +
              "<p>⑤ {N}번의 폭풍 뒤, 점수는 <b>내 계보 마릿수 × 1점 + 예측 적중 × 3점</b>입니다.</p>"
   },
   lie: "<b>이 도구가 감추는 것</b><br>" +
@@ -902,8 +913,10 @@ var TEXT = {
     "색과 번호는 혈통을 알아보기 위한 화면 표시일 뿐, 실제 유전 형질이 아닙니다.<br>" +
     "여기서 '세대'는 폭풍과 번식 한 주기이고, 어른과 자손이 함께 살아갑니다.<br>" +
     "개체군이 얼마나 자주 사라지는지는 <b>우리가 정한 숫자가 정합니다.</b> 그것으로 어느 가설이 맞는지 판단할 수 없습니다.<br>" +
-    "초기 변이와 폭풍 세기는 실제 연구와 비슷한 값이 나오도록 미리 맞춘 것입니다 — 다만 우리 모형의 상승률 중앙값은 <b>{S}%</b>로 실제 9.2%와 같지 않습니다. " +
-    "<b>우리 결과가 실제와 비슷하다는 것은 이 모형이 옳다는 증거가 아니라, 그렇게 설정했다는 뜻입니다.</b>"
+    /* ⚠ 「폭풍 한 번」이라고 쓰면 C25(폭풍 «횟수» 검사)가 개수 표현으로 잡는다. 「첫 폭풍」으로 쓴다. */
+    "초기 변이와 폭풍 세기는 실제 연구와 비슷한 값이 나오도록 미리 맞춘 것입니다 — 첫 폭풍 뒤 상승률 중앙값이 <b>{S}%</b>로 실제 9.2%에 가깝게 나오는 것은 " +
+    "<b>그렇게 나오도록 맞췄기 때문</b>입니다. 게다가 <b>두 탭이 거의 같은 값을 냅니다</b> — 첫 폭풍만으로는 두 가설을 가를 수 없습니다.<br>" +
+    "<b>결과가 실제와 비슷하다는 것은 이 모형이 옳다는 증거가 아닙니다.</b>"
 };
 
 /* ── 조원·계보 도우미 ── */
@@ -1023,9 +1036,16 @@ function drawStage() {
   var cols = Math.min(6, Math.max(3, Math.ceil(Math.sqrt(all.length * 1.6))));
   var rows = Math.ceil(all.length / cols);
   var cw = W / cols, ch = Math.min(usableH / rows, 96);
-  var top = Math.max(6, (usableH - rows * ch) / 2);
+  var top = Math.max(6, (usableH - rows * ch) / 2 - 12);
   var turnLine = (G.phase === "act" || G.phase === "pick" || G.phase === "adopt") ? lineageOf(G.turn) : null;
+
+  /* 유령 원 범례가 뜨는지 «배치 전에» 정한다 — 뜨면 윗줄 이름표와 겹치므로 격자를 내려야 한다
+     (2026-08-23 스크린샷 실측으로 잡은 겹침). */
   var anyGhost = false;
+  for (var q0 = 0; q0 < pop.length; q0++)
+    if (pop[q0].bornGen === r.gen && G.ghost[G.tab][pop[q0].id]) { anyGhost = true; break; }
+  var ghostPad = anyGhost ? 34 : 0;
+  top += ghostPad;
 
   for (var i = 0; i < all.length; i++) {
     var a = all[i], isDead = pop.indexOf(a) < 0;
@@ -1083,12 +1103,18 @@ function drawStage() {
     lizardBoxes.push({ id: a.id, lineage: a.lineage, x: cx, y: cy, r: 32,
                        color: color, padArea: a.padArea, dead: isDead });
   }
-  /* 어미 원 범례 — 유령 원이 하나라도 그려질 때만, 두 탭 «같은 문장»으로 (장식 대칭) */
+  /* 어미 원 범례 — 두 탭 «같은 요소»를 그리고(장식 대칭), 인과 문장만 다르다.
+     두 탭 모두 어미는 폭풍을 견디며 넓어지므로 점선≠실선이다. 갈리는 것은 자손이 닮는 쪽이다. */
   if (anyGhost) {
     ctx.save();
     ctx.fillStyle = CSSV("--t2") || "#57606a";
-    ctx.font = "11px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText("겹친 원 = 어미의 발바닥 — 점선: 태어날 때 · 실선: 물려줄 때. 두 원이 같으면 태어난 값 그대로 물려준 것입니다.", W / 2, 14);
+    /* 좁은 화면에서 두 줄이 넘치지 않게 글자를 줄이고, 폭을 넘으면 캔버스가 알아서 압축하게 둔다 */
+    var lg = W < 700 ? 9.5 : 11;
+    ctx.font = lg + "px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("겹친 원 = 어미의 발바닥 — 점선: 어미가 태어날 때 · 실선: 자손을 남길 때", W / 2, 13, W - 12);
+    ctx.fillText(G.tab === "lamarck"
+      ? "자손은 «실선»을 닮습니다 — 어미가 얻은 것까지 물려받습니다"
+      : "자손은 «점선»을 닮습니다 — 어미가 얻은 것은 물려받지 못합니다", W / 2, 27, W - 12);
     ctx.restore();
   }
   ctx.textBaseline = "alphabetic";
@@ -1286,9 +1312,12 @@ function renderBodies() {
     g += "</p>";
     /* 유령 원 안내 — 캔버스 글자는 낭독기가 못 읽으므로 같은 문장을 글로도 남긴다.
        두 탭 «같은 문장»이다(장식 대칭) — 차이는 화면의 원이 스스로 말한다. */
-    g += '<p class="hint">이번 세대 자손 옆의 겹친 원은 <b>어미의 발바닥</b>입니다 — 점선: 태어날 때 · 실선: 물려줄 때. ' +
-         "두 원이 같으면 <b>태어난 값 그대로</b> 물려준 것입니다. " +
-         "자손의 값은 <b>두 부모의 평균</b>에 작은 변이를 더한 것이라, 어미가 물려준 값과 똑같지는 않습니다.</p>";
+    g += '<p class="hint">이번 세대 자손 옆의 겹친 원은 <b>어미의 발바닥</b>입니다 — 점선: 어미가 태어날 때 · 실선: 자손을 남길 때. ' +
+         "폭풍을 견디며 넓어졌으므로 <b>두 탭 모두</b> 두 원이 다릅니다. " +
+         (G.tab === "lamarck"
+           ? "이 탭에서 자손은 <b>실선</b>을 닮습니다 — 어미가 살면서 얻은 것까지 물려받습니다. "
+           : "이 탭에서 자손은 <b>점선</b>을 닮습니다 — 어미가 살면서 얻은 것은 물려받지 못합니다. ") +
+         "자손의 값은 <b>두 부모의 평균</b>에 작은 변이를 더한 것이라 어느 쪽과도 딱 맞지는 않습니다.</p>";
     $("genResultBody").innerHTML = g;
     $("btnNextGen").textContent = (r.gen >= P.GENS) ? "이 탭 마치기" : "다음 세대";
   }
@@ -1534,7 +1563,7 @@ function afterStorm() { if (G.phase !== "storm") return; setPhase("stormResult")
    C31 이 이 유도가 코어와 일치하는지를 검사한다. */
 function computeGhosts(r) {
   var surv = r.pop, seed = r.scenario.seed, gen = r.gen;
-  var out = {}, i, mi, fi, m, f, pd, cid;
+  var out = {}, i, mi, fi, m, f, pd, cid, mv, fv;
   if (surv.length < P.MIN_BREED) return out;
   var want = Math.min(P.CAP, surv.length + Math.ceil(surv.length * P.MUL)) - surv.length;
   for (i = 0; i < want; i++) {
@@ -1545,7 +1574,10 @@ function computeGhosts(r) {
     if (fi >= surv.length - 1) fi = surv.length - 2;
     if (fi >= mi) fi += 1;
     m = surv[mi]; f = surv[fi];
-    pd = clampPad((m.padArea + f.padArea) / 2
+    /* 유전 규칙은 탭마다 다르다 — 코어 breed() 와 «같은 분기»여야 한다(C31 이 대조한다) */
+    mv = r.mode === "lamarck" ? m.padArea : m.bornPad;
+    fv = r.mode === "lamarck" ? f.padArea : f.bornPad;
+    pd = clampPad((mv + fv) / 2
                   + keyedGauss(seed, gen, cid, SALT.MUT, 0, r.scenario.sigm));
     out[cid] = { expect: pd, born: m.bornPad, given: m.padArea };
   }
@@ -1685,7 +1717,7 @@ function onStageClick(ev) {
   } else {
     predict(r, hit.id, G.turn);
     touch(r, hit.id, G.turn);   /* 의도적으로 무효 — false 를 돌려준다 */
-    G.lastMsg = "이 도마뱀의 발바닥은 <b>태어날 때 정해졌습니다.</b> 눌러도 변하지 않습니다.";
+    G.lastMsg = "이 탭에서는 <b>훈련으로 발바닥이 넓어지지 않습니다.</b> 폭풍을 견디면 넓어지지만, 그렇게 얻은 넓이는 자손에게 가지 않습니다.";
   }
   render();
 }
@@ -1727,8 +1759,10 @@ function renderVerdict() {
   put("vDeadL", VERDICT.deadLamarck.toFixed(1) + "%");
   put("vDeadN", VERDICT.deadNatural.toFixed(1) + "%");
   put("vZeroNMean", VERDICT.zeroVarNaturalMean.toFixed(3));
-  put("vCardL", VERDICT.cardChangeLamarck.toFixed(0) + "%");
-  put("vCardN", VERDICT.cardChangeNatural.toFixed(0) + "%");
+  put("vZeroNBody", VERDICT.zeroVarNaturalBody.toFixed(3));
+  /* 전달률은 실측값을 «반올림»해 적는다. -0.1 은 Math.round 에서 -0 이 되고 문자열로는 "0" 이다. */
+  put("vCardL", Math.round(VERDICT.transmitLamarck) + "%");
+  put("vCardN", Math.round(VERDICT.transmitNatural) + "%");
 
   /* ★ 2026-08-23 수정 (P-검토 A-5).
      여기에 「용불용설 탭에서 ○○이 앞선 것은 «훈련을 많이 시켰기 때문»」이라고 적혀 있었다.
@@ -1747,7 +1781,7 @@ function renderVerdict() {
     "<b>더 많이 노력해서 이긴 사람은 어느 탭에도 없습니다.</b> " +
     "용불용설 탭에서는 그 훈련이 발바닥을 실제로 넓혔고, 그 값이 자손에게 전달됐습니다. " +
     "자연선택 탭의 점수는 <b>마릿수 × 1점 + 예측 적중 × 3점</b>입니다. <b>" + esc(wn.name) + "</b>이(가) 앞선 것은 " + wnWhy + "입니다 — " +
-    "예측은 관찰일 뿐, 그 탭에서는 아무리 눌러도 발바닥이 변하지 않았습니다. " +
+    "예측은 관찰일 뿐이고, 그 탭에서도 폭풍을 견딘 도마뱀은 넓어졌지만 <b>그 넓이는 자손에게 가지 않았습니다.</b> " +
     /* ★ 자연선택 탭을 «아무 일도 안 일어난 쪽»으로 두면 M5 를 깨는 알맹이가 빠진다(P-검토 2차 B-21).
        개체는 그대로인데 무리의 구성이 바뀌었다 — 그것이 진화다. */
     "<b>그렇다고 아무 일도 없었던 것은 아닙니다.</b> 개체 하나하나는 그대로인데 " +
@@ -1757,17 +1791,29 @@ function renderVerdict() {
 
 /* ── 「변이 없는 개체군」 재생 ── */
 var replayData = null;
+/* ★ v3 — 그래프가 그리는 값은 «자손에게 물려준 값»(bornPad 평균)이다.
+     몸값(padArea)으로 그리면 자연선택 선이 폭풍 보너스 때문에 «올라가다 죽는» 모양이 되어
+     「진화하지 않았다」는 판정 ①을 정면으로 뒤집어 보이게 한다(2026-08-23 실측: 1.030 → 1.060).
+     진화는 «유전적 구성»의 변화이므로 물려준 값이 옳은 곡선이다. */
 function buildReplay() {
   var sc = makeScenario(20260822, { sig0: 0, sigm: 0, mu0: 1.03 });
   var out = {};
+  /* ★ 도우미를 밖에 두지 않는다 — anolis_check.js C27·C29 가 이 함수를 «잘라내 그대로 실행»하므로
+       바깥 심벌을 참조하면 거기서 ReferenceError 가 난다(2026-08-23 실제로 났다). */
+  var bornMean = function (pop) {
+    if (!pop.length) return null;
+    var s = 0, i;
+    for (i = 0; i < pop.length; i++) s += pop[i].bornPad;
+    return s / pop.length;
+  };
   ["lamarck", "natural"].forEach(function (m) {
-    var r = newRun(sc, m), hist = [{ gen: 0, mean: 1.03, dead: false }];
+    var r = newRun(sc, m), hist = [{ gen: 0, mean: 1.03, body: 1.03, dead: false }];
     while (r.gen < P.GENS && !r.extinct) {
       var t = policyPick(r, "median");
       if (t !== null) for (var i = 0; i < P.TOUCH_MAX; i++) touch(r, t, 0);
       storm(r); breed(r);
       var s = stats(r.pop);
-      hist.push({ gen: r.gen, mean: s.mean, dead: r.extinct });
+      hist.push({ gen: r.gen, mean: bornMean(r.pop), body: s.mean, dead: r.extinct });
     }
     out[m] = hist;
   });
