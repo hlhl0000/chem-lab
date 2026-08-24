@@ -123,6 +123,43 @@ function timeToBoilDry(st, liq) {
   return { toBoil: tHeat, toDry: tHeat + tVap };
 }
 
+/* ⑤ 열린 용기 vs 닫힌 용기 — 증발·응축의 동적 평형 (2단계 「닫힌 용기의 끓음」)
+   증발 속도는 액체 표면 온도만의 함수(∝ 포화 증기 압력), 응축 속도는 용기 속
+   증기 압력에 비례한다. 그래서 닫힌 용기의 증기 압력은
+     dP/dt = KP · (Psat(T) − P)
+   를 따라 포화 증기 압력으로 수렴하고, 그 자리에서 증발 = 응축(동적 평형)이 된다.
+   열린 용기는 떠난 분자가 되돌아오지 않아 응축 항이 없다 — 액체가 끝까지 준다.
+   ⚠ 수치 적분이 아니라 지수 해를 그대로 쓴다(어떤 dt 에서도 진동·overshoot 없음). */
+const SEAL = {
+  T: { min: 20, max: 80, step: 1, def: 40 },   // 조작 온도 (℃)
+  V0: 100,                                     // 두 용기의 시작 액체 (mL)
+  KP: 0.25,        // 닫힌 용기 압력 접근 속도 (1/s) — 평형까지 십수 초 (관찰 가능한 속도)
+  KV: 0.020,       // 열린 용기 증발 속도 (mL/(s·mmHg)) — 40 ℃ 물 100 mL 가 약 90 초에 소진
+  ALPHA: 0.07,     // 닫힌 용기 누적 증발량 환산 (mL/mmHg) — 헤드스페이스 부피 가정(과장 배율, 한계 ⑭)
+  RATE: 0.08       // 분자 수 흐름 환산 (개/(s·mmHg)) — 화면 카운터·입자용 정성 배율
+};
+/* 증발·응축 속도 (개/초) — 증발은 T 만의 함수, 응축은 P 에 비례 */
+function sealedRates(liq, T, P) {
+  return { evap: SEAL.RATE * vaporP(liq, T), cond: SEAL.RATE * Math.max(0, P) };
+}
+/* 한 걸음 (dt 초). s = { T, P, volOpen, volClosed, t } 를 그대로 바꿔 돌려준다 */
+function sealedStep(s, liq, dt) {
+  const ps = vaporP(liq, s.T);
+  s.P = ps + (s.P - ps) * Math.exp(-SEAL.KP * dt);      // 지수 수렴 — 진동 없음
+  if (s.P < 0) s.P = 0;
+  /* 닫힌 용기 액체 — 지금 증기로 나가 있는 양만큼 준다. 온도를 내려 P 가 내려가면
+     응축으로 되돌아와 액체가 도로 는다(적분이 아니라 유도값이라 저절로 맞는다) */
+  s.volClosed = Math.max(0, SEAL.V0 - SEAL.ALPHA * s.P);
+  s.volOpen = Math.max(0, s.volOpen - SEAL.KV * ps * dt);
+  s.t += dt;
+  return s;
+}
+/* 동적 평형 판정 — 포화 증기 압력의 2 % 이내 */
+function sealedAtEq(s, liq) {
+  const ps = vaporP(liq, s.T);
+  return ps > 0 && Math.abs(s.P - ps) < ps * 0.02;
+}
+
 
 
 
@@ -146,13 +183,13 @@ const st = { t: 20, tRoom: 20, volume: 100, pext: 1.00, heat: 300, boiling: fals
 let trace = [];                    // 가열 곡선 {s, t, v, boiling}
 let rows = [];
 let zoom = false;                  // 분자 확대 보기
-let stage = 1;                     // 지금 단계 (1~4) — 단일 원천
+let stage = 1;                     // 지금 단계 (1~5) — 단일 원천 (2026-08-24 개편: 2단계 「닫힌 용기」 신설로 4→5단계)
 let answerShown = false;           // 「답 확인」 게이트
 let cursorT = null;                // 커서 추적 십자선이 가리키는 온도(℃). null = 화면 밖
 /* ★ 답 확인 게이트의 단일 판정 (지시안 B-4 14경로).
-   true = 지금 답을 감춰야 한다. 4단계에서만 잠근다 — 1~3단계는 그 단계의 노출 표가 정한다.
-   (2단계의 #rTb·가열 곡선 끓는점 레이블은 그 단계의 증거이므로 잠그지 않는다) */
-const gated = () => stage === 4 && !answerShown;
+   true = 지금 답을 감춰야 한다. 5단계(자유 탐구)에서만 잠근다 — 1~4단계는 그 단계의 노출 표가 정한다.
+   (3단계의 #rTb·가열 곡선 끓는점 레이블은 그 단계의 증거이므로 잠그지 않는다) */
+const gated = () => stage === 5 && !answerShown;
 const REDUCED = matchMedia("(prefers-reduced-motion:reduce)").matches;
 
 /* ============================================================
@@ -434,6 +471,437 @@ function shade(hex, f) {
   return `rgb(${r},${g},${b})`;
 }
 
+/* ============================================================
+   3D 공-막대 렌더러 (M3D) — mineral/sim.js 「프로그램 ②」를 이식·축약한 것 (2026-08-24)
+   공은 화면을 향한 사각형에 구의 법선을 계산해 그린다(임포스터). 막대는 원기둥 음영,
+   판(panel)은 유리벽·액체면. 카메라에서 먼 것부터 그린다(화가 알고리즘 — WebGL 1 에는
+   조각별 깊이 쓰기가 없다). 별도 캔버스 #mol 에 자기 WebGL 컨텍스트를 하나만 쓴다.
+   쓰는 곳 ① 2단계 「닫힌 용기」의 열린/닫힌 용기 장면 ② 「분자 크기로 확대해 보기」.
+   실패하면 m3d = null 로 남고, 확대 보기는 기존 2D(drawZoom)로 폴백한다(§1-2).
+   ============================================================ */
+const M3D_VERT = `attribute vec3 aPos; attribute vec2 aLocal; attribute vec3 aCol;
+attribute vec3 aPerp; attribute vec3 aParam;
+uniform mat4 uProj;
+varying vec2 vLocal; varying vec3 vCol; varying vec3 vPerp; varying vec3 vParam;
+void main(){ vLocal=aLocal; vCol=aCol; vPerp=aPerp; vParam=aParam;
+  gl_Position = uProj * vec4(aPos,1.0); }`;
+const M3D_FRAG = `precision mediump float;
+varying vec2 vLocal; varying vec3 vCol; varying vec3 vPerp; varying vec3 vParam;
+uniform vec3 uLight;
+void main(){
+  float kind = vParam.x; float al = vParam.z;
+  vec3 n; float edge = 1.0;
+  if (kind < 0.5) {                       /* 공 */
+    float r2 = dot(vLocal, vLocal);
+    if (r2 > 1.0) discard;
+    n = vec3(vLocal, sqrt(max(0.0, 1.0 - r2)));
+    edge = mix(1.0, 0.58, smoothstep(0.78, 1.0, sqrt(r2)));
+  } else if (kind < 1.5) {                /* 막대 */
+    float y = clamp(vLocal.y, -0.999, 0.999);
+    n = normalize(vPerp * y + vec3(0.0,0.0,1.0) * sqrt(1.0 - y*y));
+    edge = mix(1.0, 0.66, smoothstep(0.72, 1.0, abs(y)));
+  } else {                                /* 판 — 유리벽·액체면. 음영 없이 색과 투명도만 */
+    gl_FragColor = vec4(vCol, al);
+    return;
+  }
+  float dif = max(dot(n, uLight), 0.0);
+  float amb = 0.34 + 0.13 * max(n.y, 0.0);
+  vec3 h = normalize(uLight + vec3(0.0,0.0,1.0));
+  float spe = pow(max(dot(n, h), 0.0), 26.0);
+  vec3 c = vCol * (amb + 0.74 * dif) * edge + vec3(1.0) * spe * 0.30;
+  gl_FragColor = vec4(clamp(c,0.0,1.0), al);
+}`;
+
+const mcv = $("mol");
+let m3d = null;
+const M3D_CAM = { z: 6.0, fovy: 0.56 };
+const M3D_PROJ = new Float32Array(16);
+function m3dPersp(out, fovy, aspect, near, far) {
+  const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+  out[0] = f / aspect; out[1] = 0; out[2] = 0; out[3] = 0;
+  out[4] = 0; out[5] = f; out[6] = 0; out[7] = 0;
+  out[8] = 0; out[9] = 0; out[10] = (far + near) * nf; out[11] = -1;
+  out[12] = 0; out[13] = 0; out[14] = 2 * far * near * nf; out[15] = 0;
+  return out;
+}
+function h2r(hex) {
+  const s = hex.replace("#", "");
+  const n = parseInt(s.length === 3 ? s.split("").map(c => c + c).join("") : s, 16);
+  return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+}
+const M3D_BG = h2r((C.stageLight || "#ffffff").trim().startsWith("#") ? C.stageLight.trim() : "#ffffff");
+function initM3D() {
+  if (!mcv) return;
+  const g = mcv.getContext("webgl", { antialias: true, alpha: false })
+    || mcv.getContext("experimental-webgl", { antialias: true, alpha: false });
+  if (!g) return;
+  const mk = (ty, src) => {
+    const sh = g.createShader(ty); g.shaderSource(sh, src); g.compileShader(sh);
+    if (!g.getShaderParameter(sh, g.COMPILE_STATUS)) { console.error(g.getShaderInfoLog(sh)); return null; }
+    return sh;
+  };
+  const vs = mk(g.VERTEX_SHADER, M3D_VERT), fs = mk(g.FRAGMENT_SHADER, M3D_FRAG);
+  if (!vs || !fs) return;
+  const p = g.createProgram(); g.attachShader(p, vs); g.attachShader(p, fs); g.linkProgram(p);
+  if (!g.getProgramParameter(p, g.LINK_STATUS)) { console.error(g.getProgramInfoLog(p)); return; }
+  g.useProgram(p);
+  const U = {}, A = {};
+  for (const nm of ["uProj", "uLight"]) U[nm] = g.getUniformLocation(p, nm);
+  for (const nm of ["aPos", "aLocal", "aCol", "aPerp", "aParam"]) A[nm] = g.getAttribLocation(p, nm);
+  g.enable(g.BLEND);
+  g.blendFunc(g.SRC_ALPHA, g.ONE_MINUS_SRC_ALPHA);
+  m3d = { g, p, U, A, vbo: g.createBuffer(), ibo: g.createBuffer(),
+          prims: [], v: new Float32Array(0), i: new Uint16Array(0) };
+}
+/* 시점 변환 — 프레임마다 m3dBegin 으로 세운다. 이후의 모든 좌표는 뷰 좌표다(mineral 방식) */
+let m3dView = null;
+function m3dBegin(yaw, pitch) {
+  m3dView = { cy: Math.cos(yaw), sy: Math.sin(yaw), cp: Math.cos(pitch), sp: Math.sin(pitch) };
+  if (m3d) m3d.prims.length = 0;
+}
+function m3dV(x, y, z) {
+  const v = m3dView;
+  const x1 = v.cy * x + v.sy * z, z1 = -v.sy * x + v.cy * z;
+  const y2 = v.cp * y - v.sp * z1, z2 = v.sp * y + v.cp * z1;
+  return [x1, y2, z2 - M3D_CAM.z];
+}
+function m3dSphere(p, r, col, al) { if (m3d) m3d.prims.push({ z: p[2], k: 0, p, r, col, al }); }
+function m3dStick(a, b, w, col, al) { if (m3d) m3d.prims.push({ z: (a[2] + b[2]) / 2, k: 1, a, b, w, col, al }); }
+/* zBias — 배경판처럼 「무조건 맨 뒤」에 깔아야 하는 판에 큰 음수를 준다 */
+function m3dPanel(c0, c1, c2, c3, col, al, zBias) {
+  if (m3d) m3d.prims.push({ z: (c0[2] + c1[2] + c2[2] + c3[2]) / 4 + (zBias || 0), k: 2, cs: [c0, c1, c2, c3], col, al });
+}
+function m3dFlush() {
+  if (!m3d) return;
+  const g = m3d.g;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cw = mcv.clientWidth, ch = +mcv.style.height.replace("px", "") || 300;
+  if (cw < 8) return;                       // 숨은 캔버스 — clientWidth 0 (매뉴얼 §5)
+  const w = Math.max(1, Math.round(cw * dpr)), h = Math.max(1, Math.round(ch * dpr));
+  if (mcv.width !== w || mcv.height !== h) { mcv.width = w; mcv.height = h; }
+  const prims = m3d.prims;
+  prims.sort((a, b) => a.z - b.z);          // 먼 것(더 음수)부터
+  const P = Math.min(prims.length, 3800);   // 정점 번호 16비트 한계 안(3800×4 = 15200)
+  const FPV = 14;
+  const needV = P * 4 * FPV, needI = P * 6;
+  if (m3d.v.length < needV) m3d.v = new Float32Array(Math.ceil(needV * 1.5));
+  if (m3d.i.length < needI) m3d.i = new Uint16Array(Math.ceil(needI * 1.5));
+  const V = m3d.v, I = m3d.i;
+  let vh = 0, ih = 0, q = 0;
+  const put = (px, py, pz, lx, ly, c, ex, ey, kind, al) => {
+    V[vh] = px; V[vh + 1] = py; V[vh + 2] = pz;
+    V[vh + 3] = lx; V[vh + 4] = ly;
+    V[vh + 5] = c[0]; V[vh + 6] = c[1]; V[vh + 7] = c[2];
+    V[vh + 8] = ex; V[vh + 9] = ey; V[vh + 10] = 0;
+    V[vh + 11] = kind; V[vh + 12] = 0; V[vh + 13] = al;
+    vh += FPV;
+  };
+  const quad = () => {
+    const b = q * 4;
+    I[ih] = b; I[ih + 1] = b + 1; I[ih + 2] = b + 2;
+    I[ih + 3] = b; I[ih + 4] = b + 2; I[ih + 5] = b + 3;
+    ih += 6; q++;
+  };
+  for (let s = 0; s < P; s++) {
+    const pr = prims[s];
+    if (pr.k === 0) {
+      const [cx, cy, cz] = pr.p, r = pr.r;
+      put(cx - r, cy - r, cz, -1, -1, pr.col, 0, 0, 0, pr.al);
+      put(cx + r, cy - r, cz, 1, -1, pr.col, 0, 0, 0, pr.al);
+      put(cx + r, cy + r, cz, 1, 1, pr.col, 0, 0, 0, pr.al);
+      put(cx - r, cy + r, cz, -1, 1, pr.col, 0, 0, 0, pr.al);
+      quad();
+    } else if (pr.k === 1) {
+      const [ax, ay, az] = pr.a, [bx, by, bz] = pr.b;
+      const dx = bx - ax, dy = by - ay, L = Math.sqrt(dx * dx + dy * dy);
+      if (L < 1e-5) continue;               // 시선과 나란한 막대 — 띠가 사라진다(mineral 방식 승계)
+      const ex = dy / L, ey = -dx / L;
+      const ox = ex * pr.w, oy = ey * pr.w;
+      put(ax + ox, ay + oy, az, -1, 1, pr.col, ex, ey, 1, pr.al);
+      put(bx + ox, by + oy, bz, 1, 1, pr.col, ex, ey, 1, pr.al);
+      put(bx - ox, by - oy, bz, 1, -1, pr.col, ex, ey, 1, pr.al);
+      put(ax - ox, ay - oy, az, -1, -1, pr.col, ex, ey, 1, pr.al);
+      quad();
+    } else {
+      const cs = pr.cs;
+      for (let ci = 0; ci < 4; ci++) put(cs[ci][0], cs[ci][1], cs[ci][2], 0, 0, pr.col, 0, 0, 2, pr.al);
+      quad();
+    }
+  }
+  g.viewport(0, 0, mcv.width, mcv.height);
+  g.clearColor(M3D_BG[0], M3D_BG[1], M3D_BG[2], 1);
+  g.clear(g.COLOR_BUFFER_BIT);
+  if (!q) return;
+  m3dPersp(M3D_PROJ, M3D_CAM.fovy, mcv.width / mcv.height, 0.1, 30);
+  g.useProgram(m3d.p);
+  g.uniformMatrix4fv(m3d.U.uProj, false, M3D_PROJ);
+  g.uniform3f(m3d.U.uLight, -0.4104, 0.7113, 0.5472);   // mineral 과 같은 빛 방향
+  g.bindBuffer(g.ARRAY_BUFFER, m3d.vbo);
+  g.bufferData(g.ARRAY_BUFFER, V.subarray(0, vh), g.DYNAMIC_DRAW);
+  const st4 = FPV * 4;
+  g.enableVertexAttribArray(m3d.A.aPos); g.vertexAttribPointer(m3d.A.aPos, 3, g.FLOAT, false, st4, 0);
+  g.enableVertexAttribArray(m3d.A.aLocal); g.vertexAttribPointer(m3d.A.aLocal, 2, g.FLOAT, false, st4, 12);
+  g.enableVertexAttribArray(m3d.A.aCol); g.vertexAttribPointer(m3d.A.aCol, 3, g.FLOAT, false, st4, 20);
+  g.enableVertexAttribArray(m3d.A.aPerp); g.vertexAttribPointer(m3d.A.aPerp, 3, g.FLOAT, false, st4, 32);
+  g.enableVertexAttribArray(m3d.A.aParam); g.vertexAttribPointer(m3d.A.aParam, 3, g.FLOAT, false, st4, 44);
+  g.bindBuffer(g.ELEMENT_ARRAY_BUFFER, m3d.ibo);
+  g.bufferData(g.ELEMENT_ARRAY_BUFFER, I.subarray(0, ih), g.DYNAMIC_DRAW);
+  g.drawElements(g.TRIANGLES, ih, g.UNSIGNED_SHORT, 0);
+}
+
+/* ── 분자 본 (3D) — 원자 상대 좌표(모형 단위)·반지름·CPK 색 (mineral 과 같은 국제 표준).
+   결합 [i,j] 쌍을 명시한다. drawZoom(2D 폴백)의 본을 3D 로 옮긴 것 — 크기 비·결합 각은
+   정확하지 않다(구조를 알아보게 하는 그림 · 「가정과 한계」 ⑦). */
+const MOL3 = {
+  water:   { atoms: [[0, 0, 0, .30, "#FF0D0D"], [-.29, .22, 0, .19, "#FFFFFF"], [.29, .22, 0, .19, "#FFFFFF"]],
+             bonds: [[0, 1], [0, 2]] },
+  ethanol: { atoms: [[-.24, .05, 0, .26, "#404040"], [0, -.08, 0, .26, "#404040"], [.24, .05, 0, .28, "#FF0D0D"], [.42, -.08, 0, .17, "#FFFFFF"]],
+             bonds: [[0, 1], [1, 2], [2, 3]] },
+  acetic:  { atoms: [[-.24, .05, 0, .26, "#404040"], [0, -.05, 0, .26, "#404040"], [.19, -.24, 0, .28, "#FF0D0D"], [.19, .16, 0, .28, "#FF0D0D"], [.40, .24, 0, .17, "#FFFFFF"]],
+             bonds: [[0, 1], [1, 2], [1, 3], [3, 4]] },
+  ether:   { atoms: [[-.36, 0, 0, .26, "#404040"], [-.12, -.11, 0, .28, "#FF0D0D"], [.12, 0, 0, .26, "#404040"], [.36, -.11, 0, .26, "#404040"]],
+             bonds: [[0, 1], [1, 2], [2, 3]] }
+};
+for (const k3 in MOL3) for (const a3 of MOL3[k3].atoms) a3.push(h2r(a3[4]));
+
+/* 분자 하나 — z축 회전(ang) + y축 자전으로 3차원 방향을 준다. ★ 원자로 쪼개지 않는다. */
+function drawMol3(x, y, z, ang, seed, alpha, scale) {
+  const mol = MOL3[liq.id] || MOL3.water;
+  const sc = scale || 1;
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const ty = Math.sin(seed * 2.1 + ang * 0.6) * 0.8;
+  const cb = Math.cos(ty), sb = Math.sin(ty);
+  const pts = [];
+  for (const a of mol.atoms) {
+    const x1 = (a[0] * ca - a[1] * sa) * sc, y1 = (a[0] * sa + a[1] * ca) * sc, z1 = a[2] * sc;
+    const x2 = x1 * cb + z1 * sb, z2 = -x1 * sb + z1 * cb;
+    pts.push(m3dV(x + x2, y + y1, z + z2));
+  }
+  for (const bd of mol.bonds) m3dStick(pts[bd[0]], pts[bd[1]], 0.05 * sc, [0.44, 0.47, 0.52], alpha);
+  mol.atoms.forEach((a, i) => m3dSphere(pts[i], a[3] * sc, a[5], alpha));
+}
+
+/* ── 3D 분자 확대 보기 — drawZoom(2D)의 3D 판. 액체(닿아 있는 분자들)와
+   떠나는 분자(분자째 통째로)를 같은 위상으로 그린다. 캡션은 #zoomCap(HTML)이 담당. */
+function drawZoom3D() {
+  if (!m3d) return;
+  m3dBegin(0, -0.16);
+  const Tb = boilingPoint(liq, st.pext);
+  const act = Math.max(0.08, Math.min(1, (st.t - st.tRoom) / Math.max(1, Tb - st.tRoom)));
+  // 액체 영역 배경판 — 2D 확대의 파란 영역과 같은 뜻. 맨 뒤에 깐다
+  m3dPanel(m3dV(-3.4, -2.2, -1.5), m3dV(3.4, -2.2, -1.5), m3dV(3.4, 0, -1.5), m3dV(-3.4, 0, -1.5),
+    [0.55, 0.68, 0.92], 0.14, -50);
+  m3dStick(m3dV(-3.0, 0, -1.45), m3dV(3.0, 0, -1.45), 0.014, [0.35, 0.42, 0.55], 0.65);
+  const seedy = i => ((i * 9301 + 49297) % 233280) / 233280;
+  // 액체 — 분자가 서로 닿을 만큼 촘촘하다 (2겹). 증기 쪽과의 대비가 곧 설명이다
+  let idx = 0;
+  for (let L = 0; L < 2; L++) for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) {
+    const i = idx++;
+    const x = -2.18 + c * 0.97 + (r % 2 ? 0.48 : 0) + (L ? 0.24 : 0);
+    const y = -0.38 - r * 0.52 - (L ? 0.20 : 0);
+    const z = L ? -0.85 : -0.15;
+    drawMol3(x + Math.sin(clock * 1.3 + i) * 0.09 * act, y + Math.cos(clock * 1.7 + i * 1.3) * 0.09 * act,
+      z, Math.sin(clock * 0.6 + i) * 0.6, i, 1, 1);
+  }
+  // 떠나는 분자 (증발/끓음) — ★ 분자째 올라간다. 가열 전에도 증발은 일어난다
+  const nEsc = st.boiling ? 5 : Math.max(1, Math.round(act * 3));
+  for (let i = 0; i < nEsc; i++) {
+    const ph = ((clock * (0.35 + 0.2 * i) + seedy(i * 11 + 5)) % 1);
+    const x = -1.85 + seedy(i * 7 + 3) * 3.7;
+    const y = 0.06 + ph * 1.52;
+    drawMol3(x, y, -0.35, ph * 2.2, i * 3 + 1, 1 - ph * 0.5, 1 - ph * 0.12);
+  }
+  m3dFlush();
+}
+
+/* ============================================================
+   2단계 — 열린 용기 vs 닫힌 용기 (학습지 「액체 관찰하기」 · 2026-08-24 신설)
+   모형은 계산부 sealedStep/sealedRates 가 담당한다. 여기는 그 결과를 3D 로 보여 주는
+   입자 표현(정성적 · 한계 ⑭)과 측정값 표시만 맡는다.
+   ============================================================ */
+const SEAL_N_MMHG = 12;   // 화면의 기체 분자 1개가 대표하는 압력(mmHg) — 카운터·입자 공용(F-1)
+const seal = { st: null, trace: [], parts: [], escaped: [],
+               adjAcc: 0, churnAcc: 0, spawnAcc: 0, lastTr: -1 };
+function resetSealed() {
+  seal.st = { T: $("sT2") ? +$("sT2").value : SEAL.T.def, P: 0,
+              volOpen: SEAL.V0, volClosed: SEAL.V0, t: 0 };
+  seal.trace = []; seal.parts = []; seal.escaped = [];
+  seal.adjAcc = 0; seal.churnAcc = 0; seal.spawnAcc = 0; seal.lastTr = -1;
+}
+function sealTrace() {
+  const s = seal.st;
+  if (seal.lastTr < 0 || s.t - seal.lastTr > 0.4) {
+    seal.lastTr = s.t;
+    seal.trace.push({ s: s.t, p: s.P });
+    if (seal.trace.length > 3000) seal.trace.shift();
+  }
+}
+
+/* 용기 기하 — 두 용기의 유일한 원천. 화면 좌우 배치·액면 높이가 전부 여기서 나온다 */
+const VES = { w: 0.88, y0: -1.30, y1: 0.85, d: 0.42, liqH: 0.85, cxO: -1.18, cxC: 1.18 };
+const vesselLevel = vol => VES.y0 + VES.liqH * Math.max(0, vol) / SEAL.V0;
+
+function spawnClosed(yL) {
+  seal.parts.push({
+    x: (Math.random() * 2 - 1) * (VES.w - 0.20), y: Math.min(yL + 0.12, VES.y1 - 0.16),
+    z: (Math.random() * 2 - 1) * (VES.d - 0.10),
+    vx: Math.random() * 2 - 1, vy: 0.6 + Math.random() * 0.6, vz: Math.random() * 2 - 1,
+    ang: Math.random() * 6.2832, va: (Math.random() * 2 - 1) * 1.5
+  });
+}
+function condenseOne() {
+  let lo = -1, ly = Infinity;
+  for (let i = 0; i < seal.parts.length; i++) if (seal.parts[i].y < ly) { ly = seal.parts[i].y; lo = i; }
+  if (lo >= 0) seal.parts.splice(lo, 1);
+}
+function spawnOpen() {
+  const yL = vesselLevel(seal.st.volOpen);
+  seal.escaped.push({
+    x: (Math.random() * 2 - 1) * (VES.w - 0.25), y: yL + 0.10,
+    z: (Math.random() * 2 - 1) * (VES.d - 0.12),
+    ph: Math.random() * 6.2832, ang: Math.random() * 6.2832, va: (Math.random() * 2 - 1) * 1.5
+  });
+}
+/* 입자 갱신 — 개수·흐름은 모형(P·포화 증기 압력)을 따라간다. 개수 자체는 정성 배율(한계 ⑭) */
+function sealParticles(dt) {
+  const s = seal.st, ps = vaporP(liq, s.T);
+  const yL = vesselLevel(s.volClosed);
+  const target = Math.round(s.P / SEAL_N_MMHG);
+  seal.adjAcc += dt;
+  if (seal.adjAcc > 0.12) {
+    seal.adjAcc = 0;
+    if (seal.parts.length < target) spawnClosed(yL);       // 증발이 응축보다 많다 — 한 개 늘린다
+    else if (seal.parts.length > target) condenseOne();    // 반대 — 액면 가까운 것이 응축한다
+  }
+  /* 평형에서도 증발·응축은 계속된다(M3 「정지 = 평형」 방지) — 교환 쌍을 주기적으로 일으킨다 */
+  if (seal.parts.length === target && target > 0 && sealedAtEq(s, liq)) {
+    seal.churnAcc += dt * Math.min(2.0, SEAL.RATE * ps * 0.25);
+    if (seal.churnAcc >= 1) { seal.churnAcc = 0; condenseOne(); spawnClosed(yL); }
+  }
+  const spd = 0.55 + 0.008 * (s.T - 20);
+  for (const p of seal.parts) {
+    p.x += p.vx * spd * dt; p.y += p.vy * spd * dt; p.z += p.vz * spd * dt;
+    p.ang += p.va * dt;
+    const bx = VES.w - 0.16, bz = VES.d - 0.08;
+    if (p.x > bx) { p.x = bx; p.vx = -Math.abs(p.vx); } else if (p.x < -bx) { p.x = -bx; p.vx = Math.abs(p.vx); }
+    if (p.z > bz) { p.z = bz; p.vz = -Math.abs(p.vz); } else if (p.z < -bz) { p.z = -bz; p.vz = Math.abs(p.vz); }
+    const top = VES.y1 - 0.14, bot = Math.min(yL + 0.10, top);   // 뚜껑·액면 사이에서 튕긴다
+    if (p.y > top) { p.y = top; p.vy = -Math.abs(p.vy); } else if (p.y < bot) { p.y = bot; p.vy = Math.abs(p.vy); }
+  }
+  if (s.volOpen > 0) {
+    seal.spawnAcc += SEAL.RATE * ps * dt * 0.35;           // 표시 밀도 배율(정성)
+    while (seal.spawnAcc >= 1 && seal.escaped.length < 40) { seal.spawnAcc -= 1; spawnOpen(); }
+  }
+  for (let i = seal.escaped.length - 1; i >= 0; i--) {
+    const p = seal.escaped[i];
+    p.y += dt * (0.5 + 0.008 * (s.T - 20));
+    p.x += Math.sin(s.t * 2 + p.ph) * dt * 0.25;
+    p.ang += p.va * dt;
+    if (p.y > VES.y1 + 0.65) seal.escaped.splice(i, 1);    // 입구 위로 흩어져 사라진다 — 되돌아오지 않는다
+  }
+}
+
+function drawVessel(cx, closed) {
+  const s = seal.st;
+  const vol = closed ? s.volClosed : s.volOpen;
+  const yL = vesselLevel(vol);
+  const w = VES.w, d = VES.d, y0 = VES.y0, y1 = VES.y1;
+  const glass = [0.42, 0.50, 0.62];
+  // 뒷벽 유리판 — 맨 뒤
+  m3dPanel(m3dV(cx - w, y0, -d), m3dV(cx + w, y0, -d), m3dV(cx + w, y1, -d), m3dV(cx - w, y1, -d),
+    [0.72, 0.78, 0.86], 0.28);
+  // 액체 몸통(뒤판) — 물질의 실제 겉보기 색 계열
+  if (vol > 0)
+    m3dPanel(m3dV(cx - w + 0.03, y0, -d + 0.02), m3dV(cx + w - 0.03, y0, -d + 0.02),
+      m3dV(cx + w - 0.03, yL, -d + 0.02), m3dV(cx - w + 0.03, yL, -d + 0.02), [0.45, 0.66, 0.88], 0.30);
+  // 액체 분자 — 개수는 남은 양에 비례(정성)
+  const nL = Math.max(0, Math.round(vol / SEAL.V0 * 18));
+  const jig = 0.06 + 0.0036 * (s.T - 20);
+  for (let k = 0; k < nL; k++) {
+    const r = Math.floor(k / 6), c = k % 6;
+    const x = cx - w + 0.22 + c * (2 * (w - 0.22) / 5.6) + (r % 2 ? 0.10 : 0);
+    const y = y0 + 0.16 + r * 0.27;
+    const z = (k % 2 ? -0.16 : 0.14);
+    drawMol3(x + Math.sin(s.t * 1.4 + k * 1.7) * jig, y + Math.cos(s.t * 1.8 + k) * jig, z,
+      Math.sin(s.t * 0.5 + k) * 0.5, k, 1, 0.62);
+  }
+  // 증기 분자 (닫힌) / 흩어지는 분자 (열린)
+  if (closed) for (const p of seal.parts) drawMol3(cx + p.x, p.y, p.z, p.ang, 3, 1, 0.62);
+  else for (const p of seal.escaped) {
+    const fade = p.y > y1 ? Math.max(0.22, 1 - (p.y - y1) / 0.7) : 1;
+    drawMol3(cx + p.x, p.y, p.z, p.ang, 3, fade, 0.62);
+  }
+  // 액면 띠
+  if (vol > 0) m3dStick(m3dV(cx - w + 0.05, yL, d * 0.4), m3dV(cx + w - 0.05, yL, d * 0.4),
+    0.012, [0.35, 0.45, 0.60], 0.55);
+  // 유리벽 모서리 12개
+  const E = [
+    [[-w, y0, -d], [w, y0, -d]], [[-w, y0, d], [w, y0, d]], [[-w, y0, -d], [-w, y0, d]], [[w, y0, -d], [w, y0, d]],
+    [[-w, y0, -d], [-w, y1, -d]], [[w, y0, -d], [w, y1, -d]], [[-w, y0, d], [-w, y1, d]], [[w, y0, d], [w, y1, d]],
+    [[-w, y1, -d], [w, y1, -d]], [[-w, y1, d], [w, y1, d]], [[-w, y1, -d], [-w, y1, d]], [[w, y1, -d], [w, y1, d]]
+  ];
+  for (const eg of E)
+    m3dStick(m3dV(cx + eg[0][0], eg[0][1], eg[0][2]), m3dV(cx + eg[1][0], eg[1][1], eg[1][2]),
+      0.022, glass, 0.85);
+  // 앞면 유리판 — 가장 가까워 맨 나중에 그려진다. 아주 옅게
+  m3dPanel(m3dV(cx - w, y0, d), m3dV(cx + w, y0, d), m3dV(cx + w, y1, d), m3dV(cx - w, y1, d),
+    [0.80, 0.86, 0.93], 0.10);
+  // 뚜껑 — 닫힌 용기에만. 열린 용기는 입구가 그대로 뚫려 있다
+  if (closed) {
+    m3dPanel(m3dV(cx - w - 0.06, y1 + 0.02, -d - 0.06), m3dV(cx + w + 0.06, y1 + 0.02, -d - 0.06),
+      m3dV(cx + w + 0.06, y1 + 0.02, d + 0.06), m3dV(cx - w - 0.06, y1 + 0.02, d + 0.06),
+      [0.38, 0.44, 0.53], 0.60);
+    m3dSphere(m3dV(cx, y1 + 0.13, 0), 0.09, [0.38, 0.44, 0.53], 0.95);
+  }
+}
+function drawSealed3D() {
+  if (!m3d || !seal.st || stage !== 2) return;
+  m3dBegin(0, -0.30);
+  drawVessel(VES.cxO, false);
+  drawVessel(VES.cxC, true);
+  m3dFlush();
+}
+
+/* 2단계 측정값 — 압력은 전부 atm(mmHg) 병기(setPress). 상태는 색 + 글자(§8) */
+function readoutsSealed() {
+  const s = seal.st; if (!s) return;
+  const ps = vaporP(liq, s.T);
+  const r = sealedRates(liq, s.T, s.P);
+  setPress("sPsat", "sPsatMm", ps);
+  $("sO-Vol").textContent = s.volOpen.toFixed(1);
+  $("sO-E").textContent = s.volOpen > 0 ? r.evap.toFixed(1) : "0.0";
+  $("sO-C").textContent = "0.0";
+  const ro = $("sO-roState"); ro.classList.remove("is-ok", "is-warn");
+  if (s.volOpen <= 0) { $("sO-State").textContent = "모두 증발함"; ro.classList.add("is-warn"); }
+  else $("sO-State").textContent = "증발 중 — 되돌아오지 않음";
+  $("sC-Vol").textContent = s.volClosed.toFixed(1);
+  $("sC-E").textContent = r.evap.toFixed(1);
+  $("sC-C").textContent = r.cond.toFixed(1);
+  $("sC-N").textContent = String(Math.round(s.P / SEAL_N_MMHG));
+  setPress("sC-P", "sC-PMm", s.P);
+  const rc = $("sC-roState"); rc.classList.remove("is-ok", "is-warn");
+  if (sealedAtEq(s, liq)) { $("sC-State").textContent = "동적 평형 — 증발 ≈ 응축"; rc.classList.add("is-ok"); }
+  else if (r.evap > r.cond) $("sC-State").textContent = "증발 > 응축 — 기체 분자 늘어남";
+  else $("sC-State").textContent = "응축 > 증발 — 기체 분자 줄어듦";
+}
+/* 2단계 결론 — 지금 실제로 평형일 때만 띄운다(J-N5 — 화면 수치와 어긋나는 순간이 없다).
+   온도를 바꾸면 잠시 사라졌다가 새 평형에서 다시 뜬다 — 평형이 「도달하면 끝」이 아님을 보인다 */
+function sealConclusion() {
+  const el = $("sealConc"); if (!el) return;
+  const s = seal.st; if (!s) { el.style.display = "none"; return; }
+  const out = [];
+  if (sealedAtEq(s, liq) && s.t > 3) {
+    const r = sealedRates(liq, s.T, s.P);
+    out.push(`닫힌 용기 — 증발 <b>${r.evap.toFixed(1)}개/초</b> ≈ 응축 <b>${r.cond.toFixed(1)}개/초</b> → ` +
+      `기체 분자 수와 증기 압력이 더 늘지 않습니다(<b>동적 평형</b>). ` +
+      `이때의 증기 압력이 이 온도에서의 <b>포화 증기 압력</b>과 같습니다.`);
+  }
+  if (s.volOpen <= 0)
+    out.push(`열린 용기 — 떠난 분자가 되돌아오지 못해 액체가 <b>모두 증발</b>했습니다.`);
+  el.innerHTML = out.join("<br>");
+  el.style.display = (stage === 2 && out.length) ? "" : "none";
+}
+
 /* ── 온도계 (§3-B) — 비커 무대 오른쪽 별도 2D 캔버스.
    WebGL 셰이더 안이 아니라 여기서 그린다(§5 금지10) — 폴백 시에도 계속 그려진다.
    데이터 색 정확히 3색: --d-blue(선택된 액체 마커) · --d-red(액주) · --t1(눈금·비선택 마커). */
@@ -558,13 +1026,47 @@ function drawChart() {
     cctx.textAlign = "left";
   };
 
-  /* ── C-5 3단계 가열 곡선 겹쳐 그리기 ──
+  /* ── 2단계 — 닫힌 용기의 증기 압력–시간 곡선 ──
+     학습지 ①·②의 관찰 본체: 압력이 점점 늘다가(증발 > 응축) 포화 증기 압력에서
+     일정해진다(동적 평형). 점선 = 이 온도에서의 포화 증기 압력. */
+  if (stage === 2) {
+    const s2 = seal.st;
+    const tr = seal.trace;
+    const ps = vaporP(liq, s2 ? s2.T : SEAL.T.def);
+    const tmax = Math.max(30, ...tr.map(p => p.s)) * 1.05;
+    const ymax = Math.max(ps * 1.35, ...tr.map(p => p.p * 1.2), 40);
+    const X = v => pad.l + v / tmax * PL, Y = v => (H - pad.b) - v / ymax * PH;
+    frame("시간 (초)", "닫힌 용기 증기 압력 (mmHg)");
+    grid(0, tmax, 0, ymax, v => v.toFixed(0), v => v.toFixed(0), X, Y);
+    // 포화 증기 압력 점선 — 온도 슬라이더를 밀면 함께 움직인다
+    cctx.strokeStyle = C.red; cctx.setLineDash([6, 4]); cctx.lineWidth = 2;
+    cctx.beginPath(); cctx.moveTo(pad.l, Y(ps)); cctx.lineTo(W - pad.r, Y(ps)); cctx.stroke();
+    cctx.setLineDash([]);
+    cctx.fillStyle = C.red; cctx.font = "600 10.5px sans-serif";
+    cctx.fillText(`이 온도에서의 포화 증기 압력 ${(ps / 760).toFixed(2)} atm (${ps.toFixed(0)} mmHg)`,
+      pad.l + 6, Math.max(pad.t + 12, Y(ps) - 5));
+    if (tr.length > 1) {
+      cctx.lineWidth = 2.2; cctx.strokeStyle = C.blue;
+      cctx.beginPath();
+      tr.forEach((p, i) => i ? cctx.lineTo(X(p.s), Y(p.p)) : cctx.moveTo(X(p.s), Y(p.p)));
+      cctx.stroke();
+      const last = tr[tr.length - 1];
+      cctx.fillStyle = C.stageLight; cctx.strokeStyle = C.blue; cctx.lineWidth = 2.6;
+      cctx.beginPath(); cctx.arc(X(last.s), Y(last.p), 5, 0, 6.2832); cctx.fill(); cctx.stroke();
+    } else {
+      cctx.fillStyle = C.t3; cctx.font = "12.5px sans-serif";
+      cctx.fillText("시간이 흐르면 닫힌 용기의 증기 압력 곡선이 그려집니다", pad.l + 8, pad.t + 16);
+    }
+    return;
+  }
+
+  /* ── C-5 4단계 가열 곡선 겹쳐 그리기 ──
      두 실험의 곡선을 한 그래프에. 실선 = 왼쪽(적은 쪽) / 파선 = 오른쪽(많은 쪽) +
      곡선 옆 직접 레이블(매뉴얼 §9 — 색만으로 구분하지 않는다).
-     ★ 가로축은 3단계의 다른 시간 표기와 같은 「화면에서 지나간 시간」이다 (duoTime() 하나만 읽는다).
-       S-검토 A-2: 1·2·4단계의 같은 축 이름은 「실험 시간」이고 「가정과 한계」 ⑤가 그것을 학생에게
-       못 박는다. 3단계만 뜻이 다르므로 축 이름에 그 사실을 적는다. */
-  if (stage === 3) {
+     ★ 가로축은 4단계의 다른 시간 표기와 같은 「화면에서 지나간 시간」이다 (duoTime() 하나만 읽는다).
+       S-검토 A-2: 1·3·5단계의 같은 축 이름은 「실험 시간」이고 「가정과 한계」 ⑤가 그것을 학생에게
+       못 박는다. 4단계만 뜻이 다르므로 축 이름에 그 사실을 적는다. */
+  if (stage === 4) {
     const all = duo.L.trace.concat(duo.R.trace);
     const tmax = Math.max(20, ...all.map(p => duoTime(p.s))) * 1.05;
     const ymax = Math.max(130, ...all.map(p => p.t)) * 1.1;
@@ -762,7 +1264,7 @@ function drawChart() {
 
     /* ── 커서 추적 십자선 (지시안 B-5 · P0 ③ 「손으로 짚기」의 실행 장치) ──
        마우스 y 와 무관하게 **선택된 액체의 곡선 위 값**을 읽어 준다. */
-    if (cursorT != null && stage === 4) {
+    if (cursorT != null && stage === 5) {
       const t = Math.max(x0, Math.min(x1, cursorT));
       const p = vaporP(liq, t);
       const inRange = p <= ymax;
@@ -793,14 +1295,22 @@ function drawChart() {
 }
 
 /* ── 측정값 ── */
+/* 압력 병기 표기의 단일 원천 — 「1.00 atm (760 mmHg)」 (2026-08-24 사용자 지시 · F-1).
+   value 칸에 atm, 뒤 unit 칸에 (mmHg) 를 쓴다. 두 자리·정수 유효숫자 고정(§8). */
+function setPress(idV, idMm, mmhg) {
+  const v = $(idV), m = $(idMm);
+  if (v) v.textContent = mmhg == null ? "–" : (mmhg / 760).toFixed(2);
+  if (m) m.textContent = mmhg == null ? "" : ` (${mmhg.toFixed(0)} mmHg)`;
+}
 function readouts() {
   const Tb = boilingPoint(liq, st.pext);
   const pv = vaporP(liq, st.t);
   $("rT").textContent = st.t.toFixed(1);
-  /* ⑥ 4단계 답 확인 전에는 값 자체를 만들지 않는다. readout 째 숨기는 것은 노출 표(SHOW.roTb)가 한다 */
+  /* ⑥ 5단계 답 확인 전에는 값 자체를 만들지 않는다. readout 째 숨기는 것은 노출 표(SHOW.roTb)가 한다 */
   $("rTb").textContent = gated() ? "–" : Tb.toFixed(1);
-  $("rPv").textContent = pv.toFixed(0);
-  $("rPe").textContent = (st.pext * 760).toFixed(0);
+  /* 압력은 atm 을 앞세우고 mmHg 를 병기한다 — 「1 atm (760 mmHg)」 (2026-08-24 사용자 지시) */
+  setPress("rPv", "rPvMm", pv);
+  setPress("rPe", "rPeMm", st.pext * 760);
   $("rVol").textContent = st.volume.toFixed(0);
   const ro = $("roState");
   ro.classList.remove("is-ok", "is-warn");
@@ -812,11 +1322,11 @@ function readouts() {
     ? "<b>⚠ 여기서부터는 모형이 실제와 다릅니다.</b> 액체가 다 증발하자 화면이 온도를 실온으로 되돌렸습니다. 실제 실험에서는 불을 끄지 않는 한 빈 비커가 계속 뜨거워집니다. <b>액체가 없으므로 위의 포화 증기 압력은 「그 온도의 액체가 가질 값」일 뿐, 빈 비커 안의 상태가 아닙니다.</b>"
     : st.boiling
     ? "포화 증기 압력이 외부 압력과 <b>같아졌습니다</b> → 액체 <b>속에서도</b> 기화가 일어납니다. 이것이 끓음입니다."
-    : `포화 증기 압력 ${pv.toFixed(0)} mmHg &lt; 외부 압력 ${(st.pext * 760).toFixed(0)} mmHg → 아직 <b>표면에서만</b> 증발합니다.`;
-  /* 2단계 결론 — ★ 끓기 시작한 뒤에만, 그리고 화면의 끓는점이 실제로 100 ℃보다 낮을 때만 (J-N5).
+    : `포화 증기 압력 ${(pv / 760).toFixed(2)} atm (${pv.toFixed(0)} mmHg) &lt; 외부 압력 ${st.pext.toFixed(2)} atm (${(st.pext * 760).toFixed(0)} mmHg) → 아직 <b>표면에서만</b> 증발합니다.`;
+  /* 3단계 결론 — ★ 끓기 시작한 뒤에만, 그리고 화면의 끓는점이 실제로 100 ℃보다 낮을 때만 (J-N5).
      설계안 v2 차시 7 ★ 오개념의 원문 처방이다 — 「빨리 끓는다」로 읽히게 쓰지 않는다. */
   const ar = $("altResult");
-  if (ar && stage === 2) {
+  if (ar && stage === 3) {
     const lowered = st.boiling && Tb < 99.95;
     ar.innerHTML = lowered
       ? "끓는점이 낮아졌습니다 — 물이 <b>빨리</b> 끓는 것이 아니라 <b>덜 뜨거운 채로</b> 끓습니다."
@@ -912,10 +1422,10 @@ function applyPextMin() {
 /* ★ 추정 6 — 액체별 권장 배속 (실행 B2 승계 · 어느 실행에도 배정되지 않았던 항목).
    실측(300 W · ×10): 에터 100 mL 는 끓기 시작 0.81 실시간초 · 소진 9.3초, 20 mL 는 0.16초로
    관찰이 불가능하다. 액체를 바꿀 때 값만 자동으로 맞추고 **슬라이더는 그대로 조작 가능**하게 둔다.
-   ⚠ 자유 탐구인 4단계에서만 동작한다 — 1~3단계는 STAGE 표의 lock 이 ×10 으로 잠근다. */
+   ⚠ 자유 탐구인 5단계에서만 동작한다 — 1~4단계는 STAGE 표의 lock 이 ×10 으로 잠근다. */
 const SPEED_BY_LIQ = { ether: 1, ethanol: 5, water: 10, acetic: 10 };
 function applyLiqSpeed() {
-  if (stage !== 4) return;
+  if (stage !== 5) return;
   const el = $("sSpeed"), note = $("speedNote");
   const next = SPEED_BY_LIQ[liq.id];
   if (next == null) return;
@@ -963,71 +1473,83 @@ const STAGE = {
   1: { title: "관찰 — 언제 액체 내부에서 기포가 생길까? (+ 온도계)",
        desc: "물을 가열하면서 온도와 포화 증기 압력이 어떻게 변하는지 봅니다. 포화 증기 압력이 외부 압력과 같아지는 순간을 놓치지 마세요.",
        lock: { liq: "water", vol: 100, pext: 1.00, heat: 300, speed: 10 } },
-  2: { title: "외부 압력을 바꾸면 — 끓는점은 어떻게 되는가? (+ 온도계)",
-       desc: "같은 물, 같은 양, 같은 열원. 외부 압력만 바꿉니다.",
+  2: { title: "관찰 — 열린 용기와 닫힌 용기, 시간이 지나면 어떻게 될까?",
+       desc: "같은 물을 뚜껑 없는 용기와 밀폐한 용기에 담아 나란히 둡니다. 가열하지 않아도 증발은 일어납니다 — 액체의 양, 기체 분자 수, 증기 압력이 시간에 따라 어떻게 되는지 두 용기를 비교하세요.",
+       lock: { liq: "water" } },
+  3: { title: "외부 압력과 가열 출력을 바꾸면 — 끓는점은 어떻게 되는가? (+ 온도계)",
+       desc: "같은 물, 같은 양. 외부 압력과 가열 출력을 한 번에 하나씩 바꿔 보세요 — 무엇이 끓는점을 바꾸고, 무엇이 시간만 바꾸는지 갈립니다.",
        lock: { liq: "water", vol: 100, heat: 300, speed: 10 } },
-  3: { title: "두 비커를 나란히 — 무엇이 같고 무엇이 다른가?",
+  4: { title: "두 비커를 나란히 — 무엇이 같고 무엇이 다른가?",
        desc: "두 비커를 동시에 끓입니다. 무엇이 같고 무엇이 다를까요?",
        lock: { liq: "water", pext: 1.00, heat: 300, speed: 10 } },
-  4: { title: "네 액체 — 자유 탐구 (+ 온도계)",
+  5: { title: "네 액체 — 자유 탐구 (+ 온도계)",
        desc: "네 액체의 곡선입니다. 60 ℃에서의 순서를 먼저 말해 보고, 각 곡선이 760 mmHg와 만나는 점을 찾으세요.",
        lock: {} }
 };
 
-/* 노출 표 (B-3) — [1단계, 2단계, 3단계, 4단계]
-   1 보임 · 0 숨김(display:none) · "A" 「답 확인」 후에만 · null 다른 코드가 판정(◐) */
+/* 노출 표 (B-3) — [1단계, 2단계, 3단계, 4단계, 5단계]
+   1 보임 · 0 숨김(display:none) · "A" 「답 확인」 후에만 · null 다른 코드가 판정(◐)
+   ★ 2026-08-24 개편: 2단계(닫힌 용기) 열이 새로 끼었다. 옛 2·3·4단계는 지금의 3·4·5단계다.
+   ★ 개선 지시(2026-08-24): 3단계에 가열 출력(ctlHeat)을 노출한다 — 외부 압력은 끓는점을
+     바꾸고 가열 출력은 시간만 바꾼다는 것을 학생이 직접 갈라 보게 한다. */
 const SHOW = {
-  namebar:      [0, 0, 0, 1],   // ▣ <details> 안 — summary 문구가 지시안에 없어 접기는 보류(보고 ④)
-  subLiq:       [0, 0, 0, 1],   // .head .sub 의 "네 액체로 직접 확인해 보자."
-  liqpick:      [0, 0, 0, 1],
-  glWrap:       [1, 1, 0, 1],   // ZOOMDEP — 확대 중에는 숨는다
-  zoomWrap:     [1, 1, 0, 1],   // ZOOMDEP — 확대 중일 때만 보인다
-  zoomNote:     [1, 1, 0, 1],   // ZOOMDEP — 41·930 캡션
-  duoWrap:      [0, 0, 1, 0],   // 실행 C 신설
-  duoPreset:    [0, 0, 1, 0],   // 양 프리셋 2개 — 시작 전에만 조작 가능(C-2)
-  gate:         [0, 0, 1, 0],   // 예측 게이트(C-2)
-  duoRo:        [0, 0, 1, 0],   // 좌/우 readout 한 벌씩(A-8 2번)
-  duoConc:      [0, 0, null, 0],// 3단계 결론 — duoConclusion() 이 판정(C-4 · altResult 와 같은 방식)
-  speedNote:    [0, 0, 0, null],// 4단계 액체별 권장 배속 안내 — applyLiqSpeed() 가 판정(추정 6)
-  thermoWrap:   [1, 1, 0, 1],
-  thermolegend: [null, null, null, null],  // drawThermo() 가 마커 노출과 함께 판정(매뉴얼 4부 ⑭)
-  glFallback:   [null, null, null, null],  // ◐ initGL() 실패 시에만. 3단계는 #glWrap 이 함께 감춘다
-  roTemp:       [1, 1, 0, 1],   // 3단계는 좌·우 각각(실행 C)
-  roTb:         [0, 1, 0, "A"], // 3단계에 있으면 예측 게이트의 정답이 미리 뜬다
-  roPv:         [1, 1, 0, 1],
-  roPe:         [1, 1, 1, 1],
-  roVol:        [1, 1, 0, 1],
-  roState:      [1, 1, 0, 1],
-  stateNote:    [1, 1, 0, 1],   // 3단계는 비커별 라벨이 담당(A-8 5번)
-  volNote:      [0, 0, 0, null],// 4단계에서 #sVol 조작 시 4초간(기존 타이머)
-  zoomBtn:      [1, 1, 0, 1],
-  zoomHint:     [1, 1, 0, 1],
-  clockWrap:    [1, 1, 0, 1],   // 3단계는 비커별 「끓기 시작한 시각」이 대신한다(A-8 3번)
-  ctlPext:      [0, 1, 0, 1],
-  altNote:      [0, 1, 0, 0],   // 높은 산 힌트
-  altResult:    [0, null, 0, 0],// 2단계 결론 — readouts() 가 끓기 시작·끓는점 하강을 함께 본다(J-N5)
-  ctlVol:       [0, 0, 0, 1],
-  ctlHeat:      [0, 0, 0, 1],
-  ctlSpeed:     [0, 0, 0, 1],
-  cardDesign:   [0, 0, 1, 1],
-  cardReadout:  [1, 1, 1, 1],
-  cardRecord:   [0, 0, 0, 1],
-  recBtns:      [0, 0, 0, 1],
-  recnote:      [0, 0, 0, 1],
-  fixNote:      [0, 0, 0, 1],
-  liqInfo:      [0, 0, 0, 1],
-  cardChart:    [0, 1, 1, 1],
-  cmodes:       [0, 0, 0, 1],
-  vp60line:     [null, null, null, null],  // updateVp60Line() 가 판정(곡선 모드 + 4단계 + 답 확인 후)
-  answerBtn:    [0, 0, 0, 1],   // 실행 B2 신설
-  answerHint:   [0, 0, 0, 1]    // 커서 추적선 사용 안내 — 곡선 전환 버튼과 같은 단계에만
+  namebar:      [0, 0, 0, 0, 1],   // ▣ <details> 안 — summary 문구가 지시안에 없어 접기는 보류(보고 ④)
+  subLiq:       [0, 0, 0, 0, 1],   // .head .sub 의 "네 액체로 직접 확인해 보자."
+  liqpick:      [0, 0, 0, 0, 1],
+  glWrap:       [1, 0, 1, 0, 1],   // ZOOMDEP — 확대 중에는 숨는다
+  zoomWrap:     [null, null, null, null, null],  // ◐ syncMolVis() — 3D 불가일 때의 2D 확대 폴백
+  molWrap:      [null, null, null, null, null],  // ◐ syncMolVis() — 2단계 3D + 3D 확대 보기
+  zoomCap:      [null, null, null, null, null],  // ◐ syncMolVis() — 3D 확대 캡션(HTML)
+  zoomNote:     [1, 0, 1, 0, 1],   // ZOOMDEP — 41·930 캡션
+  duoWrap:      [0, 0, 0, 1, 0],   // 실행 C 신설
+  duoPreset:    [0, 0, 0, 1, 0],   // 양 프리셋 2개 — 시작 전에만 조작 가능(C-2)
+  gate:         [0, 0, 0, 1, 0],   // 예측 게이트(C-2)
+  duoRo:        [0, 0, 0, 1, 0],   // 좌/우 readout 한 벌씩(A-8 2번)
+  duoConc:      [0, 0, 0, null, 0],// 4단계 결론 — duoConclusion() 이 판정(C-4 · altResult 와 같은 방식)
+  sealHead:     [0, 1, 0, 0, 0],   // 2단계 — 열린/닫힌 용기 머리글
+  sealRo:       [0, 1, 0, 0, 0],   // 2단계 — 두 용기 측정값
+  sealConc:     [0, null, 0, 0, 0],// 2단계 결론 — sealConclusion() 이 판정(동적 평형 도달 후에만)
+  ctlT2:        [0, 1, 0, 0, 0],   // 2단계 — 온도 슬라이더
+  speedNote:    [0, 0, 0, 0, null],// 5단계 액체별 권장 배속 안내 — applyLiqSpeed() 가 판정(추정 6)
+  thermoWrap:   [1, 0, 1, 0, 1],
+  thermolegend: [null, null, null, null, null],  // drawThermo() 가 마커 노출과 함께 판정(매뉴얼 4부 ⑭)
+  glFallback:   [null, null, null, null, null],  // ◐ initGL() 실패 시에만. 2·4단계는 #glWrap 이 함께 감춘다
+  roTemp:       [1, 0, 1, 0, 1],   // 4단계는 좌·우 각각(실행 C)
+  roTb:         [0, 0, 1, 0, "A"], // 4단계에 있으면 예측 게이트의 정답이 미리 뜬다
+  roPv:         [1, 0, 1, 0, 1],
+  roPe:         [1, 0, 1, 1, 1],
+  roVol:        [1, 0, 1, 0, 1],
+  roState:      [1, 0, 1, 0, 1],
+  stateNote:    [1, 0, 1, 0, 1],   // 2·4단계는 용기·비커별 라벨이 담당(A-8 5번)
+  volNote:      [0, 0, 0, 0, null],// 5단계에서 #sVol 조작 시 4초간(기존 타이머)
+  zoomBtn:      [1, 0, 1, 0, 1],
+  zoomHint:     [1, 0, 1, 0, 1],
+  clockWrap:    [1, 0, 1, 0, 1],   // 2단계는 그래프 가로축이, 4단계는 비커별 「끓기 시작한 시각」이 대신한다
+  ctlPext:      [0, 0, 1, 0, 1],
+  altNote:      [0, 0, 1, 0, 0],   // 높은 산 힌트
+  altResult:    [0, 0, null, 0, 0],// 3단계 결론 — readouts() 가 끓기 시작·끓는점 하강을 함께 본다(J-N5)
+  ctlVol:       [0, 0, 0, 0, 1],
+  ctlHeat:      [0, 0, 1, 0, 1],   // ★ 3단계 노출 신설(2026-08-24 지시)
+  ctlSpeed:     [0, 0, 0, 0, 1],
+  cardDesign:   [0, 0, 0, 1, 1],
+  cardReadout:  [1, 1, 1, 1, 1],
+  cardRecord:   [0, 0, 0, 0, 1],
+  recBtns:      [0, 0, 0, 0, 1],
+  recnote:      [0, 0, 0, 0, 1],
+  fixNote:      [0, 0, 0, 0, 1],
+  liqInfo:      [0, 0, 0, 0, 1],
+  cardChart:    [0, 1, 1, 1, 1],   // 2단계는 증기 압력–시간 곡선을 그린다
+  cmodes:       [0, 0, 0, 0, 1],
+  vp60line:     [null, null, null, null, null],  // updateVp60Line() 가 판정(곡선 모드 + 5단계 + 답 확인 후)
+  answerBtn:    [0, 0, 0, 0, 1],   // 실행 B2 신설
+  answerHint:   [0, 0, 0, 0, 1]    // 커서 추적선 사용 안내 — 곡선 전환 버튼과 같은 단계에만
 };
 /* true = 확대 중일 때만 보인다 / false = 확대 중에는 숨는다 */
-const ZOOMDEP = { glWrap: false, zoomWrap: true, zoomNote: true };
+const ZOOMDEP = { glWrap: false, zoomNote: true };
 /* .is-hidden-A{display:none} 를 인라인으로 이겨야 하는 것들 — 빈 문자열은 클래스를 못 이긴다 */
 const BLOCK = { ctlHeat: "block", ctlSpeed: "block" };
 
-const thermoBpShown = () => stage === 4 && answerShown;
+const thermoBpShown = () => stage === 5 && answerShown;
 const thermoAria = () => thermoBpShown()
   ? "온도계. 지금 온도와 네 액체의 끓는점 눈금이 함께 표시됩니다."
   : "온도계. 지금 온도를 표시합니다.";
@@ -1036,7 +1558,7 @@ const thermoAria = () => thermoBpShown()
    답 확인 전에는 **값 계산 자체를 미루고** 요소를 비워 둔다(지시안 B-4 ④ 「값 계산도 미루기」). */
 function updateVp60Line() {
   const el = $("vp60line"); if (!el) return;
-  const show = chartMode === "vp" && stage === 4 && answerShown;
+  const show = chartMode === "vp" && stage === 5 && answerShown;
   el.textContent = show
     ? "60 ℃에서의 포화 증기 압력 — " +
       LIQ.LIST.map(l => `${DISPLAY[l.id].mid} ${vaporP(l, 60).toFixed(0)}`).join(" · ") + " mmHg"
@@ -1068,6 +1590,23 @@ function applyShow() {
     if (id in ZOOMDEP) v = (v && (ZOOMDEP[id] ? zoom : !zoom)) ? 1 : 0;
     el.style.display = v ? (BLOCK[id] || "") : "none";
   }
+  syncMolVis();
+}
+
+/* 3D 분자 캔버스(#molWrap)·2D 확대 폴백(#zoomWrap)·3D 캡션의 판정 — 한 곳에서만 내린다(F-1).
+   확대 보기는 3D(m3d)가 있으면 3D 로, 없으면 기존 2D(drawZoom)로 그린다.
+   2단계는 3D 가 없어도 #molWrap 을 열어 폴백 안내문(#molFallback)을 보인다 —
+   측정값·그래프는 그대로 동작한다(매뉴얼 §1-2 폴백 조항). */
+function syncMolVis() {
+  const zoomOn = zoom && (stage === 1 || stage === 3 || stage === 5);
+  const mw = $("molWrap");
+  if (mw) mw.style.display = (stage === 2 || (zoomOn && m3d)) ? "" : "none";
+  const zw = $("zoomWrap");
+  if (zw) zw.style.display = (zoomOn && !m3d) ? "" : "none";
+  const zc = $("zoomCap");
+  if (zc) zc.style.display = (zoomOn && m3d) ? "" : "none";
+  const mf = $("molFallback");
+  if (mf) mf.style.display = (stage === 2 && !m3d) ? "block" : "none";
 }
 
 function setZoom(v) {
@@ -1094,36 +1633,39 @@ function applyStage(n) {
   answerShown = false;
   zoom = false;
   cursorT = null;
-  running = (n === 3) ? false : !REDUCED;     // 3단계는 예측 게이트를 통과해야 시작한다(실행 C)
+  running = (n === 4) ? false : !REDUCED;     // 4단계는 예측 게이트를 통과해야 시작한다(실행 C)
   $("run").textContent = running ? "일시정지" : "이어서 실험";
   $("zoomBtn").textContent = "분자 크기로 확대해 보기";
   const ab = $("answerBtn");
   if (ab) { ab.textContent = "답 확인"; ab.setAttribute("aria-pressed", "false"); }
   applyLock(n);                                                            // ⑴
   /* answerShown 을 껐으니 답을 품고 있던 것들을 다시 그린다 —
-     4단계에서 답을 켠 채 다른 단계로 갔다가 돌아오면 카드·물성·기록표에 답이 남는다 */
+     5단계에서 답을 켠 채 다른 단계로 갔다가 돌아오면 카드·물성·기록표에 답이 남는다 */
   buildLiquidPicker(); info(); renderTable();
   applyShow();                                                             // ⑵
-  $("stageWrap").classList.toggle("stagewrap--duo", n === 3);
+  /* 2·4단계는 온도계 트랙이 없는 한 칸 배치를 쓴다 */
+  $("stageWrap").classList.toggle("stagewrap--duo", n === 2 || n === 4);
   $("stageTitle").textContent = STAGE[n].title;
-  $("designTitle").textContent = n === 3 ? "무엇을 비교할까?" : "실험 설계 — 무엇을 바꿀지 먼저 정한다";
+  $("designTitle").textContent = n === 4 ? "무엇을 비교할까?" : "실험 설계 — 무엇을 바꿀지 먼저 정한다";
   $("stageDesc").textContent = STAGE[n].desc;                              // ⑶
   $("thermo").setAttribute("aria-label", thermoAria());
-  if (n !== 4) chartMode = "heat";            // 곡선 전환 버튼이 없는 단계에서는 가열 곡선만
+  if (n !== 5) chartMode = "heat";            // 곡선 전환 버튼이 없는 단계에서는 가열 곡선만
   document.querySelectorAll(".cmode").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.mode === chartMode)));
   updateVp60Line();
   document.querySelectorAll(".stg").forEach(b =>                           // ⑷
     b.setAttribute("aria-pressed", String(+b.dataset.stage === n)));
   resetRun();                                                              // ⑸
-  if (n === 3) resetDuo();                   // 3단계는 좌/우 비커도 함께 처음으로 되돌린다
+  if (n === 2) resetSealed();                // 2단계는 두 용기를 처음으로 되돌린다
+  if (n === 4) resetDuo();                   // 4단계는 좌/우 비커도 함께 처음으로 되돌린다
   /* 매뉴얼 §7 — 화면에 primary(파란 채움) 버튼은 최대 1개.
-     3단계에서는 「예측했습니다 — 시작」이 primary 이고 #run 은 일반 버튼이다 */
-  $("run").classList.toggle("primary", n !== 3);
+     4단계에서는 「예측했습니다 — 시작」이 primary 이고 #run 은 일반 버튼이다 */
+  $("run").classList.toggle("primary", n !== 4);
   const gs = $("gateStart");
-  if (gs) gs.classList.toggle("primary", n === 3);
+  if (gs) gs.classList.toggle("primary", n === 4);
   applyPextMin();                                                          // ⑹
   readouts(); drawChart(); drawThermo(); resize();                         // ⑺
-  if (n === 3) { readoutsDuo(); duoConclusion(); drawDuo(); }
+  if (n === 2) { readoutsSealed(); sealConclusion(); drawSealed3D(); }
+  if (n === 4) { readoutsDuo(); duoConclusion(); drawDuo(); }
 }
 
 document.querySelectorAll(".stg").forEach(b => b.onclick = () => {
@@ -1132,7 +1674,7 @@ document.querySelectorAll(".stg").forEach(b => b.onclick = () => {
 });
 
 /* ============================================================
-   3단계 — 나란히 비교 (실행 C · 지시안 C-1 ~ C-5)
+   4단계 — 나란히 비교 (실행 C · 지시안 C-1 ~ C-5)
    ★ 여기서만 쓰는 독립 상태 2벌이다. 다른 단계는 전역 st·trace·clock 을 그대로 쓴다.
    ★ heatStep 은 상태를 인자로 받는 순수 함수라 손대지 않고 2벌을 돌린다(지시안 C-1 ⚠).
    ★ loop() 는 3단계에서 전역 heatStep 을 호출하지 않는다 — 보이지 않는 곳에서
@@ -1148,14 +1690,14 @@ const duo = {
   started: false,                             // 예측 게이트 통과 여부
   L: null, R: null
 };
-/* 3단계는 STAGE 표가 배속을 ×10 으로 잠그고 #sSpeed 를 감춘다.
-   ★ 3단계의 시간 표기(readout「끓기 시작한 시각」· 결론 문구 · 가열 곡선 가로축)는
+/* 4단계는 STAGE 표가 배속을 ×10 으로 잠그고 #sSpeed 를 감춘다.
+   ★ 4단계의 시간 표기(readout「끓기 시작한 시각」· 결론 문구 · 가열 곡선 가로축)는
      전부 이 한 함수를 지난다 — 한 화면 안에서 시간 단위가 어긋나지 않게 하는 단일 원천(F-1). */
-const DUO_SPEED = STAGE[3].lock.speed;
+const DUO_SPEED = STAGE[4].lock.speed;
 const duoTime = s => s / DUO_SPEED;           // 실험 시간(초) → 화면에서 지나간 시간(초)
 
 const duoBeaker = v => ({
-  st: { t: 20, tRoom: 20, volume: v, pext: STAGE[3].lock.pext, heat: STAGE[3].lock.heat, boiling: false },
+  st: { t: 20, tRoom: 20, volume: v, pext: STAGE[4].lock.pext, heat: STAGE[4].lock.heat, boiling: false },
   trace: [], clock: 0, startVol: v,
   boilAt: -1, boilT: null, boilPv: null,      // 끓기 시작한 순간에 붙잡아 둔다 (확정 20)
   pv60: null, pv80: null,                     // 같은 온도를 지날 때의 포화 증기 압력 (C-4 ⑴)
@@ -1215,7 +1757,7 @@ function duoFill(side, b) {
   const t = held ? b.boilT : b.st.t;
   const pv = held ? b.boilPv : vaporP(liq, b.st.t);
   P("-T").textContent = t == null ? "–" : t.toFixed(1);
-  P("-Pv").textContent = pv == null ? "–" : pv.toFixed(0);
+  setPress(side + "-Pv", side + "-PvMm", pv);
   P("-Vol").textContent = b.st.volume.toFixed(0);
   P("-BoilAt").textContent = b.boilAt < 0 ? "–" : duoTime(b.boilAt).toFixed(0);
   const ro = P("-roState");
@@ -1252,7 +1794,7 @@ function duoConclusion() {
       `왼쪽 <b>${duoTime(L.boilAt).toFixed(1)}초</b> · 오른쪽 <b>${duoTime(R.boilAt).toFixed(1)}초</b> (화면에서 지나간 시간).`);
   }
   el.innerHTML = out.join("<br>");
-  el.style.display = (stage === 3 && out.length) ? "" : "none";
+  el.style.display = (stage === 4 && out.length) ? "" : "none";
 }
 
 /* ── C-3 2D 이중 비커 ──
@@ -1355,6 +1897,12 @@ $("gateStart").onclick = () => {
 /* ★ S-검토 A-3: 일시정지 상태에서 압력·출력을 바꾸면 heatStep 이 돌지 않아 st.boiling 이 굳는다.
    그러면 「포화 증기 압력이 외부 압력과 같아졌습니다」가 251 vs 1140 mmHg 위에 뜬다(J-N5).
    조작 즉시 다시 판정한다 — 계산부는 건드리지 않는다. */
+/* 2단계 온도 슬라이더 — 모형은 계속 돌면서 새 온도의 포화 증기 압력을 향해 다시 평형을 찾는다
+   (동적 평형이 「도달하면 끝」이 아니라 조건 변화에 반응하는 상태임을 보여 준다) */
+$("sT2").oninput = e => {
+  $("vT2").textContent = e.target.value;
+  if (seal.st) { seal.st.T = +e.target.value; readoutsSealed(); sealConclusion(); drawChart(); }
+};
 function reBoil() {
   st.boiling = st.volume > 0 && st.heat > 0 && st.t >= boilingPoint(liq, st.pext) - 1e-6;
 }
@@ -1381,8 +1929,10 @@ $("sHeat").oninput = e => { st.heat = +e.target.value; $("vHeat").textContent = 
 $("sSpeed").oninput = e => { $("vSpeed").textContent = e.target.value; };
 $("run").onclick = () => { running = !running; $("run").textContent = running ? "일시정지" : "이어서 실험"; };
 $("reset").onclick = () => {
-  /* 3단계에서는 좌/우 비커를 되돌리고 예측 게이트를 다시 연다(프리셋도 다시 고를 수 있다) */
-  if (stage === 3) { resetDuo(); running = false; $("run").textContent = "이어서 실험";
+  /* 2단계에서는 두 용기를 처음으로(액체 다시 채우기 · 증기 압력 0) */
+  if (stage === 2) { resetSealed(); readoutsSealed(); sealConclusion(); drawSealed3D(); drawChart(); return; }
+  /* 4단계에서는 좌/우 비커를 되돌리고 예측 게이트를 다시 연다(프리셋도 다시 고를 수 있다) */
+  if (stage === 4) { resetDuo(); running = false; $("run").textContent = "이어서 실험";
                      readoutsDuo(); duoConclusion(); drawDuo(); drawChart(); return; }
   resetRun(); readouts(); drawChart(); drawThermo();
 };
@@ -1403,7 +1953,7 @@ $("answerBtn").onclick = () => setAnswer(!answerShown);
    터치에서도 동작해야 하므로 mousemove 가 아니라 pointermove 를 쓴다.
    화면 좌표 → 온도 되돌리기는 drawChart() 가 적어 둔 vpGeo 하나만 읽는다(F-1). */
 function trackCursor(e) {
-  if (stage !== 4 || chartMode !== "vp" || !vpGeo) { cursorT = null; return; }
+  if (stage !== 5 || chartMode !== "vp" || !vpGeo) { cursorT = null; return; }
   const r = ccv.getBoundingClientRect();
   if (!r.width) { cursorT = null; return; }
   const x = (e.clientX - r.left) * (vpGeo.W / r.width);          // CSS px → 캔버스 좌표
@@ -1428,14 +1978,17 @@ function resize() {
   /* 3단계에서는 #glWrap·#zoomWrap 이 숨어 clientWidth 가 0이다 —
      그러면 무대 높이가 늘 320 기준(256 px)으로 고정돼 넓은 화면에서 비커가 작아진다.
      보이는 캔버스(#duo)의 폭을 마지막 대안으로 함께 읽는다 */
-  const w = gcv.clientWidth || zcv.clientWidth || (dcv ? dcv.clientWidth : 0) || 320;
+  const w = gcv.clientWidth || zcv.clientWidth || (dcv ? dcv.clientWidth : 0)
+    || (mcv ? mcv.clientWidth : 0) || 320;
   const h = Math.max(240, Math.min(380, w * 0.80));
   gcv.style.height = h + "px";
   fit2d(zcv, h);
   fit2d(tcv, h);   // 온도계는 비커 캔버스와 높이를 공유한다(3-B)
   if (dcv) fit2d(dcv, h);   // 2D 이중 비커도 같은 높이를 쓴다(실행 C)
+  if (mcv) mcv.style.height = h + "px";   // 3D 분자 캔버스 — 폭·버퍼는 m3dFlush 가 스스로 맞춘다
   fit2d(ccv, Math.max(220, Math.min(300, (ccv.clientWidth || 300) * 0.42)));
   drawGL(); drawZoom(); drawChart(); drawThermo(); drawDuo();
+  if (m3d) { if (stage === 2) drawSealed3D(); else if (zoom) drawZoom3D(); }
 }
 
 /* ── 루프 ── */
@@ -1443,10 +1996,21 @@ let rafId = null, lastT = 0;
 function loop(ts) {
   const dt = lastT ? Math.min(0.1, (ts - lastT) / 1000) : 0;
   lastT = ts;
-  /* ★ 3단계 분기 (A-8 1번) — 전역 heatStep 을 호출하지 않는다.
+  /* ★ 2단계 분기 — 배속 없이 실제 시간으로 돈다(한계 ⑤). 전역 heatStep 을 호출하지 않는다. */
+  if (stage === 2) {
+    if (running && seal.st) {
+      sealedStep(seal.st, liq, dt);
+      sealTrace();
+      sealParticles(dt);
+    }
+    drawSealed3D(); drawChart(); readoutsSealed(); sealConclusion();
+    rafId = requestAnimationFrame(loop);
+    return;
+  }
+  /* ★ 4단계 분기 (A-8 1번) — 전역 heatStep 을 호출하지 않는다.
      여기서 return 하지 않으면 보이지 않는 곳에서 전역 실험이 계속 돌고
-     #vClock·#rT 가 3단계와 무관하게 전진한다(매뉴얼 §10). */
-  if (stage === 3) {
+     #vClock·#rT 가 4단계와 무관하게 전진한다(매뉴얼 §10). */
+  if (stage === 4) {
     if (running && duo.started) stepDuo(dt);
     drawDuo(); drawChart(); readoutsDuo(); duoConclusion();
     rafId = requestAnimationFrame(loop);
@@ -1464,7 +2028,7 @@ function loop(ts) {
       if (trace.length > 3000) trace.shift();
     }
   }
-  if (zoom) drawZoom(); else drawGL();
+  if (zoom) { if (m3d) drawZoom3D(); else drawZoom(); } else drawGL();
   drawChart(); drawThermo(); readouts();
   $("vClock").textContent = clock.toFixed(0);
   rafId = requestAnimationFrame(loop);
@@ -1482,7 +2046,8 @@ window.addEventListener("resize", resize);
    출고 시점에 미리 채워 두면 답 확인 전에 DOM 에 값이 남는다 — 그래서 여기서 계산하지 않는다. */
 
 initGL();
-buildLiquidPicker(); applyPextMin(); info(); resetRun(); resetDuo(); readouts();
+initM3D();              // 3D 공-막대 (2단계 · 분자 확대) — 실패하면 m3d = null 로 폴백
+buildLiquidPicker(); applyPextMin(); info(); resetRun(); resetDuo(); resetSealed(); readouts();
 resize();
 applyStage(1);          // 기본 진입 = 1단계
 rafId = requestAnimationFrame(loop);

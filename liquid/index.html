@@ -82,6 +82,11 @@
   .gatestart{min-height:44px}
   .gatestart[disabled]{opacity:.5; cursor:not-allowed}
   .duoconc{font-size:13px; color:var(--t2); margin:10px 0 0; line-height:1.75}
+  /* 2단계 — 열린/닫힌 용기 머리글 (캔버스 위, 좌우 위치와 맞춘다) */
+  .sealhead{display:flex; gap:8px; margin:0 0 8px}
+  .sealhead span{flex:1 1 0; text-align:center; font-size:13px; font-weight:700; color:var(--t1)}
+  /* 3D 확대 보기 캡션 — 캔버스 안이 아니라 HTML 로 둔다(매뉴얼 4부 ⑦ 권장) */
+  .zoomcap{font-size:12.5px; color:var(--t1); font-weight:700; margin:8px 0 0; line-height:1.6}
   .zoomnote{font-size:12.5px; color:var(--t2); margin:8px 0 0; line-height:1.6}
   .zoombtn-hint{font-size:12.5px; color:var(--t2); margin:6px 0 0}
   .heroRow{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:12px}
@@ -130,9 +135,10 @@
 
 <div class="stages" id="stages" role="group" aria-label="단계 선택">
   <button class="stg tab" data-stage="1" data-tab="1" aria-pressed="true">1. 끓음의 조건</button>
-  <button class="stg tab" data-stage="2" data-tab="2" aria-pressed="false">2. 무엇이 끓는점을 바꾸나</button>
-  <button class="stg tab" data-stage="3" data-tab="3" aria-pressed="false">3. 액체의 양</button>
-  <button class="stg tab" data-stage="4" data-tab="4" aria-pressed="false">4. 네 액체의 곡선</button>
+  <button class="stg tab" data-stage="2" data-tab="2" aria-pressed="false">2. 닫힌 용기의 끓음</button>
+  <button class="stg tab" data-stage="3" data-tab="3" aria-pressed="false">3. 외부 압력과 끓는점</button>
+  <button class="stg tab" data-stage="4" data-tab="4" aria-pressed="false">4. 액체의 양</button>
+  <button class="stg tab" data-stage="5" data-tab="5" aria-pressed="false">5. 네 액체의 곡선</button>
 </div>
 <p class="stagedesc" id="stageDesc"></p>
 
@@ -142,6 +148,9 @@
   <div>
     <div class="card">
       <h2 id="stageTitle">관찰 — 언제 액체 내부에서 기포가 생길까? (+ 온도계)</h2>
+      <div class="sealhead" id="sealHead" style="display:none">
+        <span>열린 용기 (뚜껑 없음)</span><span>닫힌 용기 (밀폐)</span>
+      </div>
       <div class="stagewrap" id="stageWrap">
         <div class="stage stage--light" id="glWrap">
           <canvas id="gl" aria-label="비커에 담긴 액체. 뒤쪽 벽의 줄무늬가 액체를 지나며 굴절되어 좌우가 뒤집혀 보입니다. 끓기 시작하면 바닥에서 기포가 올라오고 액면 위로 증기가 피어오릅니다."></canvas>
@@ -157,11 +166,19 @@
         <div class="stage stage--light" id="duoWrap" style="display:none">
           <canvas id="duo" aria-label="같은 액체를 서로 다른 양으로 담은 비커 두 개를 나란히 가열하는 그림. 왼쪽이 적은 쪽, 오른쪽이 많은 쪽입니다. 끓기 시작하면 바닥에서 기포가 올라옵니다."></canvas>
         </div>
+        <div class="stage stage--light" id="molWrap" style="display:none">
+          <canvas id="mol" aria-label="물 분자를 3차원 공-막대 모형으로 그린 화면. 2단계에서는 열린 용기와 닫힌 용기를 나란히 두고 증발하는 분자와 응축하는 분자를 보여 주고, 분자 확대 보기에서는 액체 표면을 떠나는 분자가 원자로 쪼개지지 않는 것을 보여 줍니다."></canvas>
+          <div id="molFallback" style="display:none; padding:22px 16px; font-size:13.5px; color:var(--t2); line-height:1.7">
+            <b>이 기기에서는 3D 그리기(WebGL)를 쓸 수 없습니다.</b><br>
+            아래 측정값과 그래프로 두 용기의 변화를 그대로 관찰할 수 있습니다.
+          </div>
+        </div>
         <div class="stage stage--light" id="thermoWrap">
           <canvas id="thermo" aria-label="온도계. 지금 온도를 표시합니다."></canvas>
         </div>
       </div>
       <p class="thermolegend" id="thermolegend">에 = 다이에틸에터 · 탄 = 에탄올 · 물 = 물 · 산 = 아세트산</p>
+      <p class="zoomcap" id="zoomCap" style="display:none">아래쪽 = 액체(분자가 서로 닿아 있다) · 위쪽 = 증기(떠난 분자) — 분자가 통째로 떠난다, 분자 안의 결합은 그대로다</p>
       <p class="zoomnote" id="zoomNote" style="display:none">기화 — 분자는 그대로, 분자 <b>사이</b>의 힘을 극복 · H₂O(<i>l</i>) → H₂O(<i>g</i>) : 약 <b>41 kJ/mol</b><br>O–H 결합 <b>2개를 모두 끊어 원자로</b> · H₂O(<i>g</i>) → 2H(<i>g</i>) + O(<i>g</i>) : 약 <b>930 kJ/mol</b></p>
       <p class="duoconc" id="duoConc" style="display:none"></p>
 
@@ -189,6 +206,11 @@
         <p class="fixnote" id="speedNote" style="display:none"></p>
         <p class="altnote" id="altNote" style="display:none">1.00 atm = 평지 · 0.79 atm ≈ 한라산 정상(1,947 m) · 0.33 atm ≈ 에베레스트 정상(8,849 m)</p>
         <p class="statenote" id="altResult" style="display:none"></p>
+      </div>
+      <div class="ctl" id="ctlT2" style="margin-top:12px; display:none">
+        <div class="row"><span>온도 (두 용기 공통)</span><span class="val"><span id="vT2">40</span> ℃</span></div>
+        <input type="range" class="rng-temp" id="sT2" min="20" max="80" step="1" value="40" aria-label="두 용기의 공통 온도 (섭씨)">
+        <div class="rangeends"><span>20 ℃</span><span>여기까지만 조작할 수 있습니다 (교육적 제한)</span><span>80 ℃</span></div>
       </div>
 
       <div class="btns">
@@ -237,9 +259,9 @@
       <h2>측정값</h2>
       <div class="ros">
         <div class="readout" id="roPv"><div class="label">이 온도에서의 포화 증기 압력</div>
-          <div><span class="value" id="rPv">–</span><span class="unit">mmHg</span></div></div>
+          <div><span class="value" id="rPv">–</span><span class="unit">atm</span><span class="unit" id="rPvMm"></span></div></div>
         <div class="readout" id="roPe"><div class="label">외부 압력</div>
-          <div><span class="value" id="rPe">–</span><span class="unit">mmHg</span></div></div>
+          <div><span class="value" id="rPe">–</span><span class="unit">atm</span><span class="unit" id="rPeMm"></span></div></div>
         <div class="readout" id="roVol"><div class="label">남은 액체</div>
           <div><span class="value" id="rVol">–</span><span class="unit">mL</span></div></div>
         <div class="readout" id="roState"><div class="label">상태</div>
@@ -251,7 +273,7 @@
           <div class="readout"><div class="label">지금 온도</div>
             <div><span class="value" id="dL-T">–</span><span class="unit">℃</span></div></div>
           <div class="readout"><div class="label">이 온도에서의 포화 증기 압력</div>
-            <div><span class="value" id="dL-Pv">–</span><span class="unit">mmHg</span></div></div>
+            <div><span class="value" id="dL-Pv">–</span><span class="unit">atm</span><span class="unit" id="dL-PvMm"></span></div></div>
           <div class="readout"><div class="label">남은 액체</div>
             <div><span class="value" id="dL-Vol">–</span><span class="unit">mL</span></div></div>
           <div class="readout" id="dL-roState"><div class="label">상태</div>
@@ -264,7 +286,7 @@
           <div class="readout"><div class="label">지금 온도</div>
             <div><span class="value" id="dR-T">–</span><span class="unit">℃</span></div></div>
           <div class="readout"><div class="label">이 온도에서의 포화 증기 압력</div>
-            <div><span class="value" id="dR-Pv">–</span><span class="unit">mmHg</span></div></div>
+            <div><span class="value" id="dR-Pv">–</span><span class="unit">atm</span><span class="unit" id="dR-PvMm"></span></div></div>
           <div class="readout"><div class="label">남은 액체</div>
             <div><span class="value" id="dR-Vol">–</span><span class="unit">mL</span></div></div>
           <div class="readout" id="dR-roState"><div class="label">상태</div>
@@ -272,6 +294,41 @@
           <div class="readout"><div class="label">끓기 시작 (화면 시간)</div>
             <div><span class="value" id="dR-BoilAt">–</span><span class="unit">초</span></div></div>
         </div>
+      </div>
+      <div id="sealRo" style="display:none">
+        <div class="ros" style="margin-bottom:8px">
+          <div class="readout wide"><div class="label">이 온도에서의 포화 증기 압력</div>
+            <div><span class="value" id="sPsat">–</span><span class="unit">atm</span><span class="unit" id="sPsatMm"></span></div></div>
+        </div>
+        <div class="duoro" style="margin-top:0">
+          <div class="duocol">
+            <div class="duohead">열린 용기 (뚜껑 없음)</div>
+            <div class="readout"><div class="label">남은 액체</div>
+              <div><span class="value" id="sO-Vol">–</span><span class="unit">mL</span></div></div>
+            <div class="readout"><div class="label">증발하는 분자 수</div>
+              <div><span class="value" id="sO-E">–</span><span class="unit">개/초</span></div></div>
+            <div class="readout"><div class="label">되돌아오는(응축) 분자 수</div>
+              <div><span class="value" id="sO-C">–</span><span class="unit">개/초</span></div></div>
+            <div class="readout" id="sO-roState"><div class="label">상태</div>
+              <div><span class="value" id="sO-State" style="font-size:16px">–</span></div></div>
+          </div>
+          <div class="duocol">
+            <div class="duohead">닫힌 용기 (밀폐)</div>
+            <div class="readout"><div class="label">남은 액체</div>
+              <div><span class="value" id="sC-Vol">–</span><span class="unit">mL</span></div></div>
+            <div class="readout"><div class="label">증발하는 분자 수</div>
+              <div><span class="value" id="sC-E">–</span><span class="unit">개/초</span></div></div>
+            <div class="readout"><div class="label">응축하는 분자 수</div>
+              <div><span class="value" id="sC-C">–</span><span class="unit">개/초</span></div></div>
+            <div class="readout"><div class="label">용기 속 기체 분자 수</div>
+              <div><span class="value" id="sC-N">–</span><span class="unit">개</span></div></div>
+            <div class="readout"><div class="label">용기 속 증기 압력</div>
+              <div><span class="value" id="sC-P">–</span><span class="unit">atm</span><span class="unit" id="sC-PMm"></span></div></div>
+            <div class="readout" id="sC-roState"><div class="label">상태</div>
+              <div><span class="value" id="sC-State" style="font-size:16px">–</span></div></div>
+          </div>
+        </div>
+        <p class="duoconc" id="sealConc" style="display:none"></p>
       </div>
       <div class="statenote" id="stateNote"></div>
       <div class="btns" id="recBtns">
@@ -317,8 +374,10 @@
        이 화면은 곡선과 앞뒤가 맞도록 <b>곡선에서 얻은 값</b>을 썼습니다.<br>
     ④ 3D 그림은 비커를 <b>가로 단면</b>으로만 굴절 계산했습니다(세로 방향 굴절은 넣지 않았습니다).
        기포의 크기·개수는 <b>정성적 표현</b>이며 실제 개수가 아닙니다.<br>
-    ⑤ 시간은 <b>×10 배속</b>으로 고정되어 돌아갑니다. 화면의 "경과 초"는 실제 실험 시간이며,
-       화면에서는 그 10분의 1의 시간에 지나갑니다. <b>가열 출력은 300 W로 고정</b>했습니다.<br>
+    ⑤ 시간은 <b>×10 배속</b>으로 고정되어 돌아갑니다(2단계 제외 — 2단계는 실제 시간). 화면의 "경과 초"는 실제 실험 시간이며,
+       화면에서는 그 10분의 1의 시간에 지나갑니다. <b>가열 출력은 1단계에서 300 W로 고정</b>했고,
+       3단계와 5단계에서는 직접 조절할 수 있습니다 — 가열 출력을 바꿔도 <b>끓는점은 변하지 않고</b>
+       끓기까지 걸리는 시간만 달라집니다.<br>
     ⑥ 액체가 끓어 줄어드는 동안 <b>비커 안 압력은 일정</b>하다고 가정했습니다(열린 계).<br>
     ⑦ 분자 그림의 원자 색은 <b>CPK 국제 표준</b>입니다(O 빨강 · H 흰색 · C 진회색).
        원자의 크기 비와 결합 각은 정확하지 않습니다 — 구조를 알아보게 하는 그림입니다.<br>
@@ -340,7 +399,13 @@
        실제 실험에서는 빈 비커가 계속 뜨거워집니다.<br>
     ⑬ 0.79 atm은 한라산 높이(1,947 m)를 <b>표준대기 식으로 환산</b>한 값입니다.
        0.33 atm은 에베레스트 정상(8,849 m)에서 <b>실제로 측정된 기압</b>(약 253 mmHg)입니다 —
-       열대 고위 대기 때문에 표준대기 환산값(약 0.31 atm)보다 높습니다.
+       열대 고위 대기 때문에 표준대기 환산값(약 0.31 atm)보다 높습니다.<br>
+    ⑭ 2단계(닫힌 용기)의 분자 개수와 움직임은 <b>정성적 표현</b>입니다. 화면의 「기체 분자 수」와
+       「개/초」는 실제 개수가 아니라 <b>압력에 비례하도록 환산한 값</b>이고, 닫힌 용기에서 액체가
+       줄어드는 양은 눈에 보이도록 <b>과장</b>했습니다(용기 위 공간이 크다고 가정).
+       닫힌 용기의 증기 압력은 「증발 속도는 온도만의 함수, 응축 속도는 증기 압력에 비례」 모형을 따라
+       그 온도의 포화 증기 압력으로 수렴합니다. 온도를 20~80 ℃로 제한한 것은 이 화면이 <b>가열 없는
+       증발·응축만</b> 다루기 때문입니다 — 100 ℃ 이상의 끓음은 1·3단계가 담당합니다.
   </p>
 </details>
 
