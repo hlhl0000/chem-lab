@@ -135,7 +135,9 @@ const SEAL = {
   V0: 100,                                     // 두 용기의 시작 액체 (mL)
   KP: 0.25,        // 닫힌 용기 압력 접근 속도 (1/s) — 평형까지 십수 초 (관찰 가능한 속도)
   KV: 0.020,       // 열린 용기 증발 속도 (mL/(s·mmHg)) — 40 ℃ 물 100 mL 가 약 90 초에 소진
-  ALPHA: 0.07,     // 닫힌 용기 누적 증발량 환산 (mL/mmHg) — 헤드스페이스 부피 가정(과장 배율, 한계 ⑭)
+  ALPHA: 0.02,     // 닫힌 용기 누적 증발량 환산 (mL/mmHg) — 헤드스페이스 부피 가정(한계 ⑭).
+                   //   80 ℃ 평형에서도 감소가 7 mL 안이라 거시 화면에서 「거의 그대로」로 읽힌다
+                   //   (2026-08-24 2차 지시 — 닫힌 용기는 온도를 올려도 물이 줄지 않는 모습이 먼저다)
   RATE: 0.08       // 분자 수 흐름 환산 (개/(s·mmHg)) — 화면 카운터·입자용 정성 배율
 };
 /* 증발·응축 속도 (개/초) — 증발은 T 만의 함수, 응축은 P 에 비례 */
@@ -213,6 +215,8 @@ uniform float heatAmt;     // 0~1 가열 세기 (바닥 불빛)
 uniform float hotAmt;      // 0~1 액체가 얼마나 뜨거운가
 uniform vec3  tint;        // 액체 색
 uniform float nLiq;        // 액체 굴절률
+uniform float lid;         // 1 = 뚜껑(밀폐) — 2단계 닫힌 용기
+uniform float mist;        // 끓지 않아도 피어오르는 증발 김 (2단계 열린 용기 · 0~1)
 
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float noise(vec2 p){
@@ -244,7 +248,8 @@ void main(){
   float u = q.x / R;                                  // -1..1 (원기둥 가로 위치)
   bool inCyl = abs(u) < 1.0 && q.y > y0 && q.y < y1;
 
-  float liqTop = y0 + (y1 - y0) * (0.06 + 0.80 * fill);
+  /* fill 0 이면 액면을 바닥 아래로 — 「모두 증발」에 물 조각이 남아 보이면 화면 수치와 어긋난다(J-N5) */
+  float liqTop = fill <= 0.001 ? y0 - 0.01 : y0 + (y1 - y0) * (0.06 + 0.80 * fill);
 
   if (inCyl) {
     float shell = sqrt(max(0.0, 1.0 - u*u));          // 원기둥 표면의 깊이 성분
@@ -326,7 +331,15 @@ void main(){
     v += 0.5*noise(vec2(q.x*7.0, q.y*5.0 - time*0.9));
     v /= 1.5;
     float m = smoothstep(0.0,0.35,q.y-liqTop) * smoothstep(1.0,0.25,q.y-liqTop);
-    col = mix(col, vec3(0.97), clamp(v-0.42,0.0,1.0)*m*boilAmt*1.5);
+    col = mix(col, vec3(0.97), clamp(v-0.42,0.0,1.0)*m*(boilAmt*1.5+mist));
+  }
+
+  /* 뚜껑 — 2단계 닫힌 용기(밀폐). 입구를 판으로 덮고 손잡이를 얹는다 */
+  if (lid > 0.5) {
+    float plate = step(abs(q.x), R*1.18) * step(y1, q.y) * step(q.y, y1+0.055);
+    col = mix(col, vec3(0.42,0.47,0.55), plate*0.92);
+    float knob = step(abs(q.x), 0.09) * step(y1+0.055, q.y) * step(q.y, y1+0.135);
+    col = mix(col, vec3(0.36,0.41,0.48), knob*0.92);
   }
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -352,7 +365,7 @@ function initGL() {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
   const loc = gl.getAttribLocation(prog, "p");
   gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  for (const n of ["res", "time", "fill", "boilAmt", "heatAmt", "hotAmt", "tint", "nLiq"])
+  for (const n of ["res", "time", "fill", "boilAmt", "heatAmt", "hotAmt", "tint", "nLiq", "lid", "mist"])
     U[n] = gl.getUniformLocation(prog, n);
   return true;
 }
@@ -372,7 +385,43 @@ function drawGL() {
   gl.uniform1f(U.hotAmt, Math.max(0, Math.min(1, (st.t - st.tRoom) / 90)));
   gl.uniform3f(U.tint, liq.tint[0], liq.tint[1], liq.tint[2]);
   gl.uniform1f(U.nLiq, liq.id === "water" ? 1.333 : liq.id === "ethanol" ? 1.361 : liq.id === "ether" ? 1.353 : 1.372);
+  gl.uniform1f(U.lid, 0.0);
+  gl.uniform1f(U.mist, 0.0);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+/* ── 2단계 거시 화면 — 같은 비커 셰이더로 열린/닫힌 용기 두 개를 좌우에 그린다 (2026-08-24 2차 지시).
+   1단계와 같은 거시 세계에서 「열린 쪽은 물이 줄고, 닫힌 쪽은 온도를 올려도 거의 그대로」를
+   먼저 보인 뒤 『분자 크기로 확대해 보기』로 분자 화면과 전환한다.
+   끓음이 아니므로 boilAmt = 0(기포·격렬한 증기 없음) — 열린 쪽만 mist 로 옅은 증발 김을 준다. */
+function drawGLSeal() {
+  if (!gl || !seal.st) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.round(gcv.clientWidth * dpr));
+  const h = Math.max(1, Math.round((+gcv.style.height.replace("px", "") || 300) * dpr));
+  if (gcv.width !== w || gcv.height !== h) { gcv.width = w; gcv.height = h; }
+  if (gcv.clientWidth < 8) return;          // 숨은 캔버스 (매뉴얼 §5)
+  const s = seal.st;
+  gl.enable(gl.SCISSOR_TEST);
+  const halfW = Math.floor(gcv.width / 2);
+  const one = (x0, vw, vol, lidOn) => {
+    gl.viewport(x0, 0, vw, gcv.height);
+    gl.scissor(x0, 0, vw, gcv.height);
+    gl.uniform2f(U.res, vw, gcv.height);
+    gl.uniform1f(U.time, s.t);
+    gl.uniform1f(U.fill, Math.max(0, Math.min(1, vol / LIQ.VOL.max)));   // 1단계와 같은 눈금
+    gl.uniform1f(U.boilAmt, 0.0);            // 끓지 않는다 — 기포를 그리면 오개념(내부 기화)
+    gl.uniform1f(U.heatAmt, 0.0);            // 열원 없음
+    gl.uniform1f(U.hotAmt, Math.max(0, Math.min(1, (s.T - 20) / 90)));
+    gl.uniform3f(U.tint, liq.tint[0], liq.tint[1], liq.tint[2]);
+    gl.uniform1f(U.nLiq, 1.333);
+    gl.uniform1f(U.lid, lidOn);
+    gl.uniform1f(U.mist, (lidOn > 0.5 || vol <= 0) ? 0.0 : Math.min(0.5, 0.10 + (s.T - 20) * 0.006));
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  };
+  one(0, halfW, s.volOpen, 0.0);
+  one(halfW, gcv.width - halfW, s.volClosed, 1.0);
+  gl.disable(gl.SCISSOR_TEST);
 }
 
 /* ── 분자 확대 보기 (2D 캔버스) — ★★★ '끓는점 = 결합 파괴' 오개념 반박 ──
@@ -1474,7 +1523,7 @@ const STAGE = {
        desc: "물을 가열하면서 온도와 포화 증기 압력이 어떻게 변하는지 봅니다. 포화 증기 압력이 외부 압력과 같아지는 순간을 놓치지 마세요.",
        lock: { liq: "water", vol: 100, pext: 1.00, heat: 300, speed: 10 } },
   2: { title: "관찰 — 열린 용기와 닫힌 용기, 시간이 지나면 어떻게 될까?",
-       desc: "같은 물을 뚜껑 없는 용기와 밀폐한 용기에 담아 나란히 둡니다. 가열하지 않아도 증발은 일어납니다 — 액체의 양, 기체 분자 수, 증기 압력이 시간에 따라 어떻게 되는지 두 용기를 비교하세요.",
+       desc: "같은 물을 뚜껑 없는 용기와 밀폐한 용기에 담아 나란히 둡니다. 가열하지 않아도 증발은 일어납니다 — 온도를 올려 가며 두 용기의 액체의 양을 먼저 비교하고, 『분자 크기로 확대해 보기』로 분자 화면에서 그 이유를 찾으세요.",
        lock: { liq: "water" } },
   3: { title: "외부 압력과 가열 출력을 바꾸면 — 끓는점은 어떻게 되는가? (+ 온도계)",
        desc: "같은 물, 같은 양. 외부 압력과 가열 출력을 한 번에 하나씩 바꿔 보세요 — 무엇이 끓는점을 바꾸고, 무엇이 시간만 바꾸는지 갈립니다.",
@@ -1496,7 +1545,7 @@ const SHOW = {
   namebar:      [0, 0, 0, 0, 1],   // ▣ <details> 안 — summary 문구가 지시안에 없어 접기는 보류(보고 ④)
   subLiq:       [0, 0, 0, 0, 1],   // .head .sub 의 "네 액체로 직접 확인해 보자."
   liqpick:      [0, 0, 0, 0, 1],
-  glWrap:       [1, 0, 1, 0, 1],   // ZOOMDEP — 확대 중에는 숨는다
+  glWrap:       [1, 1, 1, 0, 1],   // ZOOMDEP — 확대 중에는 숨는다. 2단계 거시(두 용기)도 이 캔버스다
   zoomWrap:     [null, null, null, null, null],  // ◐ syncMolVis() — 3D 불가일 때의 2D 확대 폴백
   molWrap:      [null, null, null, null, null],  // ◐ syncMolVis() — 2단계 3D + 3D 확대 보기
   zoomCap:      [null, null, null, null, null],  // ◐ syncMolVis() — 3D 확대 캡션(HTML)
@@ -1522,7 +1571,7 @@ const SHOW = {
   roState:      [1, 0, 1, 0, 1],
   stateNote:    [1, 0, 1, 0, 1],   // 2·4단계는 용기·비커별 라벨이 담당(A-8 5번)
   volNote:      [0, 0, 0, 0, null],// 5단계에서 #sVol 조작 시 4초간(기존 타이머)
-  zoomBtn:      [1, 0, 1, 0, 1],
+  zoomBtn:      [1, 1, 1, 0, 1],   // 2단계도 거시 ↔ 분자 전환(2026-08-24 2차 지시)
   zoomHint:     [1, 0, 1, 0, 1],
   clockWrap:    [1, 0, 1, 0, 1],   // 2단계는 그래프 가로축이, 4단계는 비커별 「끓기 시작한 시각」이 대신한다
   ctlPext:      [0, 0, 1, 0, 1],
@@ -1598,20 +1647,23 @@ function applyShow() {
    2단계는 3D 가 없어도 #molWrap 을 열어 폴백 안내문(#molFallback)을 보인다 —
    측정값·그래프는 그대로 동작한다(매뉴얼 §1-2 폴백 조항). */
 function syncMolVis() {
-  const zoomOn = zoom && (stage === 1 || stage === 3 || stage === 5);
+  /* 2단계도 확대 토글에 참여한다 — 거시(#glWrap · ZOOMDEP가 끔) ↔ 분자(#molWrap) */
+  const zoomOn = zoom && (stage === 1 || stage === 2 || stage === 3 || stage === 5);
   const mw = $("molWrap");
-  if (mw) mw.style.display = (stage === 2 || (zoomOn && m3d)) ? "" : "none";
+  if (mw) mw.style.display = (zoomOn && (m3d || stage === 2)) ? "" : "none";
   const zw = $("zoomWrap");
-  if (zw) zw.style.display = (zoomOn && !m3d) ? "" : "none";
+  if (zw) zw.style.display = (zoomOn && !m3d && stage !== 2) ? "" : "none";
   const zc = $("zoomCap");
   if (zc) zc.style.display = (zoomOn && m3d) ? "" : "none";
   const mf = $("molFallback");
-  if (mf) mf.style.display = (stage === 2 && !m3d) ? "block" : "none";
+  if (mf) mf.style.display = (stage === 2 && zoom && !m3d) ? "block" : "none";
 }
 
 function setZoom(v) {
   zoom = v;
-  $("zoomBtn").textContent = zoom ? "← 비커로 돌아가기" : "분자 크기로 확대해 보기";
+  $("zoomBtn").textContent = zoom
+    ? (stage === 2 ? "← 용기로 돌아가기" : "← 비커로 돌아가기")
+    : "분자 크기로 확대해 보기";
   applyShow();
   resize();
 }
@@ -1662,11 +1714,16 @@ function applyStage(n) {
   $("run").classList.toggle("primary", n !== 4);
   const gs = $("gateStart");
   if (gs) gs.classList.toggle("primary", n === 4);
+  /* 무대 캔버스의 aria-label — 2단계는 두 용기 그림이므로 설명을 바꾼다(J-N 적용 범위) */
+  gcv.setAttribute("aria-label", n === 2
+    ? "뚜껑 없는 용기와 밀폐한 용기에 같은 물을 담아 나란히 둔 그림. 시간이 지나면 열린 용기의 물은 줄어들고, 닫힌 용기의 물은 온도를 올려도 거의 그대로입니다."
+    : GL_ARIA_DEFAULT);
   applyPextMin();                                                          // ⑹
   readouts(); drawChart(); drawThermo(); resize();                         // ⑺
-  if (n === 2) { readoutsSealed(); sealConclusion(); drawSealed3D(); }
+  if (n === 2) { readoutsSealed(); sealConclusion(); }
   if (n === 4) { readoutsDuo(); duoConclusion(); drawDuo(); }
 }
+const GL_ARIA_DEFAULT = gcv.getAttribute("aria-label");
 
 document.querySelectorAll(".stg").forEach(b => b.onclick = () => {
   if (b.disabled) return;
@@ -1987,8 +2044,9 @@ function resize() {
   if (dcv) fit2d(dcv, h);   // 2D 이중 비커도 같은 높이를 쓴다(실행 C)
   if (mcv) mcv.style.height = h + "px";   // 3D 분자 캔버스 — 폭·버퍼는 m3dFlush 가 스스로 맞춘다
   fit2d(ccv, Math.max(220, Math.min(300, (ccv.clientWidth || 300) * 0.42)));
-  drawGL(); drawZoom(); drawChart(); drawThermo(); drawDuo();
-  if (m3d) { if (stage === 2) drawSealed3D(); else if (zoom) drawZoom3D(); }
+  if (stage === 2) drawGLSeal(); else drawGL();
+  drawZoom(); drawChart(); drawThermo(); drawDuo();
+  if (m3d && zoom) { if (stage === 2) drawSealed3D(); else drawZoom3D(); }
 }
 
 /* ── 루프 ── */
@@ -1996,14 +2054,17 @@ let rafId = null, lastT = 0;
 function loop(ts) {
   const dt = lastT ? Math.min(0.1, (ts - lastT) / 1000) : 0;
   lastT = ts;
-  /* ★ 2단계 분기 — 배속 없이 실제 시간으로 돈다(한계 ⑤). 전역 heatStep 을 호출하지 않는다. */
+  /* ★ 2단계 분기 — 배속 없이 실제 시간으로 돈다(한계 ⑤). 전역 heatStep 을 호출하지 않는다.
+     거시(두 용기) ↔ 분자(3D)는 zoom 이 가른다 — 입자 상태는 화면과 무관하게 계속 돌려
+     전환 순간에도 이어진 상태가 보인다. */
   if (stage === 2) {
     if (running && seal.st) {
       sealedStep(seal.st, liq, dt);
       sealTrace();
       sealParticles(dt);
     }
-    drawSealed3D(); drawChart(); readoutsSealed(); sealConclusion();
+    if (zoom) drawSealed3D(); else drawGLSeal();
+    drawChart(); readoutsSealed(); sealConclusion();
     rafId = requestAnimationFrame(loop);
     return;
   }
