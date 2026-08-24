@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>개체군 생존 게임 | 케미랩</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+/* 색은 shared/style.css 토큰만 쓴다. 요소 선택자(button{}, input{})는 쓰지 않는다 (매뉴얼 §12①)
+   이 블록은 Codex 디자인 산출물(_codex_popgame_design.md §2)을 그대로 옮긴 것이다. */
+.popgame-page{
+  padding-top:8px;
+  padding-bottom:32px;
+}
+
+.popgame-head{
+  margin-bottom:8px;
+}
+
+.popgame-title{
+  margin:0 0 2px;
+  color:var(--t1);
+  font-size:22px;
+  font-weight:700;
+  line-height:1.3;
+}
+
+.popgame-sub{
+  margin:0;
+  color:var(--t2);
+  font-size:13.5px;
+}
+
+.progress-panel{
+  padding:10px 12px;
+}
+
+.progress-main{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.progress-copy{
+  min-width:0;
+  flex:1;
+}
+
+.section-title{
+  margin:0;
+  color:var(--t1);
+  font-size:14px;
+  font-weight:700;
+  letter-spacing:.02em;
+}
+
+.subsection-title{
+  margin:0;
+  color:var(--t1);
+  font-size:13.5px;
+  font-weight:700;
+}
+
+.phase-label{
+  margin:2px 0 0;
+  color:var(--t1);
+  font-size:16px;
+  font-weight:700;
+}
+
+.phase-hint{
+  margin:1px 0 0;
+  color:var(--t2);
+  font-size:12px;
+}
+
+.progress-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.action{
+  min-width:44px;
+  min-height:44px;
+  font-family:inherit;
+}
+
+.action-primary{
+  border-color:var(--accent);
+  background:var(--accent);
+  color:var(--panel);
+  font-weight:700;
+}
+
+.action-primary:hover{
+  border-color:var(--accent);
+  background:var(--accent);
+  color:var(--panel);
+}
+
+.phase-pane{
+  display:none;
+}
+
+.phase-pane.is-visible{
+  display:block;
+}
+
+.setup-pane,
+.rules-pane{
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid var(--line);
+}
+
+.field-label{
+  color:var(--t2);
+  font-size:12px;
+  font-weight:700;
+}
+
+.team-count-grid{
+  display:grid;
+  grid-template-columns:repeat(7,minmax(44px,1fr));
+  gap:6px;
+  margin-top:5px;
+}
+
+.team-count.is-active{
+  border-color:var(--accent);
+  background:var(--accent);
+  color:var(--panel);
+  font-weight:700;
+}
+
+.rules-table-wrap,
+.history-table-wrap{
+  overflow-x:auto;
+}
+
+.rules-table,
+.history-table{
+  width:100%;
+  margin-top:6px;
+  border-collapse:collapse;
+  color:var(--t2);
+  font-size:12.5px;
+}
+
+.rules-cell,
+.history-cell{
+  padding:7px 8px;
+  border-bottom:1px solid var(--line);
+  text-align:left;
+  vertical-align:top;
+}
+
+.rules-head,
+.history-head{
+  color:var(--t1);
+  font-weight:700;
+}
+
+.rules-key{
+  width:50%;
+}
+
+.term{
+  color:var(--t1);
+  font-weight:700;
+}
+
+.rules-note{
+  margin:7px 0 0;
+  color:var(--t2);
+  font-size:13.5px;
+}
+
+.team-rail{
+  display:grid;
+  grid-template-columns:repeat(8,minmax(44px,1fr));
+  gap:6px;
+  margin-top:10px;
+}
+
+.team-rail.is-empty{
+  display:none;
+}
+
+.team-tab{
+  min-width:44px;
+  min-height:44px;
+  padding:5px 6px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--panel);
+  color:var(--t2);
+  font-family:inherit;
+  font-size:12px;
+  font-weight:700;
+  line-height:1.25;
+}
+
+.team-tab.is-current{
+  border-color:var(--accent);
+  color:var(--d-blue);
+  box-shadow:var(--shadow);
+}
+
+.team-tab.is-complete{
+  border-style:double;
+  color:var(--d-green);
+}
+
+.team-status{
+  display:block;
+  margin-top:1px;
+  color:var(--t3);
+  font-size:11px;
+  font-weight:600;
+}
+
+.peer-mount{
+  margin-top:6px;
+}
+
+.work-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.45fr) minmax(360px,1fr);
+  gap:12px;
+  margin-top:10px;
+  align-items:start;
+}
+
+.stage-card,
+.control-card{
+  min-width:0;
+  padding:12px;
+}
+
+.card-heading{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:8px;
+}
+
+.card-heading-copy{
+  min-width:0;
+}
+
+.card-subtitle{
+  margin:1px 0 0;
+  color:var(--t2);
+  font-size:12px;
+}
+
+.generation-chip{
+  flex:none;
+  margin:0;
+  padding:4px 8px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  color:var(--d-violet);
+  font-size:12px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+
+.environment-mount{
+  margin-bottom:8px;
+}
+
+.environment-card{
+  padding:12px;
+  border:2px solid var(--d-cyan);
+  border-radius:var(--radius);
+  background:var(--panel);
+  color:var(--t1);
+  text-align:center;
+  box-shadow:var(--shadow-lg);
+}
+
+.environment-kicker{
+  margin:0;
+  color:var(--d-cyan);
+  font-size:12px;
+  font-weight:700;
+}
+
+.environment-name{
+  margin:2px 0;
+  color:var(--t1);
+  font-size:22px;
+  font-weight:700;
+  line-height:1.3;
+}
+
+.environment-range{
+  margin:0;
+  color:var(--t2);
+  font-size:14px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+
+.population-stage{
+  width:100%;
+  background:var(--stage-light);
+}
+
+.population-canvas,
+.histogram-canvas{
+  display:block;
+  width:100%;
+}
+
+.stage-legend{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:7px;
+  color:var(--t2);
+  font-size:12px;
+}
+
+.legend-item{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+}
+
+.legend-mark{
+  display:inline-grid;
+  place-items:center;
+  width:14px;
+  height:14px;
+  flex:none;
+  color:var(--d-red);
+  font-size:14px;
+  font-weight:700;
+  line-height:1;
+}
+
+.alive-mark{
+  border-radius:50%;
+  background:var(--d-blue);
+}
+
+.leaving-mark{
+  border:1px solid var(--d-red);
+  border-radius:50%;
+  background:var(--panel);
+}
+
+.selected-mark{
+  border:3px double var(--d-violet);
+  border-radius:50%;
+  background:var(--panel);
+}
+
+.stage-caption{
+  margin:4px 0 0;
+  color:var(--t3);
+  font-size:11px;
+}
+
+.allocation-grid{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:6px;
+}
+
+.allocation-cell{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+  color:var(--t3);
+  font-size:11px;
+  font-weight:700;
+}
+
+.allocation-index{
+  text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+
+.allocation-input,
+.prediction-input,
+.trace-select{
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--panel);
+  color:var(--t1);
+  font-family:inherit;
+  font-size:16px;
+}
+
+.allocation-input{
+  padding:7px 4px;
+  text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+
+.allocation-input.is-invalid,
+.prediction-input.is-invalid{
+  border-color:var(--d-red);
+  color:var(--d-red);
+}
+
+.allocation-summary{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin-top:9px;
+}
+
+.allocation-readout{
+  min-width:0;
+}
+
+.readout-label{
+  margin:0;
+  color:var(--t3);
+  font-size:11.5px;
+  font-weight:600;
+}
+
+.readout-line{
+  margin:1px 0 0;
+  line-height:1.2;
+}
+
+.readout-value{
+  color:var(--t1);
+  font-size:22px;
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+
+.readout-unit{
+  margin-left:3px;
+  color:var(--t3);
+  font-size:12px;
+  font-weight:500;
+}
+
+.readout-state{
+  margin:3px 0 0;
+  color:var(--t2);
+  font-size:11px;
+}
+
+.readout-state.is-ok{
+  color:var(--d-green);
+  font-weight:700;
+}
+
+.readout-state.is-bad{
+  color:var(--d-red);
+  font-weight:700;
+}
+
+.histogram-panel{
+  margin-top:9px;
+  padding-top:8px;
+  border-top:1px solid var(--line);
+}
+
+.histogram-heading{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:8px;
+}
+
+.histogram-note{
+  margin:0;
+  color:var(--t3);
+  font-size:11px;
+}
+
+.histogram-canvas{
+  height:116px;
+  margin-top:4px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--stage-light);
+}
+
+.prediction-panel{
+  min-width:0;
+  margin:9px 0 0;
+  padding:8px;
+  border:1px solid var(--line);
+  border-radius:8px;
+}
+
+.prediction-field,
+.trace-field{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  margin-top:6px;
+}
+
+.prediction-input,
+.trace-select{
+  padding:7px 8px;
+}
+
+.prediction-note{
+  margin:6px 0 0;
+  color:var(--t2);
+  font-size:11px;
+}
+
+.public-wait-pane{
+  padding:18px 10px;
+  border:2px dashed var(--d-gray);
+  border-radius:var(--radius);
+  text-align:center;
+}
+
+.wait-title{
+  margin:0;
+  color:var(--t1);
+  font-size:16px;
+  font-weight:700;
+}
+
+.wait-copy{
+  margin:3px 0 0;
+  color:var(--t2);
+  font-size:12px;
+}
+
+.single-result-pane{
+  padding-top:2px;
+}
+
+.prediction-actual{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin-top:7px;
+}
+
+.comparison-block{
+  min-width:0;
+  padding:8px;
+  border:1px solid var(--line);
+  border-radius:8px;
+}
+
+.comparison-value{
+  margin:3px 0 0;
+  color:var(--t1);
+  font-size:13.5px;
+  font-weight:600;
+  overflow-wrap:anywhere;
+}
+
+.survival-line{
+  margin:9px 0 0;
+  color:var(--t1);
+  font-size:20px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+
+.trace-pane{
+  margin-top:9px;
+  padding-top:8px;
+  border-top:1px solid var(--line);
+}
+
+.lineage-line{
+  margin:8px 0 0;
+  color:var(--t1);
+  font-size:15px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+
+.lineage-note{
+  margin:3px 0 0;
+  color:var(--d-violet);
+  font-size:12px;
+  font-weight:700;
+}
+
+.history-card{
+  display:none;
+  margin-top:10px;
+  padding:12px;
+}
+
+.history-card.is-visible{
+  display:block;
+}
+
+.history-table{
+  min-width:620px;
+}
+
+.history-cell{
+  font-variant-numeric:tabular-nums;
+}
+
+.limits-sheet{
+  margin-top:10px;
+  padding:12px;
+}
+
+.limits-summary{
+  min-height:44px;
+  padding:10px 0;
+  color:var(--t1);
+  font-size:14px;
+  font-weight:700;
+  cursor:pointer;
+}
+
+.limits-content{
+  color:var(--t2);
+  font-size:13.5px;
+  line-height:1.7;
+}
+
+@media (max-width:1023px){
+  .cols{
+    grid-template-columns:1fr;
+  }
+
+  .allocation-grid{
+    grid-template-columns:repeat(10,minmax(0,1fr));
+  }
+}
+
+@media (max-width:559px){
+  .popgame-title{
+    font-size:20px;
+  }
+
+  .progress-main,
+  .card-heading{
+    align-items:stretch;
+    flex-direction:column;
+  }
+
+  .progress-actions{
+    justify-content:stretch;
+  }
+
+  .progress-actions .action{
+    flex:1;
+  }
+
+  .team-count-grid{
+    grid-template-columns:repeat(4,minmax(44px,1fr));
+  }
+
+  .team-rail{
+    grid-template-columns:repeat(4,minmax(44px,1fr));
+  }
+
+  .allocation-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+
+  .allocation-summary,
+  .prediction-actual{
+    grid-template-columns:1fr;
+  }
+}
+
+@media (pointer:coarse){
+  .action,
+  .team-tab,
+  .allocation-input,
+  .prediction-input,
+  .trace-select,
+  .limits-summary{
+    min-height:44px;
+  }
+
+  .allocation-input,
+  .prediction-input,
+  .trace-select{
+    font-size:16px;
+  }
+}
+
+@media (prefers-reduced-motion:reduce){
+  .environment-card,
+  .legend-mark{
+    animation-duration:.001ms;
+    animation-iteration-count:1;
+    transition-duration:.001ms;
+  }
+}
+
+/* ── v3: 두께별 마릿수 표 ── */
+.counts-table{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:4px 14px;
+  max-height:340px;
+  overflow-y:auto;
+  padding-right:4px;
+}
+.counts-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-height:44px;
+}
+.counts-thick{
+  flex:0 0 52px;
+  font-size:12.5px;
+  color:var(--t2);
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  text-align:right;
+}
+.counts-input{
+  flex:1 1 auto;
+  min-width:0;
+  min-height:44px;
+  padding:6px 8px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--panel);
+  color:var(--t1);
+  font-family:inherit;
+  font-size:15px;
+  text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+.counts-unit{
+  flex:0 0 auto;
+  font-size:11.5px;
+  color:var(--t3);
+}
+@media (max-width:1023px){
+  .counts-table{ grid-template-columns:repeat(2,minmax(0,1fr)); max-height:none; }
+}
+
+
+/* ── v3: 전 조 격자 (교사 화면) ── */
+.allteams-card{ margin-top:12px; }
+.allteams-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+}
+.allteam-cell{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  padding:8px 4px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--panel);
+}
+.allteam-canvas{ width:100%; height:auto; display:block; }
+.allteam-name{ font-size:12.5px; color:var(--t2); font-weight:700; }
+.allteam-count{
+  font-size:15px; color:var(--t1); font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.allteam-count.is-wiped{ color:var(--d-gray); }
+@media (max-width:1023px){
+  .allteams-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
+
+/* ── v3: 교실 모드 PIN 목록 ── */
+.pin-list{ margin-top:8px; padding-top:8px; border-top:1px solid var(--line); }
+.pin-list-title{ margin:0 0 6px; font-size:12px; color:var(--t3); font-weight:700; }
+.pin-row{ display:flex; gap:8px; flex-wrap:wrap; }
+.pin-chip{
+  display:inline-flex; align-items:baseline; gap:6px;
+  padding:5px 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel);
+}
+.pin-chip-name{ font-size:11.5px; color:var(--t3); font-weight:700; }
+.pin-chip-code{
+  font-size:17px; color:var(--t1); font-weight:700; letter-spacing:.12em;
+  font-variant-numeric:tabular-nums;
+}
+
+</style>
+</head>
+<body>
+
+<main class="wrap popgame-page">
+  <header class="popgame-head">
+    <h1 class="popgame-title">개체군 생존 게임</h1>
+    <p class="popgame-sub">개체의 값은 그대로인데 환경에 따라 개체군의 분포가 어떻게 달라지는지 관찰합니다.</p>
+  </header>
+
+  <section class="card progress-panel" aria-labelledby="progressTitle">
+    <div class="progress-main">
+      <div class="progress-copy">
+        <h2 class="section-title" id="progressTitle">진행</h2>
+        <p class="phase-label" id="phaseLabel" aria-live="polite">대기 중</p>
+        <p class="phase-hint" id="phaseHint">시작하면 조 수부터 정합니다.</p>
+      </div>
+      <div class="progress-actions" id="progressActions">
+        <button class="action action-primary" id="startButton" type="button">시작</button>
+      </div>
+    </div>
+
+    <div class="phase-pane setup-pane" id="setupPane">
+      <p class="field-label">조 수</p>
+      <div class="team-count-grid" role="group" aria-label="조 수 선택">
+        <button class="team-count action" type="button" data-count="2">2조</button>
+        <button class="team-count action" type="button" data-count="3">3조</button>
+        <button class="team-count action" type="button" data-count="4">4조</button>
+        <button class="team-count action" type="button" data-count="5">5조</button>
+        <button class="team-count action" type="button" data-count="6">6조</button>
+        <button class="team-count action" type="button" data-count="7">7조</button>
+        <button class="team-count action" type="button" data-count="8">8조</button>
+      </div>
+    </div>
+
+    <div class="phase-pane rules-pane" id="rulesPane">
+      <p class="field-label">게임 조작과 생물학적 의미</p>
+      <div class="rules-table-wrap">
+        <table class="rules-table">
+          <thead class="rules-head"><tr class="rules-row"><th class="rules-cell rules-key">게임 조작</th><th class="rules-cell">비유하는 것</th></tr></thead>
+          <tbody class="rules-body">
+            <tr class="rules-row"><td class="rules-cell rules-key">털 두께가 개체마다 다름</td><td class="rules-cell"><strong class="term">변이</strong></td></tr>
+            <tr class="rules-row"><td class="rules-cell rules-key">환경 카드</td><td class="rules-cell"><strong class="term">환경 변화</strong></td></tr>
+            <tr class="rules-row"><td class="rules-cell rules-key">구간 밖 개체가 사라짐</td><td class="rules-cell"><strong class="term">포식·도태(선택압)</strong></td></tr>
+            <tr class="rules-row"><td class="rules-cell rules-key">생존자만 다음 세대로</td><td class="rules-cell"><strong class="term">증식(형질의 세대 전달)</strong></td></tr>
+            <tr class="rules-row"><td class="rules-cell rules-key">점 한 개 = <strong class="term">개체</strong> · 20개 전체 = <strong class="term">개체군</strong></td><td class="rules-cell"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="rules-note">「자연선택」은 표의 한 칸이 아니라 표 전체가 가리키는 과정입니다.</p>
+    </div>
+
+    <nav class="team-rail" id="teamRail" aria-label="조별 진행 상태"></nav>
+    <div class="peer-mount" id="peerMount"></div>
+  </section>
+
+  <section class="work-grid cols" aria-label="개체 무대와 현재 조 입력">
+    <article class="card stage-card">
+      <div class="card-heading">
+        <div class="card-heading-copy">
+          <h2 class="section-title">개체 무대</h2>
+          <p class="card-subtitle" id="stageTeamLabel">현재 조를 기다리는 중</p>
+        </div>
+        <p class="generation-chip" id="generationLabel">0세대</p>
+      </div>
+
+      <div class="environment-mount" id="environmentMount"></div>
+
+      <div class="stage stage--light population-stage">
+        <canvas class="population-canvas" id="populationCanvas"
+          aria-label="털 두께 1부터 19까지의 가로축 위에 개체를 점으로 쌓아 나타낸 개체군 분포"></canvas>
+      </div>
+
+      <div class="stage-legend" aria-label="개체 무대 범례">
+        <span class="legend-item"><span class="legend-mark alive-mark" aria-hidden="true"></span>살아 있는 개체 (조 색깔 · 두꺼울수록 진하고 큼)</span>
+        <span class="legend-item"><span class="legend-mark leaving-mark" aria-hidden="true">×</span>사라진 개체 (색을 잃습니다)</span>
+        <span class="legend-item"><span class="legend-mark selected-mark" aria-hidden="true"></span>추적 중인 개체</span>
+      </div>
+      <p class="stage-caption" id="stageCaption">점 하나가 개체 한 마리입니다. 원 안의 «자리»는 개체마다 정해져 있고 바뀌지 않습니다 — 자리는 좋고 나쁨이 아닙니다. 조마다 색이 다르고, 털이 두꺼울수록 진하고 큽니다.</p>
+
+      <section class="phase-pane trace-pane" id="tracePane" aria-labelledby="traceTitle">
+        <h3 class="subsection-title" id="traceTitle">개체 추적기</h3>
+        <label class="trace-field">
+          <span class="field-label">추적할 개체</span>
+          <select class="trace-select" id="traceSelect"></select>
+        </label>
+        <p class="lineage-line" id="lineageLine" aria-live="polite"></p>
+        <p class="lineage-note" id="lineageNote"></p>
+      </section>
+    </article>
+
+    <aside class="card control-card">
+      <div class="card-heading">
+        <div class="card-heading-copy">
+          <h2 class="section-title">배분 입력</h2>
+          <p class="card-subtitle" id="controlTeamLabel">현재 조의 종이 기록을 옮겨 적습니다.</p>
+        </div>
+      </div>
+
+      <section class="phase-pane design-pane" id="designPane">
+        <div class="allocation-grid" id="allocationGrid"></div>
+
+        <div class="allocation-summary">
+          <div class="readout allocation-readout" id="remainingReadout">
+            <p class="readout-label">마릿수</p>
+            <p class="readout-line"><span class="readout-value" id="remainingValue">0 / 20</span></p>
+            <p class="readout-state" id="remainingState">두께별 마릿수를 채우세요</p>
+          </div>
+          <div class="readout allocation-readout" id="thicknessReadout">
+            <p class="readout-label">두께 총합</p>
+            <p class="readout-line"><span class="readout-value" id="thicknessTotal">0 / 200</span></p>
+            <p class="readout-state">마릿수 × 두께의 합입니다</p>
+          </div>
+          <div class="readout allocation-readout" id="spreadReadout">
+            <p class="readout-label">분포의 폭</p>
+            <p class="readout-line"><span class="readout-value" id="spreadValue">–</span><span class="readout-unit"> SD</span></p>
+            <p class="readout-state">배분 결과에서 계산됩니다</p>
+          </div>
+        </div>
+
+        <div class="histogram-panel">
+          <div class="histogram-heading">
+            <h3 class="subsection-title">실시간 분포 막대</h3>
+            <p class="histogram-note">입력할 때마다 바뀝니다</p>
+          </div>
+          <canvas class="histogram-canvas" id="histogramCanvas"
+            aria-label="현재 조가 입력한 털 두께별 개체 수 막대그래프"></canvas>
+        </div>
+
+        <fieldset class="prediction-panel">
+          <legend class="field-label">우리 조의 예측</legend>
+          <label class="prediction-field">
+            <span class="field-label">몇 마리가 살아남을 것 같은가 (0~20)</span>
+            <input class="prediction-input" id="survivorPrediction" type="number" min="0" max="20" step="1" inputmode="numeric">
+          </label>
+          <p class="prediction-note">예측은 나중에 실제 결과와 나란히 확인하며 별도 수치로 평가하지 않습니다.</p>
+        </fieldset>
+      </section>
+
+      <section class="phase-pane public-wait-pane" id="publicWaitPane">
+        <p class="wait-title">교사가 환경 카드를 준비하고 있습니다</p>
+        <p class="wait-copy">선택 내용은 공개 순간까지 이 화면에 만들지 않습니다.</p>
+      </section>
+
+      <section class="phase-pane single-result-pane" id="singleResultPane">
+        <div class="prediction-actual">
+          <div class="comparison-block">
+            <p class="readout-label">우리 조의 예측</p>
+            <p class="comparison-value" id="predictionSummary">–</p>
+          </div>
+          <div class="comparison-block">
+            <p class="readout-label">실제 관찰</p>
+            <p class="comparison-value" id="actualSummary">–</p>
+          </div>
+        </div>
+        <p class="survival-line" id="survivalLine" aria-live="polite">생존 –마리</p>
+      </section>
+    </aside>
+  </section>
+
+  <section class="card allteams-card" id="allTeamsCard" aria-labelledby="allTeamsTitle">
+    <div class="card-heading">
+      <div class="card-heading-copy">
+        <h2 class="section-title" id="allTeamsTitle">전체 조</h2>
+        <p class="card-subtitle">조마다 원 하나입니다. 조 순서는 고정이며 결과에 따라 바뀌지 않습니다.</p>
+      </div>
+    </div>
+    <div class="allteams-grid" id="allTeamsGrid"></div>
+  </section>
+
+  <section class="card history-card" id="historyCard" aria-labelledby="historyTitle">
+    <div class="card-heading">
+      <div class="card-heading-copy">
+        <h2 class="section-title" id="historyTitle">라운드 기록</h2>
+        <p class="card-subtitle" id="historyTeamLabel">선택한 한 조의 기록</p>
+      </div>
+    </div>
+    <div class="history-table-wrap">
+      <table class="history-table">
+        <thead class="history-head"><tr class="history-row"><th class="history-cell">라운드</th><th class="history-cell">환경</th><th class="history-cell">예측</th><th class="history-cell">실제 관찰</th></tr></thead>
+        <tbody class="history-body" id="historyBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <details class="card limits-sheet">
+    <summary class="limits-summary">이 게임이 하지 않는 것</summary>
+    <div class="limits-content" id="limitsContent"></div>
+  </details>
+</main>
+
+<div class="site-foot">케미랩</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="popgame"></script>
+<script src="../shared/qr.js" data-base=".." data-current="popgame"></script>
+<script src="sim.js?v=20260824a"></script>
+</body>
+</html>

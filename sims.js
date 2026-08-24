@@ -103,6 +103,16 @@ const SIMS = [
     tags: ["자연선택","변이","획득 형질","용불용설","개체군","진화","아놀도마뱀"]
   },
   {
+    id: "popgame",
+    title: "개체군 생존 게임",
+    cat: "통합과학",
+    path: "popgame/",
+    icon: "popgame",
+    ready: true,
+    desc: "모둠마다 개체 20마리에 형질값을 나눠 담아 제출하면, 환경이 바뀔 때마다 살아남는 범위 밖의 개체가 사라집니다. 개체 하나하나의 값은 끝까지 바뀌지 않는데 무리의 분포만 달라집니다. 똑같이 맞춰 놓은 무리가 다음 환경에서 어떻게 되는지 봅니다.",
+    tags: ["자연선택","변이","개체군","유전적 다양성","진화","환경 변화"]
+  },
+  {
     id: "titration",
     title: "산-염기 적정",
     cat: "산과 염기",
@@ -193,6 +203,12 @@ const ICONS = {
               <path d="M10 45h42" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
               <path d="M16 51c4 5 28 5 32 0" fill="none" stroke="currentColor" stroke-width="3" opacity=".55"/>
               <path d="M48 10v15M43 20l5 5 5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`,
+  popgame:`<circle cx="12" cy="40" r="3.2" fill="currentColor"/>
+<circle cx="22" cy="40" r="3.2" fill="currentColor"/><circle cx="22" cy="32" r="3.2" fill="currentColor"/>
+<circle cx="32" cy="40" r="3.2" fill="currentColor"/><circle cx="32" cy="32" r="3.2" fill="currentColor"/><circle cx="32" cy="24" r="3.2" fill="currentColor"/>
+<circle cx="42" cy="40" r="3.2" fill="currentColor"/><circle cx="42" cy="32" r="3.2" fill="currentColor"/>
+<circle cx="52" cy="40" r="3.2" fill="currentColor"/>
+<path d="M6 46 H58" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>`,
   anolis:`<ellipse cx="30" cy="27" rx="14" ry="9" fill="currentColor"/>
           <path d="M44 27c9-2 11-9 9-16" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
           <circle cx="16" cy="44" r="7" fill="currentColor"/>
