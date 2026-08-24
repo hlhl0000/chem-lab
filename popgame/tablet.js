@@ -27,7 +27,12 @@ const CONFIG = {
 /* ── 개체군 규격 ── */
 const POP = {
   N: 20,        // 개체 수
-  SUM: 200,     // 형질값 총합 (고정) — 평균 10
+  /* ★ v3.1 — 총합을 «고정»에서 «하한»으로 바꿨다(사용자 확정 2026-08-24).
+     딱 맞추는 번거로움을 없애되, 하한이 없으면 겹침 구간(4~7mm)에 전원을 몰아넣은
+     조가 2라운드를 무사 통과해 「다 똑같이 맞추면 위험하다」가 정확히 뒤집힌다(실측).
+     겹침 몰빵의 총합은 최대 7×20 = 140 이므로 하한 150 이 그것을 구조적으로 막는다. */
+  SUM_MIN: 150, // 형질값 총합 «하한»
+  SUM: 200,     // 권장 총합 — 자동 채우기·안내에만 쓴다
   T_MIN: 1,
   T_MAX: 19,
   ROUNDS: 3     // ★ v5 §5 금지 8 과 동형: 바꾸면 C5·C7·§8-2 시간 예산이 전부 무효
@@ -44,15 +49,15 @@ function validateAllocation(alloc) {
     if (t < POP.T_MIN || t > POP.T_MAX) return { ok: false, reason: (i + 1) + "번째 값이 범위 밖이다: " + t };
     s += t;
   }
-  if (s !== POP.SUM) return { ok: false, reason: "총합이 " + POP.SUM + "이 아니다: " + s, sum: s };
+  if (s < POP.SUM_MIN) return { ok: false, reason: "두께 총합이 " + POP.SUM_MIN + " 미만이다: " + s, sum: s };
   return { ok: true, sum: s };
 }
 
-/* 남은 점수 — 배분 화면의 카운터가 이 함수를 부른다(손으로 계산하지 않는다) */
+/* 하한까지 얼마나 모자란가 — 0 이하면 충족 */
 function remaining(alloc) {
   let s = 0;
   for (let i = 0; i < alloc.length; i++) s += (alloc[i] | 0);
-  return POP.SUM - s;
+  return POP.SUM_MIN - s;
 }
 
 /* ── 개체 생성 ──
@@ -225,7 +230,35 @@ function countsTotals(counts) {
     const c = counts[i] | 0;
     n += c; sum += c * (POP.T_MIN + i);
   }
-  return { animals: n, thickness: sum, okAnimals: n === POP.N, okThickness: sum === POP.SUM };
+  return {
+    animals: n, thickness: sum,
+    okAnimals: n === POP.N,
+    okThickness: sum >= POP.SUM_MIN,
+    needThickness: Math.max(0, POP.SUM_MIN - sum),
+    restAnimals: Math.max(0, POP.N - n)
+  };
+}
+
+/* ── v3.1 신설: 자동 채우기 ──
+   남은 마릿수를 «하한을 넘기는 데 필요한 최소 두께»로 채운다.
+   이미 하한을 넘겼으면 중립값(권장 총합의 평균)으로 채운다.
+   반환은 새 counts 배열이고, 채울 수 없으면 null 을 준다(화면이 안내를 낸다). */
+function autoFill(counts) {
+  const T = countsTotals(counts);
+  const rest = T.restAnimals;
+  if (rest <= 0) return null;                       // 이미 20마리
+  const mid = Math.round(POP.SUM / POP.N);          // 중립값 10
+  let per;
+  if (T.needThickness > 0) {
+    per = Math.ceil(T.needThickness / rest);
+    if (per > POP.T_MAX) return null;               // 남은 마릿수로는 하한을 못 넘긴다
+    per = Math.max(POP.T_MIN, Math.min(POP.T_MAX, per));
+  } else {
+    per = mid;
+  }
+  const out = counts.slice();
+  out[per - POP.T_MIN] = (out[per - POP.T_MIN] | 0) + rest;
+  return out;
 }
 
 /* ── v3 신설: 조별 색 (설계지시안 v3 §4-1) ──

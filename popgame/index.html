@@ -799,6 +799,21 @@
   font-variant-numeric:tabular-nums;
 }
 
+
+/* ── v3.1: 배분 도구 · 교실 모드 안내 ── */
+.alloc-tools{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.alloc-autofill{ font-weight:700; }
+.classroom-sheet{ margin-top:12px; }
+.cls-lead{ margin:0 0 8px; font-size:13px; color:var(--t2); line-height:1.6; }
+.cls-steps{ margin:0 0 8px; padding-left:20px; font-size:13px; color:var(--t2); line-height:1.7; }
+.cls-steps li{ margin:3px 0; }
+.cls-code{
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px;
+  background:#f1f3f5; border:1px solid var(--line); border-radius:5px; padding:1px 5px; color:var(--t1);
+}
+.cls-warn{ margin:0 0 6px; font-size:12.5px; color:var(--d-red); line-height:1.6; }
+.cls-note{ margin:0; font-size:12.5px; color:var(--t3); line-height:1.6; }
+
 </style>
 </head>
 <body>
@@ -899,6 +914,10 @@
       </div>
 
       <section class="phase-pane design-pane" id="designPane">
+        <div class="alloc-tools">
+          <button class="action alloc-autofill" id="autoFillButton" type="button">남은 마릿수 자동으로 채우기</button>
+          <button class="action alloc-clear" id="clearButton" type="button">지우기</button>
+        </div>
         <div class="allocation-grid" id="allocationGrid"></div>
 
         <div class="allocation-summary">
@@ -909,7 +928,7 @@
           </div>
           <div class="readout allocation-readout" id="thicknessReadout">
             <p class="readout-label">두께 총합</p>
-            <p class="readout-line"><span class="readout-value" id="thicknessTotal">0 / 200</span></p>
+            <p class="readout-line"><span class="readout-value" id="thicknessTotal">0</span><span class="readout-unit" id="thicknessNeed"> / 150 이상</span></p>
             <p class="readout-state">마릿수 × 두께의 합입니다</p>
           </div>
           <div class="readout allocation-readout" id="spreadReadout">
@@ -983,6 +1002,21 @@
       </table>
     </div>
   </section>
+
+  <details class="card classroom-sheet" id="classroomSheet">
+    <summary class="limits-summary">학생 태블릿으로 조별 화면 보기 (교실 모드)</summary>
+    <div class="limits-content">
+      <p class="cls-lead">각 모둠이 태블릿으로 <strong>자기 조 개체군만</strong> 실시간으로 보게 하려면, 교사 컴퓨터에서 작은 서버를 하나 켜야 합니다. 이 사이트만으로는 기기 사이에 자료를 보낼 방법이 없기 때문입니다.</p>
+      <ol class="cls-steps">
+        <li>교사 컴퓨터에서 <code class="cls-code">popgame_server.js</code> 를 실행합니다 (Node 필요).</li>
+        <li>검은 창에 <strong>교사 화면 주소</strong>와 <strong>학생 태블릿 주소</strong>가 뜹니다. 태블릿 주소를 칠판에 적으세요.</li>
+        <li>교사 화면에서 조 수를 고르면 <strong>조별 PIN 네 자리</strong>가 이 페이지에 나타납니다.</li>
+        <li>학생은 태블릿에서 그 주소를 열고 자기 조 PIN을 넣습니다.</li>
+      </ol>
+      <p class="cls-warn">⚠ 학교 와이파이가 기기 사이 통신을 막으면 태블릿이 닿지 못합니다. <strong>수업 전에 태블릿 한 대로 확인하세요.</strong></p>
+      <p class="cls-note">서버 없이도 수업은 됩니다 — 이 화면 하나로 전체 조가 원으로 나타납니다. 태블릿은 추가 기능입니다.</p>
+    </div>
+  </details>
 
   <details class="card limits-sheet">
     <summary class="limits-summary">이 게임이 하지 않는 것</summary>
