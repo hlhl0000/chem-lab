@@ -904,7 +904,7 @@ function drawVessel(cx, closed) {
   }
 }
 function drawSealed3D() {
-  if (!m3d || !seal.st || stage !== 2) return;
+  if (!m3d || !seal.st || stage !== 1) return;
   m3dBegin(0, -0.30);
   drawVessel(VES.cxO, false);
   drawVessel(VES.cxC, true);
@@ -948,7 +948,7 @@ function sealConclusion() {
   if (s.volOpen <= 0)
     out.push(`열린 용기 — 떠난 분자가 되돌아오지 못해 액체가 <b>모두 증발</b>했습니다.`);
   el.innerHTML = out.join("<br>");
-  el.style.display = (stage === 2 && out.length) ? "" : "none";
+  el.style.display = (stage === 1 && out.length) ? "" : "none";
 }
 
 /* ── 온도계 (§3-B) — 비커 무대 오른쪽 별도 2D 캔버스.
@@ -988,12 +988,34 @@ function drawThermo() {
   tctx.strokeRect(tubeX - tubeW / 2, y1, tubeW, y0 - y1);
   tctx.beginPath(); tctx.arc(tubeX, y0, bulbR, 0, 6.2832); tctx.stroke();
 
-  // 액주 — 구근에서 현재 온도까지 --d-red로 채움. 범위 밖은 양끝에서 자른다
-  const tClamped = Math.max(TMIN, Math.min(TMAX, st.t));
-  const colY = Y(tClamped);
-  tctx.fillStyle = C.red;
-  tctx.beginPath(); tctx.arc(tubeX, y0, bulbR - 1, 0, 6.2832); tctx.fill();
-  tctx.fillRect(tubeX - tubeW / 2 + 1, colY, tubeW - 2, y0 - colY + bulbR);
+  if (stage === 4 && duo.L && duo.R) {
+    /* ── 4단계 — 두 비커의 온도를 좌/우 반쪽 액주로 나란히 (2026-08-25 지시).
+       색은 가열 곡선과 같은 배정(왼쪽 = --d-blue, 오른쪽 = --d-gray) + 「왼/오」 직접 레이블(§9).
+       소진된 비커는 duoFill 과 같은 규칙(붙잡아 둔 값)을 읽는다 — 판정을 두 곳에서 내리지 않는다. */
+    const tL = Math.max(TMIN, Math.min(TMAX, duoTemp(duo.L)));
+    const tR = Math.max(TMIN, Math.min(TMAX, duoTemp(duo.R)));
+    const yL2 = Y(tL), yR2 = Y(tR);
+    const half = (tubeW - 2) / 2;
+    tctx.fillStyle = C.blue;
+    tctx.beginPath(); tctx.arc(tubeX, y0, bulbR - 1, 1.5708, 4.7124); tctx.fill();
+    tctx.fillRect(tubeX - tubeW / 2 + 1, yL2, half, y0 - yL2 + bulbR);
+    tctx.fillStyle = C.gray;
+    tctx.beginPath(); tctx.arc(tubeX, y0, bulbR - 1, -1.5708, 1.5708); tctx.fill();
+    tctx.fillRect(tubeX + tubeW / 2 - 1 - half, yR2, half, y0 - yR2 + bulbR);
+    /* 「왼/오」 레이블 — 각 액주 꼭대기 오른쪽. 겹치면 위아래로 벌린다 */
+    tctx.font = "700 12px sans-serif"; tctx.textAlign = "left"; tctx.textBaseline = "middle";
+    let ly1 = yL2, ly2 = yR2;
+    if (Math.abs(ly1 - ly2) < 13) { const mid = (ly1 + ly2) / 2; ly1 = mid - 6.5; ly2 = mid + 6.5; }
+    tctx.fillStyle = C.blue; tctx.fillText("왼", afterTubeX, Math.max(y1 + 6, ly1));
+    tctx.fillStyle = C.gray; tctx.fillText("오", afterTubeX, Math.max(y1 + 6, ly2));
+  } else {
+    // 액주 — 구근에서 현재 온도까지 --d-red로 채움. 범위 밖은 양끝에서 자른다
+    const tClamped = Math.max(TMIN, Math.min(TMAX, st.t));
+    const colY = Y(tClamped);
+    tctx.fillStyle = C.red;
+    tctx.beginPath(); tctx.arc(tubeX, y0, bulbR - 1, 0, 6.2832); tctx.fill();
+    tctx.fillRect(tubeX - tubeW / 2 + 1, colY, tubeW - 2, y0 - colY + bulbR);
+  }
 
   // 눈금선 10 ℃ 간격 + 숫자 20 ℃ 간격(눈금 숫자는 유리관 왼쪽)
   tctx.textAlign = "right"; tctx.textBaseline = "middle";
@@ -1075,10 +1097,10 @@ function drawChart() {
     cctx.textAlign = "left";
   };
 
-  /* ── 2단계 — 닫힌 용기의 증기 압력–시간 곡선 ──
+  /* ── 1단계(증발) — 닫힌 용기의 증기 압력–시간 곡선 ──
      학습지 ①·②의 관찰 본체: 압력이 점점 늘다가(증발 > 응축) 포화 증기 압력에서
      일정해진다(동적 평형). 점선 = 이 온도에서의 포화 증기 압력. */
-  if (stage === 2) {
+  if (stage === 1) {
     const s2 = seal.st;
     const tr = seal.trace;
     const ps = vaporP(liq, s2 ? s2.T : SEAL.T.def);
@@ -1143,7 +1165,8 @@ function drawChart() {
          나중에 그린 레이블이 앞의 것을 덮는다(실측 C2-boiling-1194 — 「50 mL」가 사라졌다).
          끓기 시작 시각은 두 비커가 서로 다르므로 겹치지 않는다. */
       const anchor = b.trace.find(p => p.b) || b.trace[b.trace.length - 1];
-      const lab = `${b.startVol} mL`;
+      /* 2라운드는 다른 변인(가열 출력)이 레이블이다 (2026-08-25) */
+      const lab = duo.round === 2 ? `${b.st.heat} W` : `${b.startVol} mL`;
       cctx.font = "700 12px sans-serif";
       const lw = cctx.measureText(lab).width;
       let lx = X(duoTime(anchor.s)) + 8;
@@ -1519,17 +1542,19 @@ function info() {
    ★ 요소는 B1 → B2 → C 로 늘어난다. 없는 요소는 조용히 건너뛴다.
    ============================================================ */
 const STAGE = {
-  1: { title: "관찰 — 언제 액체 내부에서 기포가 생길까? (+ 온도계)",
-       desc: "물을 가열하면서 온도와 포화 증기 압력이 어떻게 변하는지 봅니다. 포화 증기 압력이 외부 압력과 같아지는 순간을 놓치지 마세요.",
-       lock: { liq: "water", vol: 100, pext: 1.00, heat: 300, speed: 10 } },
-  2: { title: "관찰 — 열린 용기와 닫힌 용기, 시간이 지나면 어떻게 될까?",
+  /* ★ 2026-08-25 피드백 반영: 증발 탭이 1단계로 왔다(끓음보다 증발이 먼저 — 학습지 순서).
+     옛 1단계(끓음의 조건)는 2단계다. 「액체의 양」은 4단계 그대로. */
+  1: { title: "관찰 — 열린 용기와 닫힌 용기, 시간이 지나면 어떻게 될까?",
        desc: "같은 물을 뚜껑 없는 용기와 밀폐한 용기에 담아 나란히 둡니다. 가열하지 않아도 증발은 일어납니다 — 온도를 올려 가며 두 용기의 액체의 양을 먼저 비교하고, 『분자 크기로 확대해 보기』로 분자 화면에서 그 이유를 찾으세요.",
        lock: { liq: "water" } },
+  2: { title: "관찰 — 언제 액체 내부에서 기포가 생길까? (+ 온도계)",
+       desc: "물을 가열하면서 온도와 포화 증기 압력이 어떻게 변하는지 봅니다. 포화 증기 압력이 외부 압력과 같아지는 순간을 놓치지 마세요.",
+       lock: { liq: "water", vol: 100, pext: 1.00, heat: 300, speed: 10 } },
   3: { title: "외부 압력과 가열 출력을 바꾸면 — 끓는점은 어떻게 되는가? (+ 온도계)",
        desc: "같은 물, 같은 양. 외부 압력과 가열 출력을 한 번에 하나씩 바꿔 보세요 — 무엇이 끓는점을 바꾸고, 무엇이 시간만 바꾸는지 갈립니다.",
        lock: { liq: "water", vol: 100, heat: 300, speed: 10 } },
-  4: { title: "두 비커를 나란히 — 무엇이 같고 무엇이 다른가?",
-       desc: "두 비커를 동시에 끓입니다. 무엇이 같고 무엇이 다를까요?",
+  4: { title: "두 비커를 나란히 — 무엇이 같고 무엇이 다른가? (+ 온도계)",
+       desc: "두 비커를 동시에 끓입니다. 먼저 양을 다르게, 다음엔 불의 세기를 다르게 — 무엇이 끓는점을 바꾸고 무엇이 시간만 바꿀까요?",
        lock: { liq: "water", pext: 1.00, heat: 300, speed: 10 } },
   5: { title: "네 액체 — 자유 탐구 (+ 온도계)",
        desc: "네 액체의 곡선입니다. 60 ℃에서의 순서를 먼저 말해 보고, 각 곡선이 760 mmHg와 만나는 점을 찾으세요.",
@@ -1542,38 +1567,42 @@ const STAGE = {
    ★ 개선 지시(2026-08-24): 3단계에 가열 출력(ctlHeat)을 노출한다 — 외부 압력은 끓는점을
      바꾸고 가열 출력은 시간만 바꾼다는 것을 학생이 직접 갈라 보게 한다. */
 const SHOW = {
+  /* ★ 2026-08-25: 1열 = 증발 탭, 2열 = 끓음의 조건(옛 1열). 4단계는 온도계 노출 + 2라운드 신설 */
   namebar:      [0, 0, 0, 0, 1],   // ▣ <details> 안 — summary 문구가 지시안에 없어 접기는 보류(보고 ④)
   subLiq:       [0, 0, 0, 0, 1],   // .head .sub 의 "네 액체로 직접 확인해 보자."
   liqpick:      [0, 0, 0, 0, 1],
-  glWrap:       [1, 1, 1, 0, 1],   // ZOOMDEP — 확대 중에는 숨는다. 2단계 거시(두 용기)도 이 캔버스다
+  glWrap:       [1, 1, 1, 0, 1],   // ZOOMDEP — 확대 중에는 숨는다. 1단계 거시(두 용기)도 이 캔버스다
   zoomWrap:     [null, null, null, null, null],  // ◐ syncMolVis() — 3D 불가일 때의 2D 확대 폴백
-  molWrap:      [null, null, null, null, null],  // ◐ syncMolVis() — 2단계 3D + 3D 확대 보기
+  molWrap:      [null, null, null, null, null],  // ◐ syncMolVis() — 1단계 3D + 3D 확대 보기
   zoomCap:      [null, null, null, null, null],  // ◐ syncMolVis() — 3D 확대 캡션(HTML)
-  zoomNote:     [1, 0, 1, 0, 1],   // ZOOMDEP — 41·930 캡션
+  zoomNote:     [0, 1, 1, 0, 1],   // ZOOMDEP — 41·930 캡션
   duoWrap:      [0, 0, 0, 1, 0],   // 실행 C 신설
-  duoPreset:    [0, 0, 0, 1, 0],   // 양 프리셋 2개 — 시작 전에만 조작 가능(C-2)
-  gate:         [0, 0, 0, 1, 0],   // 예측 게이트(C-2)
+  duoPreset:    [0, 0, 0, null, 0],// ◐ syncDuoVis() — 1라운드(양)에서만
+  gate:         [0, 0, 0, null, 0],// ◐ syncDuoVis() — 1라운드 예측 게이트(C-2)
+  gate2:        [0, 0, 0, null, 0],// ◐ syncDuoVis() — 2라운드(열량) 예측 게이트 (2026-08-25 신설)
+  round2Btn:    [0, 0, 0, null, 0],// ◐ syncDuoVis() — 1라운드 완료 후에만
   duoRo:        [0, 0, 0, 1, 0],   // 좌/우 readout 한 벌씩(A-8 2번)
   duoConc:      [0, 0, 0, null, 0],// 4단계 결론 — duoConclusion() 이 판정(C-4 · altResult 와 같은 방식)
-  sealHead:     [0, 1, 0, 0, 0],   // 2단계 — 열린/닫힌 용기 머리글
-  sealRo:       [0, 1, 0, 0, 0],   // 2단계 — 두 용기 측정값
-  sealConc:     [0, null, 0, 0, 0],// 2단계 결론 — sealConclusion() 이 판정(동적 평형 도달 후에만)
-  ctlT2:        [0, 1, 0, 0, 0],   // 2단계 — 온도 슬라이더
+  sealHead:     [1, 0, 0, 0, 0],   // 1단계 — 열린/닫힌 용기 머리글
+  sealRo:       [1, 0, 0, 0, 0],   // 1단계 — 두 용기 측정값
+  sealConc:     [null, 0, 0, 0, 0],// 1단계 결론 — sealConclusion() 이 판정(동적 평형 도달 후에만)
+  ctlT2:        [1, 0, 0, 0, 0],   // 1단계 — 온도 슬라이더
+  ctlSealSpd:   [1, 0, 0, 0, 0],   // 1단계 — 시간 배속 (2026-08-25 피드백)
   speedNote:    [0, 0, 0, 0, null],// 5단계 액체별 권장 배속 안내 — applyLiqSpeed() 가 판정(추정 6)
-  thermoWrap:   [1, 0, 1, 0, 1],
+  thermoWrap:   [0, 1, 1, 1, 1],   // ★ 4단계도 온도계(왼/오 두 액주 · 2026-08-25 지시)
   thermolegend: [null, null, null, null, null],  // drawThermo() 가 마커 노출과 함께 판정(매뉴얼 4부 ⑭)
-  glFallback:   [null, null, null, null, null],  // ◐ initGL() 실패 시에만. 2·4단계는 #glWrap 이 함께 감춘다
-  roTemp:       [1, 0, 1, 0, 1],   // 4단계는 좌·우 각각(실행 C)
+  glFallback:   [null, null, null, null, null],  // ◐ initGL() 실패 시에만
+  roTemp:       [0, 1, 1, 0, 1],   // 4단계는 좌·우 각각(실행 C)
   roTb:         [0, 0, 1, 0, "A"], // 4단계에 있으면 예측 게이트의 정답이 미리 뜬다
-  roPv:         [1, 0, 1, 0, 1],
-  roPe:         [1, 0, 1, 1, 1],
-  roVol:        [1, 0, 1, 0, 1],
-  roState:      [1, 0, 1, 0, 1],
-  stateNote:    [1, 0, 1, 0, 1],   // 2·4단계는 용기·비커별 라벨이 담당(A-8 5번)
+  roPv:         [0, 1, 1, 0, 1],
+  roPe:         [0, 1, 1, 1, 1],
+  roVol:        [0, 1, 1, 0, 1],
+  roState:      [0, 1, 1, 0, 1],
+  stateNote:    [0, 1, 1, 0, 1],   // 1·4단계는 용기·비커별 라벨이 담당(A-8 5번)
   volNote:      [0, 0, 0, 0, null],// 5단계에서 #sVol 조작 시 4초간(기존 타이머)
-  zoomBtn:      [1, 1, 1, 0, 1],   // 2단계도 거시 ↔ 분자 전환(2026-08-24 2차 지시)
-  zoomHint:     [1, 0, 1, 0, 1],
-  clockWrap:    [1, 0, 1, 0, 1],   // 2단계는 그래프 가로축이, 4단계는 비커별 「끓기 시작한 시각」이 대신한다
+  zoomBtn:      [1, 1, 1, 0, 1],   // 1단계도 거시 ↔ 분자 전환(2026-08-24 2차 지시)
+  zoomHint:     [0, 1, 1, 0, 1],
+  clockWrap:    [0, 1, 1, 0, 1],   // 1단계는 그래프 가로축이, 4단계는 비커별 「끓기 시작한 시각」이 대신한다
   ctlPext:      [0, 0, 1, 0, 1],
   altNote:      [0, 0, 1, 0, 0],   // 높은 산 힌트
   altResult:    [0, 0, null, 0, 0],// 3단계 결론 — readouts() 가 끓기 시작·끓는점 하강을 함께 본다(J-N5)
@@ -1587,7 +1616,7 @@ const SHOW = {
   recnote:      [0, 0, 0, 0, 1],
   fixNote:      [0, 0, 0, 0, 1],
   liqInfo:      [0, 0, 0, 0, 1],
-  cardChart:    [0, 1, 1, 1, 1],   // 2단계는 증기 압력–시간 곡선을 그린다
+  cardChart:    [1, 0, 1, 1, 1],   // 1단계는 증기 압력–시간 곡선을 그린다
   cmodes:       [0, 0, 0, 0, 1],
   vp60line:     [null, null, null, null, null],  // updateVp60Line() 가 판정(곡선 모드 + 5단계 + 답 확인 후)
   answerBtn:    [0, 0, 0, 0, 1],   // 실행 B2 신설
@@ -1599,7 +1628,9 @@ const ZOOMDEP = { glWrap: false, zoomNote: true };
 const BLOCK = { ctlHeat: "block", ctlSpeed: "block" };
 
 const thermoBpShown = () => stage === 5 && answerShown;
-const thermoAria = () => thermoBpShown()
+const thermoAria = () => stage === 4
+  ? "온도계. 왼쪽 비커(파란 액주)와 오른쪽 비커(회색 액주)의 지금 온도를 나란히 표시합니다."
+  : thermoBpShown()
   ? "온도계. 지금 온도와 네 액체의 끓는점 눈금이 함께 표시됩니다."
   : "온도계. 지금 온도를 표시합니다.";
 
@@ -1640,29 +1671,48 @@ function applyShow() {
     el.style.display = v ? (BLOCK[id] || "") : "none";
   }
   syncMolVis();
+  syncDuoVis();
 }
 
 /* 3D 분자 캔버스(#molWrap)·2D 확대 폴백(#zoomWrap)·3D 캡션의 판정 — 한 곳에서만 내린다(F-1).
    확대 보기는 3D(m3d)가 있으면 3D 로, 없으면 기존 2D(drawZoom)로 그린다.
-   2단계는 3D 가 없어도 #molWrap 을 열어 폴백 안내문(#molFallback)을 보인다 —
+   1단계(증발)는 3D 가 없어도 #molWrap 을 열어 폴백 안내문(#molFallback)을 보인다 —
    측정값·그래프는 그대로 동작한다(매뉴얼 §1-2 폴백 조항). */
 function syncMolVis() {
-  /* 2단계도 확대 토글에 참여한다 — 거시(#glWrap · ZOOMDEP가 끔) ↔ 분자(#molWrap) */
-  const zoomOn = zoom && (stage === 1 || stage === 2 || stage === 3 || stage === 5);
+  /* 증발 탭도 확대 토글에 참여한다 — 거시(#glWrap · ZOOMDEP가 끔) ↔ 분자(#molWrap) */
+  const zoomOn = zoom && stage !== 4;
   const mw = $("molWrap");
-  if (mw) mw.style.display = (zoomOn && (m3d || stage === 2)) ? "" : "none";
+  if (mw) mw.style.display = (zoomOn && (m3d || stage === 1)) ? "" : "none";
   const zw = $("zoomWrap");
-  if (zw) zw.style.display = (zoomOn && !m3d && stage !== 2) ? "" : "none";
+  if (zw) zw.style.display = (zoomOn && !m3d && stage !== 1) ? "" : "none";
   const zc = $("zoomCap");
   if (zc) zc.style.display = (zoomOn && m3d) ? "" : "none";
   const mf = $("molFallback");
-  if (mf) mf.style.display = (stage === 2 && zoom && !m3d) ? "block" : "none";
+  if (mf) mf.style.display = (stage === 1 && zoom && !m3d) ? "block" : "none";
+}
+
+/* 4단계 2라운드 요소의 판정 — 한 곳에서만 내린다(F-1 · 2026-08-25 신설).
+   1라운드 = 액체의 양(프리셋 + 게이트 1), 2라운드 = 가열 출력(게이트 2).
+   「다음 탐구」 버튼은 1라운드에서 두 비커가 모두 끓기 시작한 뒤에만 뜬다.
+   primary(파란 채움)는 화면에 1개(§7) — 지금 눌러야 할 버튼 하나만 primary 로 옮긴다. */
+function syncDuoVis() {
+  const on = stage === 4;
+  const r1 = on && duo.round === 1, r2 = on && duo.round === 2;
+  const done1 = r1 && duo.L && duo.L.boilAt >= 0 && duo.R.boilAt >= 0;
+  const p = $("duoPreset"); if (p) p.style.display = r1 ? "" : "none";
+  const g1 = $("gate"); if (g1) g1.style.display = r1 ? "" : "none";
+  const g2 = $("gate2"); if (g2) g2.style.display = r2 ? "" : "none";
+  const rb = $("round2Btn"); if (rb) rb.style.display = done1 ? "" : "none";
+  const gs = $("gateStart"), g2s = $("gate2Start");
+  if (gs) gs.classList.toggle("primary", r1 && !done1);
+  if (rb) rb.classList.toggle("primary", !!done1);
+  if (g2s) g2s.classList.toggle("primary", r2 && !duo.started);
 }
 
 function setZoom(v) {
   zoom = v;
   $("zoomBtn").textContent = zoom
-    ? (stage === 2 ? "← 용기로 돌아가기" : "← 비커로 돌아가기")
+    ? (stage === 1 ? "← 용기로 돌아가기" : "← 비커로 돌아가기")
     : "분자 크기로 확대해 보기";
   applyShow();
   resize();
@@ -1694,9 +1744,8 @@ function applyStage(n) {
   /* answerShown 을 껐으니 답을 품고 있던 것들을 다시 그린다 —
      5단계에서 답을 켠 채 다른 단계로 갔다가 돌아오면 카드·물성·기록표에 답이 남는다 */
   buildLiquidPicker(); info(); renderTable();
-  applyShow();                                                             // ⑵
-  /* 2·4단계는 온도계 트랙이 없는 한 칸 배치를 쓴다 */
-  $("stageWrap").classList.toggle("stagewrap--duo", n === 2 || n === 4);
+  /* 1단계(증발)는 온도계 트랙이 없는 한 칸 배치를 쓴다. 4단계는 온도계가 돌아왔다(2026-08-25) */
+  $("stageWrap").classList.toggle("stagewrap--duo", n === 1);
   $("stageTitle").textContent = STAGE[n].title;
   $("designTitle").textContent = n === 4 ? "무엇을 비교할까?" : "실험 설계 — 무엇을 바꿀지 먼저 정한다";
   $("stageDesc").textContent = STAGE[n].desc;                              // ⑶
@@ -1707,20 +1756,19 @@ function applyStage(n) {
   document.querySelectorAll(".stg").forEach(b =>                           // ⑷
     b.setAttribute("aria-pressed", String(+b.dataset.stage === n)));
   resetRun();                                                              // ⑸
-  if (n === 2) resetSealed();                // 2단계는 두 용기를 처음으로 되돌린다
-  if (n === 4) resetDuo();                   // 4단계는 좌/우 비커도 함께 처음으로 되돌린다
+  if (n === 1) resetSealed();                // 1단계는 두 용기를 처음으로 되돌린다
+  if (n === 4) { duo.round = 1; resetDuo(); }// 4단계는 1라운드(양)부터 다시
+  applyShow();                               // ⑵ — duo.round 확정 뒤에 (syncDuoVis 가 round 를 읽는다)
   /* 매뉴얼 §7 — 화면에 primary(파란 채움) 버튼은 최대 1개.
-     4단계에서는 「예측했습니다 — 시작」이 primary 이고 #run 은 일반 버튼이다 */
+     4단계의 primary 이동(게이트1→다음 탐구→게이트2)은 syncDuoVis() 가 맡는다 */
   $("run").classList.toggle("primary", n !== 4);
-  const gs = $("gateStart");
-  if (gs) gs.classList.toggle("primary", n === 4);
-  /* 무대 캔버스의 aria-label — 2단계는 두 용기 그림이므로 설명을 바꾼다(J-N 적용 범위) */
-  gcv.setAttribute("aria-label", n === 2
+  /* 무대 캔버스의 aria-label — 1단계는 두 용기 그림이므로 설명을 바꾼다(J-N 적용 범위) */
+  gcv.setAttribute("aria-label", n === 1
     ? "뚜껑 없는 용기와 밀폐한 용기에 같은 물을 담아 나란히 둔 그림. 시간이 지나면 열린 용기의 물은 줄어들고, 닫힌 용기의 물은 온도를 올려도 거의 그대로입니다."
     : GL_ARIA_DEFAULT);
   applyPextMin();                                                          // ⑹
   readouts(); drawChart(); drawThermo(); resize();                         // ⑺
-  if (n === 2) { readoutsSealed(); sealConclusion(); }
+  if (n === 1) { readoutsSealed(); sealConclusion(); }
   if (n === 4) { readoutsDuo(); duoConclusion(); drawDuo(); }
 }
 const GL_ARIA_DEFAULT = gcv.getAttribute("aria-label");
@@ -1745,32 +1793,51 @@ const duo = {
                  (확정 20의 「그 자리에 멈춰 끓기 시작 시점의 값을 고정 표시」가 실제로 필요하다)
      [50, 100] : 50 mL 소진 43.2 실시간초  >  100 mL 끓기 시작 11.1 실시간초 → 역전 없음 */
   started: false,                             // 예측 게이트 통과 여부
+  /* ★ 2026-08-25 피드백(동료 교사) — 2라운드 탐구.
+     1라운드 = 액체의 양(기존), 2라운드 = 가열 출력: 같은 양(100 mL)에 왼쪽 300 W · 오른쪽 600 W.
+     「불을 세게 하면 끓는점이 높아질까」를 양-무관성 확인 «다음» 질문으로 잇는다. */
+  round: 1,
+  HEATS: [300, 600], R2VOL: 100,
   L: null, R: null
 };
+/* 비커의 표시 온도 — 소진되면 붙잡아 둔 값(확정 20). duoFill·온도계가 같은 판정을 읽는다(F-1) */
+const duoTemp = b => (b.done ? b.boilT : b.st.t);
 /* 4단계는 STAGE 표가 배속을 ×10 으로 잠그고 #sSpeed 를 감춘다.
    ★ 4단계의 시간 표기(readout「끓기 시작한 시각」· 결론 문구 · 가열 곡선 가로축)는
      전부 이 한 함수를 지난다 — 한 화면 안에서 시간 단위가 어긋나지 않게 하는 단일 원천(F-1). */
 const DUO_SPEED = STAGE[4].lock.speed;
 const duoTime = s => s / DUO_SPEED;           // 실험 시간(초) → 화면에서 지나간 시간(초)
 
-const duoBeaker = v => ({
-  st: { t: 20, tRoom: 20, volume: v, pext: STAGE[4].lock.pext, heat: STAGE[4].lock.heat, boiling: false },
+const duoBeaker = (v, heat) => ({
+  st: { t: 20, tRoom: 20, volume: v, pext: STAGE[4].lock.pext,
+        heat: heat || STAGE[4].lock.heat, boiling: false },
   trace: [], clock: 0, startVol: v,
   boilAt: -1, boilT: null, boilPv: null,      // 끓기 시작한 순간에 붙잡아 둔다 (확정 20)
   pv60: null, pv80: null,                     // 같은 온도를 지날 때의 포화 증기 압력 (C-4 ⑴)
   done: false
 });
 function resetDuo() {
-  const [a, b] = duo.presets[duo.preset];
-  duo.L = duoBeaker(a); duo.R = duoBeaker(b);
+  if (duo.round === 2) {
+    /* 2라운드 — 같은 양, 다른 열원. 변인 통제: 양·압력·액체는 그대로, 가열 출력만 다르다 */
+    duo.L = duoBeaker(duo.R2VOL, duo.HEATS[0]);
+    duo.R = duoBeaker(duo.R2VOL, duo.HEATS[1]);
+  } else {
+    const [a, b] = duo.presets[duo.preset];
+    duo.L = duoBeaker(a); duo.R = duoBeaker(b);
+  }
   duo.started = false;
   duoSyncControls();
 }
 function duoSyncControls() {
-  const [a, b] = duo.presets[duo.preset];
   const tl = $("dL-Title"), tr = $("dR-Title");
-  if (tl) tl.textContent = `왼쪽 ${a} mL`;
-  if (tr) tr.textContent = `오른쪽 ${b} mL`;
+  if (duo.round === 2) {
+    if (tl) tl.textContent = `왼쪽 ${duo.R2VOL} mL · ${duo.HEATS[0]} W`;
+    if (tr) tr.textContent = `오른쪽 ${duo.R2VOL} mL · ${duo.HEATS[1]} W`;
+  } else {
+    const [a, b] = duo.presets[duo.preset];
+    if (tl) tl.textContent = `왼쪽 ${a} mL`;
+    if (tr) tr.textContent = `오른쪽 ${b} mL`;
+  }
   /* 프리셋은 시작 전에만 바꿀 수 있다 (C-2) — 「실험 처음부터」가 다시 연다 */
   document.querySelectorAll(".pst").forEach(x => {
     x.setAttribute("aria-pressed", String(+x.dataset.preset === duo.preset));
@@ -1778,6 +1845,8 @@ function duoSyncControls() {
   });
   const gs = $("gateStart");
   if (gs) gs.disabled = duo.started;
+  const g2s = $("gate2Start");
+  if (g2s) g2s.disabled = duo.started;
 }
 
 /* 한 비커의 한 걸음. 전역 st 와 완전히 분리돼 있다 */
@@ -1811,7 +1880,7 @@ function stepDuo(dt) {
 function duoFill(side, b) {
   const P = k => $(side + k);
   const held = b.done;                        // 소진된 비커는 붙잡아 둔 값을 계속 보인다 (확정 20)
-  const t = held ? b.boilT : b.st.t;
+  const t = duoTemp(b);                       // 온도계와 같은 판정 하나를 읽는다(F-1)
   const pv = held ? b.boilPv : vaporP(liq, b.st.t);
   P("-T").textContent = t == null ? "–" : t.toFixed(1);
   setPress(side + "-Pv", side + "-PvMm", pv);
@@ -1838,6 +1907,21 @@ function readoutsDuo() { duoFill("dL", duo.L); duoFill("dR", duo.R); }
 function duoConclusion() {
   const el = $("duoConc"); if (!el) return;
   const L = duo.L, R = duo.R, out = [];
+  if (duo.round === 2) {
+    /* 2라운드(가열 출력) 결론 — 관찰이 끝난 값만 말한다(J-N5).
+       「높아지지 않았다」는 두 온도가 실제로 같을 때만 쓴다 — 화면 수치가 그 문장의 증거다 */
+    if (L.boilT !== null && R.boilT !== null) {
+      out.push(`끓기 시작한 온도 — 왼쪽(${duo.HEATS[0]} W) <b>${L.boilT.toFixed(1)} ℃</b> · ` +
+        `오른쪽(${duo.HEATS[1]} W) <b>${R.boilT.toFixed(1)} ℃</b>.`);
+      if (Math.abs(L.boilT - R.boilT) < 0.05)
+        out.push(`불을 두 배로 세게 해도 끓는 온도는 <b>높아지지 않았습니다</b> — 달라진 것은 ` +
+          `끓기까지 걸린 <b>시간</b>입니다: 왼쪽 <b>${duoTime(L.boilAt).toFixed(1)}초</b> · ` +
+          `오른쪽 <b>${duoTime(R.boilAt).toFixed(1)}초</b> (화면에서 지나간 시간).`);
+    }
+    el.innerHTML = out.join("<br>");
+    el.style.display = (stage === 4 && out.length) ? "" : "none";
+    return;
+  }
   if (L.pv60 !== null && R.pv60 !== null)
     out.push(`60 ℃를 지날 때 — 왼쪽 <b>${L.pv60.toFixed(0)} mmHg</b> · 오른쪽 <b>${R.pv60.toFixed(0)} mmHg</b>`);
   if (L.pv80 !== null && R.pv80 !== null)
@@ -1950,6 +2034,22 @@ $("gateStart").onclick = () => {
   $("run").textContent = "일시정지";
   duoSyncControls();
 };
+/* 2라운드(가열 출력) 게이트 — 1라운드와 같은 방식: 고르지 않아도 시작은 눌리고, 정답은 실험이 말한다 */
+document.querySelectorAll(".gopt2").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".gopt2").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+});
+$("gate2Start").onclick = () => {
+  duo.started = true;
+  running = true;
+  $("run").textContent = "일시정지";
+  duoSyncControls(); syncDuoVis();
+};
+$("round2Btn").onclick = () => {
+  duo.round = 2;
+  resetDuo();
+  running = false; $("run").textContent = "이어서 실험";
+  readoutsDuo(); duoConclusion(); syncDuoVis(); drawDuo(); drawChart(); drawThermo();
+};
 
 /* ★ S-검토 A-3: 일시정지 상태에서 압력·출력을 바꾸면 heatStep 이 돌지 않아 st.boiling 이 굳는다.
    그러면 「포화 증기 압력이 외부 압력과 같아졌습니다」가 251 vs 1140 mmHg 위에 뜬다(J-N5).
@@ -1960,6 +2060,8 @@ $("sT2").oninput = e => {
   $("vT2").textContent = e.target.value;
   if (seal.st) { seal.st.T = +e.target.value; readoutsSealed(); sealConclusion(); drawChart(); }
 };
+/* 증발 탭 시간 배속 (2026-08-25 피드백) — loop 이 매 프레임 .value 를 직접 읽는다(§13-②) */
+$("sSealSpd").oninput = e => { $("vSealSpd").textContent = e.target.value; };
 function reBoil() {
   st.boiling = st.volume > 0 && st.heat > 0 && st.t >= boilingPoint(liq, st.pext) - 1e-6;
 }
@@ -1986,11 +2088,13 @@ $("sHeat").oninput = e => { st.heat = +e.target.value; $("vHeat").textContent = 
 $("sSpeed").oninput = e => { $("vSpeed").textContent = e.target.value; };
 $("run").onclick = () => { running = !running; $("run").textContent = running ? "일시정지" : "이어서 실험"; };
 $("reset").onclick = () => {
-  /* 2단계에서는 두 용기를 처음으로(액체 다시 채우기 · 증기 압력 0) */
-  if (stage === 2) { resetSealed(); readoutsSealed(); sealConclusion(); drawSealed3D(); drawChart(); return; }
-  /* 4단계에서는 좌/우 비커를 되돌리고 예측 게이트를 다시 연다(프리셋도 다시 고를 수 있다) */
-  if (stage === 4) { resetDuo(); running = false; $("run").textContent = "이어서 실험";
-                     readoutsDuo(); duoConclusion(); drawDuo(); drawChart(); return; }
+  /* 1단계(증발)에서는 두 용기를 처음으로(액체 다시 채우기 · 증기 압력 0) */
+  if (stage === 1) { resetSealed(); readoutsSealed(); sealConclusion();
+                     if (zoom) drawSealed3D(); else drawGLSeal();
+                     drawChart(); return; }
+  /* 4단계에서는 1라운드(양)부터 다시 — 예측 게이트·프리셋이 도로 열린다 */
+  if (stage === 4) { duo.round = 1; resetDuo(); running = false; $("run").textContent = "이어서 실험";
+                     readoutsDuo(); duoConclusion(); syncDuoVis(); drawDuo(); drawChart(); drawThermo(); return; }
   resetRun(); readouts(); drawChart(); drawThermo();
 };
 /* 확대 보기의 노출도 노출 표가 정한다 — 여기서 직접 display 를 쓰지 않는다(F-1) */
@@ -2044,9 +2148,9 @@ function resize() {
   if (dcv) fit2d(dcv, h);   // 2D 이중 비커도 같은 높이를 쓴다(실행 C)
   if (mcv) mcv.style.height = h + "px";   // 3D 분자 캔버스 — 폭·버퍼는 m3dFlush 가 스스로 맞춘다
   fit2d(ccv, Math.max(220, Math.min(300, (ccv.clientWidth || 300) * 0.42)));
-  if (stage === 2) drawGLSeal(); else drawGL();
+  if (stage === 1) drawGLSeal(); else drawGL();
   drawZoom(); drawChart(); drawThermo(); drawDuo();
-  if (m3d && zoom) { if (stage === 2) drawSealed3D(); else drawZoom3D(); }
+  if (m3d && zoom) { if (stage === 1) drawSealed3D(); else drawZoom3D(); }
 }
 
 /* ── 루프 ── */
@@ -2054,14 +2158,15 @@ let rafId = null, lastT = 0;
 function loop(ts) {
   const dt = lastT ? Math.min(0.1, (ts - lastT) / 1000) : 0;
   lastT = ts;
-  /* ★ 2단계 분기 — 배속 없이 실제 시간으로 돈다(한계 ⑤). 전역 heatStep 을 호출하지 않는다.
-     거시(두 용기) ↔ 분자(3D)는 zoom 이 가른다 — 입자 상태는 화면과 무관하게 계속 돌려
-     전환 순간에도 이어진 상태가 보인다. */
-  if (stage === 2) {
+  /* ★ 1단계(증발) 분기 — 배속은 #sSealSpd 가 정한다(기본 ×1 · 2026-08-25 피드백).
+     전역 heatStep 을 호출하지 않는다. 거시(두 용기) ↔ 분자(3D)는 zoom 이 가른다 —
+     입자 상태는 화면과 무관하게 계속 돌려 전환 순간에도 이어진 상태가 보인다. */
+  if (stage === 1) {
     if (running && seal.st) {
-      sealedStep(seal.st, liq, dt);
+      const sdt = dt * (+$("sSealSpd").value || 1);
+      sealedStep(seal.st, liq, sdt);
       sealTrace();
-      sealParticles(dt);
+      sealParticles(sdt);
     }
     if (zoom) drawSealed3D(); else drawGLSeal();
     drawChart(); readoutsSealed(); sealConclusion();
@@ -2073,7 +2178,8 @@ function loop(ts) {
      #vClock·#rT 가 4단계와 무관하게 전진한다(매뉴얼 §10). */
   if (stage === 4) {
     if (running && duo.started) stepDuo(dt);
-    drawDuo(); drawChart(); readoutsDuo(); duoConclusion();
+    /* 온도계(왼/오 두 액주)와 「다음 탐구」 버튼도 매 프레임 갱신 (2026-08-25) */
+    drawDuo(); drawChart(); drawThermo(); readoutsDuo(); duoConclusion(); syncDuoVis();
     rafId = requestAnimationFrame(loop);
     return;
   }
