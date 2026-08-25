@@ -53,6 +53,13 @@
   #latNote .sub{color:var(--t3)}
   @media(max-width:560px){ #latNote .why{display:none} }
 
+  /* 망치 타격 결과 캡션 — 위쪽 #latNote 와 겹치지 않게 무대 **아래쪽**에 붙인다.
+     클릭·드래그는 캔버스로 그대로 통과시킨다(끌어서 돌리기를 막지 않는다). */
+  #strikeNote{position:absolute; inset:auto 10px 8px 10px; z-index:4; display:none;
+    pointer-events:none; background:rgba(255,255,255,.90); border:1px solid var(--line);
+    border-radius:8px; padding:6px 9px; font-size:12px; line-height:1.55; color:var(--t2)}
+  .strikelegend{font-size:12px; color:var(--t2); margin-top:9px; line-height:1.7}
+
   .ctl{margin-bottom:10px}
   .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
     font-size:13px; margin-bottom:4px; color:var(--t2); gap:8px}
@@ -144,11 +151,16 @@
           <span class="sub" id="stickNote">막대는 <b>실제 결합봉이 아니라 이웃 표시</b>입니다.</span>
           <span class="sub" id="cellNote">테두리 상자 = <b>되풀이되는 최소 단위(단위 세포) 하나</b> — 결정을 이루는 부품이 아닙니다.</span>
         </div>
+        <!-- 타격 결과 캡션 — 무대 아래쪽. 표시 여부와 문구는 sim.js 가 정한다 -->
+        <div id="strikeNote"></div>
       </div>
       <div class="btns">
         <button id="spinBtn">회전 멈추기</button>
+        <button id="strikeBtn" style="display:none">망치로 내려치기</button>
+        <button id="strikeReset" style="display:none">되돌리기</button>
       </div>
       <div id="bondLegend"></div>
+      <div class="strikelegend">얼음에서 본 점선은 분자 사이의 힘이고, 암염의 붉은 점선은 밀어내는 힘입니다 — 둘 다 결합봉이 아닙니다.</div>
       <div class="info" id="mInfo"></div>
     </div>
   </div>
@@ -291,7 +303,8 @@
   ⑥ 원자·이온 색은 <b>CPK 국제 표준</b>입니다. 실제 원자에 색이 있는 것은 아닙니다.<br>
   ⑦ 단위 세포·배위수·격자 상수는 <b>교육과정 범위 밖</b>이며 <b>시험 범위가 아닙니다.</b>
      기본 화면에서는 <b>강조하지 않고</b> 「심화」로 접어 두었습니다 — 기본 화면의 입자 그림은
-     단위 세포가 아니라 <b>대표 부분</b>입니다.
+     단위 세포가 아니라 <b>대표 부분</b>입니다.<br>
+  ⑧ 망치 타격은 개념 모형입니다. 층이 밀리는 방향·쪼개지는 면은 실제 결정의 벽개면과 정확히 같지 않으며, 힘·에너지의 크기는 다루지 않습니다. 암염의 붉은 점선은 반발력의 표시이지 결합이 아니고, 반발을 보이기 위해 타격 중에는 이온을 실제 비율보다 작게 그립니다. 분산력(드라이아이스)은 이 화면에 선으로 그리지 않습니다.
 </p>
 
 </div>

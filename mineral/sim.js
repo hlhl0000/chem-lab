@@ -651,18 +651,6 @@ function makeLattice3D(m, rnd) {
   return l3Amorphous(rnd);
 }
 
-/* ================= UI + WebGL ================= */
-/* ↑ 위쪽(계산부)은 화면과 무관하다. 검증 스크립트가 이 주석줄을 기준으로 잘라
-   Node 에서 그대로 돌린다. 이 줄을 지우거나 바꾸지 말 것. */
-
-const $ = id => document.getElementById(id);
-const CSSV = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const C = {
-  blue: CSSV("--d-blue"), amber: CSSV("--d-amber"), ink: CSSV("--t1"),
-  gray: CSSV("--d-gray"), t3: CSSV("--t3"), stageLight: CSSV("--stage-light"),
-  green: CSSV("--d-green"), red: CSSV("--d-red"), violet: CSSV("--d-violet"),
-  cyan: CSSV("--d-cyan")
-};
 /* ⚠ 아래 두 가지는 토큰으로 바꾸면 안 된다.
    ① 광물의 색은 그 물질의 **실제 겉보기 색**이다 (사이트 테마 색이 아니다).
    ② 원자·이온 색은 CPK 국제 표준을 따른다 (매뉴얼 §4 "값 변경 금지").
@@ -684,6 +672,189 @@ const SITES = {
   diamond: [{ sym: "C", label: "탄소 C", cpk: CPK.C, r: 1.0 }],
   iron: [{ sym: "Fe", label: "철 Fe (양이온 + 자유 전자)", cpk: CPK.Fe, r: 1.0 }],
   dryice: [{ sym: "C", label: "탄소 C (분자 중심)", cpk: CPK.C, r: 0.66 }, { sym: "O", label: "산소 O", cpk: CPK.O, r: 0.74 }]
+};
+
+/* ── 망치 타격(외부 힘) — 계산부 ────────────────────────────────────
+   「외부 힘으로 층이 밀리면 어떻게 되는가」를 결합의 종류마다 다르게 계산한다.
+   여기 있는 함수는 전부 **순수 함수**다 — DOM 도 전역 가변 상태도 건드리지 않는다.
+   화면(UI부)은 이 함수가 돌려준 계획(plan)을 시간에 따라 보간해 그릴 뿐이고,
+   검증 스크립트는 이 마커 위쪽만 잘라 Node 에서 같은 함수를 그대로 돌린다(F-1 단일 원천).
+
+   ⚠ 슬립 벡터는 「격자를 보존하는 최소 밀림」이다 — 임의로 고른 값이 아니다.
+     암염 (nn,0,0)  : 점 집합은 그대로지만 **자리 종류(Na⁺↔Cl⁻)가 교환**된다.
+                      같은 전하가 마주 보게 되는 기하학적 원인이 바로 이것이다.
+     구리 (u/2,0,u/2)·철 (u,0,0) : 자리가 한 종류뿐이라 교환이 없다 — 배열이 그대로 유지된다.
+     분자 결정      : 층이 미끄러지는 것이 아니라 **분자 덩어리째** 떨어져 나간다(슬립 벡터 없음). */
+const STRIKE_MODE = Object.freeze({
+  halite: "ion", copper: "metal", iron: "metal", ice: "molecular", dryice: "molecular"
+});
+
+/* 격자를 자기 자신으로 옮기는 최소 병진. 분자 결정은 없다(null). */
+function strikeSlipVec(l3, mnrId) {
+  if (mnrId === "halite") return [l3.nn, 0, 0];
+  if (mnrId === "copper") return [l3.cell / 2, 0, l3.cell / 2];
+  if (mnrId === "iron") return [l3.cell, 0, 0];
+  return null;
+}
+
+/* 공 반지름의 기준 길이 — drawLattice3D 가 쓰던 식을 인자로 받는 순수 함수로 옮긴 것이다.
+   nbOn(최근접 이웃 막대 표시)에 따라 값이 달라지므로 반드시 인자로 받는다.
+   striking=true(타격 중인 이온 결정)면 공간 채움(fill)을 쓰지 않고 **공-막대 반지름**으로 줄인다 —
+   슬립으로 같은 전하가 0.27 거리까지 다가오는데 공간 채움 반지름이면 두 공이 20 % 겹쳐
+   붉은 반발 점선이 공 속에 파묻힌다. 줄여 그린다는 사실은 캡션과 「가정과 한계」 ⑧에 적는다. */
+function strikeRenderRadiusUnit(l3, nbOn, striking) {
+  return (l3.fill && !nbOn && striking !== true)
+    ? l3.fill
+    : (l3.style === "pack" ? l3.nn * 0.48 : l3.rref * 0.32);
+}
+
+/* 타격 계획 — 무엇이 움직이고, 어느 쌍이 반발하고, 어느 연결이 끊기는가.
+   반환 { mode, planeY, moved, slipVec, repelPairs, brokenBonds, clusterOf, clusterOffsets }
+     moved         — Uint8Array(원자 수). 1이면 외부 힘에 밀려 움직이는 원자
+     repelPairs    — [[아래 원자, 위 원자], …] 슬립 후 같은 전하가 마주 보는 쌍(이온만)
+     brokenBonds   — l3.bonds 의 **번호** 목록. 경계를 가로지르던 이웃 표시·분자 사이 힘.
+                     분자 **안**의 공유 결합("in")은 절대 들어가지 않는다
+     clusterOf     — Int32Array(원자 수). 분자 결정에서 떨어져 나가는 조각 번호(0~2), 아니면 −1
+     clusterOffsets— 조각별 이동 방향 */
+function strikePlan(l3, mnrId) {
+  const mode = STRIKE_MODE[mnrId];
+  if (!mode) return null;
+  const atoms = l3.atoms, N = atoms.length, nn = l3.nn;
+  const moved = new Uint8Array(N);
+  const slipVec = strikeSlipVec(l3, mnrId);
+  const repelPairs = [], brokenBonds = [];
+  let planeY = 0, clusterOf = null, clusterOffsets = null;
+
+  if (mode === "molecular") {
+    /* 분자 중심(그 분자에 속한 원자들의 평균 자리)이 슬립면 위면 그 분자의 원자 전부가 움직인다 —
+       분자를 원자 단위로 자르지 않기 위해서다. 분자 안의 공유 결합은 어떤 경우에도 끊기지 않는다. */
+    planeY = 0;
+    const sx = new Map(), sy = new Map(), cn = new Map();
+    for (let i = 0; i < N; i++) {
+      const m = atoms[i].mol;
+      sx.set(m, (sx.get(m) || 0) + atoms[i].x);
+      sy.set(m, (sy.get(m) || 0) + atoms[i].y);
+      cn.set(m, (cn.get(m) || 0) + 1);
+    }
+    const mols = [];
+    for (const [m, c] of cn) mols.push({ mol: m, x: sx.get(m) / c, y: sy.get(m) / c });
+    mols.sort((a, b) => a.mol - b.mol);
+    const movedMols = mols.filter(o => o.y > planeY);
+    /* 조각 나누기 — 중심 x 로 정렬한 뒤 **개수**를 삼등분한다.
+       x 범위를 삼등분하면 가운데 조각의 크기가 격자 위상에 따라 크게 흔들린다(판정 불안정). */
+    movedMols.sort((a, b) => (a.x - b.x) || (a.mol - b.mol));
+    const cluOfMol = new Map();
+    const n3 = movedMols.length;
+    for (let c = 0; c < 3; c++) {
+      const lo = Math.floor(c * n3 / 3), hi = Math.floor((c + 1) * n3 / 3);
+      for (let t = lo; t < hi; t++) cluOfMol.set(movedMols[t].mol, c);
+    }
+    clusterOf = new Int32Array(N).fill(-1);
+    for (let i = 0; i < N; i++) {
+      const c = cluOfMol.get(atoms[i].mol);
+      if (c === undefined) continue;
+      moved[i] = 1; clusterOf[i] = c;
+    }
+    clusterOffsets = [
+      [-0.9 * nn, 0.5 * nn, 0],
+      [0, 0.5 * nn, 0],
+      [0.9 * nn, 0.5 * nn, 0]
+    ];
+  } else {
+    /* 이온·금속 — 슬립면 위 절반이 통째로 밀린다. 면은 층과 층 **사이**에 둔다(메시에서 유도). */
+    planeY = nn / 2;
+    for (let i = 0; i < N; i++) if (atoms[i].y > planeY) moved[i] = 1;
+  }
+
+  if (mode === "ion") {
+    /* 완전히 밀린 뒤의 자리에서, 경계를 가로질러 맞닿는 쌍을 찾는다.
+       슬립 전에는 이 쌍이 전부 이종(+/−)이고, 슬립 후에는 전부 동종이 된다 — 그것이 반발의 원인이다. */
+    const lim = nn * 1.05, lim2 = lim * lim;
+    const px = new Float64Array(N), py = new Float64Array(N), pz = new Float64Array(N);
+    for (let i = 0; i < N; i++) {
+      px[i] = atoms[i].x + (moved[i] ? slipVec[0] : 0);
+      py[i] = atoms[i].y + (moved[i] ? slipVec[1] : 0);
+      pz[i] = atoms[i].z + (moved[i] ? slipVec[2] : 0);
+    }
+    /* 슬립은 수평이므로 면에서 lim 보다 멀리 있는 원자는 어느 쌍에도 들어갈 수 없다 */
+    const lowIdx = [], highIdx = [];
+    for (let i = 0; i < N; i++) {
+      if (Math.abs(atoms[i].y - planeY) > lim) continue;
+      (moved[i] ? highIdx : lowIdx).push(i);
+    }
+    for (let a = 0; a < lowIdx.length; a++) {
+      const i = lowIdx[a];
+      for (let b = 0; b < highIdx.length; b++) {
+        const j = highIdx[b];
+        const dx = px[i] - px[j], dy = py[i] - py[j], dz = pz[i] - pz[j];
+        if (dx * dx + dy * dy + dz * dz > lim2) continue;
+        if (atoms[i].s !== atoms[j].s) continue;      // 같은 전하끼리만 반발한다
+        repelPairs.push([i, j]);
+      }
+    }
+  }
+
+  /* 끊어지는 연결 — 경계를 가로지르던 것만. 분자 안의 공유 결합("in")은 넣지 않는다.
+     층이 밀리거나 조각이 갈라지기 시작하면 그 경계를 가로지르던 이웃 관계·분자 사이 힘은
+     더 이상 작용하지 않는다. 조각 **안쪽**의 힘은 그대로 남아 "표면에서만 끊어지고 속은 붙어 있다"가 된다. */
+  const grp = i => (moved[i] ? (clusterOf ? clusterOf[i] : 0) : -1);
+  for (let b = 0; b < l3.bonds.length; b++) {
+    const bd = l3.bonds[b];
+    if (bd[2] === "in") continue;
+    if (grp(bd[0]) !== grp(bd[1])) brokenBonds.push(b);
+  }
+
+  return { mode, planeY, moved, slipVec, repelPairs, brokenBonds, clusterOf, clusterOffsets };
+}
+
+/* 한 순간의 원자 오프셋 — 「어느 진행에서 원자가 어디에 있는가」의 **단일 원천**(F-1).
+   시간을 진행값(slipP·splitP·crumbleP)으로 바꾸는 일은 화면(UI부)이 하고,
+   진행값을 좌표로 바꾸는 규칙은 여기 하나뿐이다. 검증 스크립트도 이 함수를 그대로 호출해
+   대조한다 — 스크립트가 같은 식을 따로 적어 두면 「자기 자신과의 대조」가 되어 아무것도
+   검사하지 못한다(원칙 11 · S-검토 B B-5).
+
+   ⚠ 아치 들림 — 슬립 **중간**에는 밀리는 층이 `0.25·nn·sin(π·slipP)` 만큼 들렸다가 내려온다.
+     끝점(진행 0·1)에서 sin 이 0 이므로 격자 보존 검산(정합 307/307·151/151)은 그대로 성립하고,
+     중간 프레임에서만 두 층이 서로 **타고 넘는다**. 넣지 않으면 진행 0.10~0.90 내내
+     구리 132쌍(최대 침투 9.8 %)·철 60쌍(14.9 %)이 겹친 공으로 화면에 나온다
+     (S-검토 B A-1 실측 · 매뉴얼 4부 ⑱). 물리적으로도 층은 서로를 뚫고 가지 않는다. */
+const STRIKE_SPLIT_GAP = 0.8;   // 쪼개진 두 조각이 벌어지는 간격(최근접 이웃 거리의 배수)
+const STRIKE_ARCH = 0.25;       // 슬립 중 들림 높이(최근접 이웃 거리의 배수)
+function strikeOffsetsAt(l3, plan, slipP, splitP, crumbleP, out) {
+  const N = l3.atoms.length, nn = l3.nn;
+  const offs = (out && out.length >= N * 3) ? out : new Float64Array(N * 3);
+  offs.fill(0, 0, N * 3);
+  if (!plan) return offs;
+  const mv = plan.moved;
+  if (crumbleP > 0) {
+    const co = plan.clusterOffsets, cf = plan.clusterOf;
+    for (let i = 0; i < N; i++) {
+      if (!mv[i]) continue;
+      const o = co[cf[i]];
+      offs[i * 3] = o[0] * crumbleP; offs[i * 3 + 1] = o[1] * crumbleP; offs[i * 3 + 2] = o[2] * crumbleP;
+    }
+  } else if (slipP > 0 || splitP > 0) {
+    const v = plan.slipVec;
+    const up = STRIKE_SPLIT_GAP * nn * splitP + STRIKE_ARCH * nn * Math.sin(Math.PI * slipP);
+    for (let i = 0; i < N; i++) {
+      if (!mv[i]) continue;
+      offs[i * 3] = v[0] * slipP; offs[i * 3 + 1] = v[1] * slipP + up; offs[i * 3 + 2] = v[2] * slipP;
+    }
+  }
+  return offs;
+}
+
+/* ================= UI + WebGL ================= */
+/* ↑ 위쪽(계산부)은 화면과 무관하다. 검증 스크립트가 이 주석줄을 기준으로 잘라
+   Node 에서 그대로 돌린다. 이 줄을 지우거나 바꾸지 말 것. */
+
+const $ = id => document.getElementById(id);
+const CSSV = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = {
+  blue: CSSV("--d-blue"), amber: CSSV("--d-amber"), ink: CSSV("--t1"),
+  gray: CSSV("--d-gray"), t3: CSSV("--t3"), stageLight: CSSV("--stage-light"),
+  green: CSSV("--d-green"), red: CSSV("--d-red"), violet: CSSV("--d-violet"),
+  cyan: CSSV("--d-cyan")
 };
 
 let mineral = MIN.LIST[0];
@@ -1110,6 +1281,110 @@ function sstep(a, b, x) {
   return t * t * (3 - 2 * t);
 }
 
+/* ── 망치 타격 — 화면 쪽 상태기계 ──────────────────────────────────
+   계산부의 strikePlan() 이 돌려준 「무엇이 어디로 움직이는가」를 시간에 따라 보간해 그린다.
+   진행은 기존 loop() 의 dtSec 만 쓴다 — 새 requestAnimationFrame·setInterval 을 만들지 않는다.
+   단계열  이온   swing → slip → repel → split → done
+           금속   swing → slip → done
+           분자   swing → crumble → done                                       */
+const STRIKE_T = { swing: 0.45, slip: 0.6, repel: 0.9, split: 0.8, crumble: 0.8 };
+/* 간격·아치 높이는 계산부(STRIKE_SPLIT_GAP·STRIKE_ARCH)에 하나만 둔다 — 여기 사본을 두지 않는다(F-1) */
+const HAMMER_PRIMS = 4;            // 자루 1 + 머리 1 + 끝 구 2
+const REDUCE_MOTION = matchMedia("(prefers-reduced-motion:reduce)").matches;
+const strike = {
+  on: false, mnrId: null, phase: "idle", t: 0,
+  plan: null, l3: null, primMask: null, offs: null,
+  maskOn: false, repelAlpha: 0
+};
+let strikeRepelDrawn = 0;          // 이번 프레임에 실제로 그린 반발 점선 수(훅 전용 — 화면에 표시하지 않는다)
+let strikeRUnitNow = 0;
+
+function easeOutCubic(t) { const u = 1 - Math.min(1, Math.max(0, t)); return 1 - u * u * u; }
+
+/* 끊어진 결합의 **반쪽 막대 프림 2개 모두**에 1 을 세운다.
+   primsOf 가 프림을 담은 순서(원자별 커서 ps[i]+1 부터)를 그대로 재현해야 번호가 맞는다. */
+function strikeBuildMask(l3, brokenBonds) {
+  primsOf(l3);
+  const N = l3.atoms.length, ps = l3._ps;
+  const mask = new Uint8Array(l3._pk.length);
+  const cur = new Int32Array(N);
+  for (let i = 0; i < N; i++) cur[i] = ps[i] + 1;
+  const brk = new Uint8Array(l3.bonds.length);
+  for (const b of brokenBonds) brk[b] = 1;
+  for (let b = 0; b < l3.bonds.length; b++) {
+    const oi = cur[l3.bonds[b][0]]++, oj = cur[l3.bonds[b][1]]++;
+    if (brk[b]) { mask[oi] = 1; mask[oj] = 1; }
+  }
+  return mask;
+}
+
+/* 이 프레임의 원자 오프셋(모형 좌표). l3.atoms 원본은 절대 건드리지 않는다. */
+function strikeComputeOffsets() {
+  const p = strike.plan, l3 = strike.l3;
+  if (!p || !l3) { strike.maskOn = false; strike.repelAlpha = 0; return; }
+  const N = l3.atoms.length, ph = strike.phase;
+  if (!strike.offs || strike.offs.length < N * 3) strike.offs = new Float32Array(N * 3);
+  let slipP = 0, splitP = 0, crumbleP = 0;
+  if (p.mode === "molecular") {
+    if (ph === "crumble") crumbleP = easeOutCubic(strike.t / STRIKE_T.crumble);
+    else if (ph === "done") crumbleP = 1;
+  } else {
+    if (ph === "slip") slipP = easeOutCubic(strike.t / STRIKE_T.slip);
+    else if (ph === "repel") slipP = 1;
+    else if (ph === "split") { slipP = 1; splitP = easeOutCubic(strike.t / STRIKE_T.split); }
+    else if (ph === "done") { slipP = 1; splitP = p.mode === "ion" ? 1 : 0; }
+  }
+  /* 좌표를 만드는 규칙은 계산부의 strikeOffsetsAt() 하나뿐이다 — 화면과 검증이 같은 함수를 쓴다.
+     슬립 중 아치 들림도 그 안에 있다(끝점에서 0 이라 격자 보존 검산은 그대로 성립한다). */
+  strikeOffsetsAt(l3, p, slipP, splitP, crumbleP, strike.offs);
+  /* 마스크는 **moved 원자에 오프셋이 실제로 적용되기 시작한 순간부터** 건다.
+     층이 밀리거나 조각이 갈라지기 시작하면 그 경계를 가로지르던 이웃 관계·분자 사이 힘은
+     더 이상 작용하지 않는다 — 남겨 두면 늘어난 실선·점선이 조각 사이를 잇는 거짓 그림이 된다. */
+  strike.maskOn = (slipP > 0 || splitP > 0 || crumbleP > 0);
+  /* 반발 점선 — repel 단계에서 온전히, **split 초입**에 사라진다.
+     조각이 벌어진 뒤에도 남겨 두면 두 조각을 잇는 「늘어난 줄」로 읽혀 반발 표시가 결합봉으로
+     오독된다. 벌어진 거리가 아직 작을 때(0.3·0.8nn 안쪽) 다 없어지게 감쇠 폭을 좁힌다. */
+  strike.repelAlpha = p.mode !== "ion" ? 0
+    : (ph === "repel" ? 1 : (ph === "split" ? Math.max(0, 1 - splitP / 0.3) : 0));
+}
+
+function strikeOffsetsFor(l3) { return (strike.on && strike.l3 === l3) ? strike.offs : null; }
+
+/* 망치 — 코드로 만든 메시(막대 2 + 구 2). 치수는 전부 최근접 이웃 거리 nn 에서 유도한다.
+   swing 동안 z축으로 회전하며 내려오고, 층이 밀리기 시작하면(slip/crumble) 화면에서 빠진다.
+   격자와 **같은 시점 변환**을 쓴다 — 따로 돌지 않는다. */
+const HAMMER_T3 = hexToRgb01(C.t3 || "#5b636b");
+const HAMMER_INK = hexToRgb01(C.ink || "#1f2328");
+function strikeDrawHammer(l3, scale, yaw, pitch) {
+  const nn = l3.nn;
+  const a0 = -1.20, a1 = 0.0;                       // 들어 올린 각 → 내려친 각(라디안)
+  const th = a0 + (a1 - a0) * easeOutCubic(strike.t / STRIKE_T.swing);
+  const HANDLE = 6 * nn, HEAD_HALF = 1.2 * nn;
+  const pivotY = 2.2 * nn + HANDLE;                 // 자루 끝(손) — 화면 위쪽 밖
+  const dx = Math.sin(th), dy = -Math.cos(th);      // 자루가 뻗는 방향
+  const hx = dx * HANDLE, hy = pivotY + dy * HANDLE;
+  const px = Math.cos(th), py = Math.sin(th);       // 자루와 수직(머리가 뻗는 방향)
+  const cyw = Math.cos(yaw), syw = Math.sin(yaw), cpt = Math.cos(pitch), spt = Math.sin(pitch);
+  const toView = (X, Y, Z) => {
+    const x1 = cyw * X * scale + syw * Z * scale, z1 = -syw * X * scale + cyw * Z * scale;
+    const y2 = cpt * Y * scale - spt * z1, z2 = spt * Y * scale + cpt * z1;
+    return [x1, y2, z2 - CAM_Z];
+  };
+  const pv = toView(0, pivotY, 0), hd = toView(hx, hy, 0);
+  const e1 = toView(hx + px * HEAD_HALF, hy + py * HEAD_HALF, 0);
+  const e2 = toView(hx - px * HEAD_HALF, hy - py * HEAD_HALF, 0);
+  ensureCap(HAMMER_PRIMS + 2);
+  vHead = 0; iHead = 0; primCount = 0;
+  emitStick(pv[0], pv[1], pv[2], hd[0], hd[1], hd[2], 0.35 * nn * scale, HAMMER_T3, 1, 0, 1);
+  emitStick(e1[0], e1[1], e1[2], e2[0], e2[1], e2[2], 1.1 * nn * scale, HAMMER_INK, 1, 0, 1);
+  emitSphere(e1[0], e1[1], e1[2], 1.1 * nn * scale, HAMMER_INK, 1);
+  emitSphere(e2[0], e2[1], e2[2], 1.1 * nn * scale, HAMMER_INK, 1);
+  gl.bufferData(gl.ARRAY_BUFFER, vArr.subarray(0, vHead), gl.DYNAMIC_DRAW);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, iArr.subarray(0, iHead), gl.DYNAMIC_DRAW);
+  gl.drawElements(gl.TRIANGLES, iHead, gl.UNSIGNED_SHORT, 0);
+}
+const RED_RGB = hexToRgb01(C.red || "#b91c1c");
+
 /* 한 판에 3차원 공-막대 모형을 그린다.
    x,y,w,h — 픽셀 뷰포트 / rect — 클릭 판정에 쓸 CSS 픽셀 사각형
    store — 원자의 화면 좌표를 담아 둘 배열(클릭 판정용)
@@ -1131,13 +1406,20 @@ function drawLattice3D(mnr, l3, x, y, w, h, alpha, pickedIdx, rect, store) {
   const cyw = Math.cos(yaw), syw = Math.sin(yaw), cpt = Math.cos(pitch), spt = Math.sin(pitch);
   const aspect = w / h, fp = 1 / Math.tan(FOVY / 2);
   const nbOn = showNb;
+  /* 타격 중이면 이 판의 원자에 오프셋이 실린다. l3.atoms 원본은 건드리지 않는다. */
+  const sOff = strikeOffsetsFor(l3);
+  const sMask = (sOff && strike.maskOn) ? strike.primMask : null;
+  const sRepel = (sOff && strike.plan.mode === "ion" && strike.repelAlpha > 0) ? strike.plan.repelPairs : null;
+  const repelCount = sRepel ? sRepel.length : 0;
 
   /* ① 시점 좌표 + 진하기 */
   if (vpBuf.length < N * 3) vpBuf = new Float32Array(N * 3 * 2);
   if (fadeBuf.length < N) fadeBuf = new Float32Array(N * 2);
   for (let i = 0; i < N; i++) {
     const a = atoms[i];
-    const X = a.x * scale, Y = a.y * scale, Z = a.z * scale;
+    const X = (a.x + (sOff ? sOff[i * 3] : 0)) * scale,
+          Y = (a.y + (sOff ? sOff[i * 3 + 1] : 0)) * scale,
+          Z = (a.z + (sOff ? sOff[i * 3 + 2] : 0)) * scale;
     const x1 = cyw * X + syw * Z, z1 = -syw * X + cyw * Z;
     const y2 = cpt * Y - spt * z1, z2 = spt * Y + cpt * z1;
     const vz = z2 - CAM_Z;
@@ -1158,11 +1440,17 @@ function drawLattice3D(mnr, l3, x, y, w, h, alpha, pickedIdx, rect, store) {
   /* ② 그릴 것 모으기 — 이웃 막대(kind 3)는 켰을 때만 */
   /* 공 반지름 — 막대를 끈 이온 결정은 fill(거의 맞닿게), 금속은 촘촘히 쌓인 모습,
      공-막대 모형은 이웃 거리의 0.32배(막대와 틈이 또렷하게 보이는 크기). */
-  const rUnit = (l3.fill && !nbOn) ? l3.fill
-    : (l3.style === "pack" ? l3.nn * 0.48 : l3.rref * 0.32);
+  /* 타격 중인 이온 결정은 공간 채움 대신 공-막대 반지름으로 줄여 그린다 — 계산부의 단일 원천 함수(F-1).
+     ⚠ 줄이기 시작하는 시점은 **슬립 시작 프레임**이다(swing 제외 — S-검토 B A-2).
+       swing 부터 줄이면 망치가 닿기 0.45 s 전에 이온 부피가 15 %로 뛰는데, 왜 작아졌는지 말해 주는
+       캡션은 1.05 s 뒤에야 뜬다 — 학생에게는 「망치도 안 닿았는데 이온이 쪼그라들었다」로 읽힌다.
+     ⚠ 이 판이 정말 타격 중인 격자인지는 다른 strike 참조(sOff)와 **같은 격자 동일성 확인**으로 판정한다
+       (B-4 — strike.on 만 보면 비교 판의 격자에도 축소가 걸릴 수 있다). */
+  const rUnit = strikeRenderRadiusUnit(l3, showNb,
+    !!sOff && strike.plan.mode === "ion" && strike.phase !== "swing");
   const stickW = Math.max(rUnit * 0.24, l3.rref * 0.085);
   const pk = l3._pk, pa = l3._pa, pb = l3._pb, ps = l3._ps, total = pk.length;
-  const cap = Math.min(total, MAX_PRIMS);
+  const cap = Math.min(total + repelCount, MAX_PRIMS);
   if (zBuf.length < cap) { zBuf = new Float32Array(cap); aBuf = new Float32Array(cap); }
   if (!primBuf || primBuf.length < cap) { primBuf = new Int32Array(cap); ordBuf = new Int32Array(cap); }
   let M = 0;
@@ -1176,6 +1464,7 @@ function drawLattice3D(mnr, l3, x, y, w, h, alpha, pickedIdx, rect, store) {
       if (k === 0) { al = fi; zBuf[M] = vpBuf[i * 3 + 2]; }
       else {
         if (k === 3 && !nbOn) continue;
+        if (sMask && sMask[o]) continue;    // 끊어진 결합 — 늘어난 막대로 남기지 않는다
         const j = pb[o], fj = fadeBuf[j];
         const mn = fi < fj ? fi : fj;
         al = mn * mn;                       // 막대는 공보다 빨리 흐려진다 — 가운데만 또렷하게
@@ -1186,15 +1475,41 @@ function drawLattice3D(mnr, l3, x, y, w, h, alpha, pickedIdx, rect, store) {
     }
   }
 
+  /* ②-2 반발 표시 — 같은 전하가 마주 본 쌍. **정렬 스트림 안에** 넣어 다른 프림과 같은 규칙으로
+     앞뒤가 가려지게 한다. 목록 번호를 음수로 달아 두고 그릴 때 되돌린다. */
+  if (sRepel) {
+    for (let q = 0; q < repelCount && M < cap; q++) {
+      const i = sRepel[q][0], j = sRepel[q][1];
+      const fi = fadeBuf[i], fj = fadeBuf[j];
+      const mn = fi < fj ? fi : fj;
+      const al = mn * mn * strike.repelAlpha;
+      if (al < BOND_MIN) continue;
+      zBuf[M] = (vpBuf[i * 3 + 2] + vpBuf[j * 3 + 2]) * 0.5;
+      aBuf[M] = al; primBuf[M] = -(q + 1); M++;
+    }
+  }
+
   /* ③ 먼 것(더 작은 z)부터 */
   const ord = ordBuf.subarray(0, M);
   for (let s = 0; s < M; s++) ord[s] = s;
   ord.sort((p, q) => zBuf[p] - zBuf[q]);
 
-  ensureCap(M + 2);
+  ensureCap(M + 2 + repelCount + HAMMER_PRIMS);
   vHead = 0; iHead = 0; primCount = 0;
+  let repelDrawn = 0;
   for (let s = 0; s < M; s++) {
-    const sl = ord[s], o = primBuf[sl], k = pk[o], al = aBuf[sl];
+    const sl = ord[s], o = primBuf[sl], al = aBuf[sl];
+    if (o < 0) {
+      /* 반발 표시 — 붉은 **점선**(dash 8). 얼음의 수소 결합 점선(dash 5)과 간격으로도 구분된다.
+         이것은 결합봉이 아니라 「밀어내는 힘」의 표시다(캡션·범례·한계⑧에 명시). */
+      const q = -o - 1, i = sRepel[q][0], j = sRepel[q][1];
+      emitStick(vpBuf[i * 3], vpBuf[i * 3 + 1], vpBuf[i * 3 + 2],
+                vpBuf[j * 3], vpBuf[j * 3 + 1], vpBuf[j * 3 + 2],
+                stickW * 0.62 * scale, RED_RGB, 2, 8, al);
+      repelDrawn++;
+      continue;
+    }
+    const k = pk[o];
     if (k === 0) {
       const i = pa[o], a = atoms[i];
       const r = rUnit * siteOf(mnr, a.s).r * scale;
@@ -1232,6 +1547,10 @@ function drawLattice3D(mnr, l3, x, y, w, h, alpha, pickedIdx, rect, store) {
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo3);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, iArr.subarray(0, iHead), gl.DYNAMIC_DRAW);
   gl.drawElements(gl.TRIANGLES, iHead, gl.UNSIGNED_SHORT, 0);
+  if (l3 === lat3) { strikeRepelDrawn = repelDrawn; strikeRUnitNow = rUnit; }
+
+  /* ④-0 망치 — 내려치는 동안에만. 격자와 같은 시점 변환을 쓴다 */
+  if (sOff && strike.phase === "swing") strikeDrawHammer(l3, scale, yaw, pitch);
 
   /* ④ 「심화」 — 되풀이되는 최소 단위 **하나만** 테두리로. 기본 화면에서는 그리지 않는다
      (교육과정상 단위 세포는 범위 밖이고, 기본 화면에서 강조하면 "결정 = 상자들의 집합"으로 읽힌다). */
@@ -1606,7 +1925,8 @@ function buildPicker() {
     b.onclick = () => {
       mineral = m; picked = -1;
       lattice = makeLattice(m, rnd); lat3 = makeLattice3D(m, rnd);
-      buildPicker(); info(); showPick(); drawGL(); drawLat();
+      /* 타격 중에 광물을 바꾸면 즉시 되돌린다 — applyZoom() 이 노출·안내·리셋을 한 번에 다시 판정한다 */
+      buildPicker(); info(); showPick(); applyZoom();
     };
     host.appendChild(b);
   });
@@ -1701,6 +2021,9 @@ function applyZoom() {
         ? "표면의 결이 보이기 시작합니다. <b>약 ×" + Math.round(magnification(ZOOM_BLEND_START)).toLocaleString("ko-KR") + " 단계를 넘으면</b> 입자 배열이 나타납니다."
         : "<b>손에 들고 보는 크기</b>입니다. 이 겉모습만으로 결정인지 알 수 있을까요?"));
   $("pickCard").style.display = zoomV >= ZOOM_BLEND_START ? "" : "none";
+  /* 버튼이 나타나는 순간을 배율 안내가 함께 말해 준다 — 판정은 strikeAvailable() 한 곳뿐이다 */
+  if (strikeAvailable()) $("zoomState").innerHTML += STRIKE_ZOOM_HINT;
+  strikeSync();
   updateStageNotes();
   resize();
 }
@@ -1727,6 +2050,99 @@ $("nbToggle").onchange = e => { showNb = e.target.checked; updateStageNotes(); d
 $("cellToggle").onchange = e => { showCell = e.target.checked; updateStageNotes(); drawGL(); };
 $("sZoom").oninput = e => { zoomV = +e.target.value; applyZoom(); };
 $("spinBtn").onclick = () => { spinning = !spinning; $("spinBtn").textContent = spinning ? "회전 멈추기" : "회전 시키기"; };
+
+/* ── 망치 타격 — 단계열·노출 제어·캡션 ─────────────────────────────
+   노출과 리셋의 판정은 **strikeAvailable() 하나**가 내린다(§5 금지-⑯ — 임계를 두 곳에 두면
+   한쪽만 바뀌었을 때 타격 상태가 화면에 남는다). */
+const STRIKE_SEQ = {
+  ion: ["swing", "slip", "repel", "split", "done"],
+  metal: ["swing", "slip", "done"],
+  molecular: ["swing", "crumble", "done"]
+};
+/* 구리·철은 같은 문장을 쓴다 — 두 곳에 따로 적으면 한쪽만 고쳐지는 날이 온다(F-1 · METAL_MP_NOTE 와 같은 취지) */
+const STRIKE_METAL_TEXT = "외부 힘으로 층이 밀려도 자유 전자가 양이온 사이를 계속 돌아다니며 결합을 유지합니다. 층이 밀린 뒤에도 배열과 결합이 그대로 유지되어 결정은 쪼개지지 않습니다 — 금속을 두드려 펼 수 있는 이유입니다.";
+const STRIKE_TEXT = {
+  halite: "외부 힘으로 층이 한 칸 밀리면 같은 전하의 이온이 마주 보게 됩니다. 마주 본 같은 전하 사이의 반발력(붉은 점선)으로 결정이 쪼개집니다.",
+  copper: STRIKE_METAL_TEXT,
+  iron: STRIKE_METAL_TEXT,
+  ice: "외부 힘에 분자 사이의 수소 결합이 먼저 끊어져 부스러집니다. 분자 안의 공유 결합은 끊어지지 않아 물 분자는 통째로 떨어져 나갑니다.",
+  dryice: "외부 힘에 분자 사이를 붙잡는 약한 힘(분산력)을 이겨내며 분자째 떨어져 나가 부스러집니다. 분자 안의 공유 결합은 끊어지지 않습니다.",
+  haliteRepel: "같은 전하가 마주 보게 되었습니다 — 붉은 점선은 이온 사이의 반발력입니다(결합봉이 아닙니다). 반발을 보이기 위해 타격 중에는 이온을 작게 그립니다."
+};
+const STRIKE_ZOOM_HINT = " 이제 「망치로 내려치기」를 쓸 수 있습니다 — 왼쪽 그림 아래 버튼을 보세요.";
+
+function strikeAvailable() {
+  return !cmpOn && gl && blend(zoomV) >= 0.85 && STRIKE_MODE[mineral.id];
+}
+function strikeReset() {
+  strike.on = false; strike.mnrId = null; strike.phase = "idle"; strike.t = 0;
+  strike.plan = null; strike.l3 = null; strike.primMask = null;
+  strike.maskOn = false; strike.repelAlpha = 0;
+  strikeRepelDrawn = 0;
+  strikeShowNote();
+  strikeButtons();
+}
+function strikeStart() {
+  if (!strikeAvailable() || !lat3) return;
+  const plan = strikePlan(lat3, mineral.id);
+  if (!plan) return;
+  strike.on = true; strike.mnrId = mineral.id; strike.plan = plan; strike.l3 = lat3;
+  strike.primMask = strikeBuildMask(lat3, plan.brokenBonds);
+  /* 움직임을 줄이도록 설정한 기기에서는 애니메이션을 생략하고 **곧바로 최종 상태**를 보여 준다.
+     파문·점멸·흔들림은 어느 경우에도 쓰지 않는다(매뉴얼 §10). */
+  strike.phase = REDUCE_MOTION ? "done" : "swing";
+  strike.t = 0;
+  strikeComputeOffsets();
+  strikeShowNote(); strikeButtons();
+}
+/* 노출 조건이 무너졌거나(비교 모드·배율 하향·비대상 광물) 격자가 갈렸으면 즉시 되돌린다 */
+function strikeSync() {
+  if (strike.on && (!strikeAvailable() || strike.mnrId !== mineral.id || strike.l3 !== lat3)) strikeReset();
+  strikeButtons();
+}
+function strikeButtons() {
+  const av = !!strikeAvailable();
+  $("strikeBtn").style.display = av ? "" : "none";
+  $("strikeReset").style.display = (av && strike.phase !== "idle") ? "" : "none";
+}
+function strikeShowNote() {
+  const el = $("strikeNote");
+  let t = "";
+  if (strike.on) {
+    /* repel 문구는 **split 이 끝날 때까지** 그대로 둔다 — split 0.8 s 동안 캡션이 사라졌다가
+       done 문구로 다시 뜨면 화면이 깜빡이고, 정작 조각이 갈라지는 순간에 설명이 없다(S-검토 B B-1) */
+    if (strike.mnrId === "halite" && (strike.phase === "repel" || strike.phase === "split")) t = STRIKE_TEXT.haliteRepel;
+    else if (strike.phase === "done") t = STRIKE_TEXT[strike.mnrId] || "";
+  }
+  el.textContent = t;
+  /* ⚠ 빈 문자열("")로 되돌리면 페이지 CSS 의 `#strikeNote{display:none}` 이 다시 이겨 캡션이
+     화면에 뜨지 않는다(실측으로 잡은 결함). 켤 때는 반드시 값을 명시한다. */
+  el.style.display = t ? "block" : "none";
+}
+function strikeStep(dt) {
+  if (!strike.on) return;
+  const seq = STRIKE_SEQ[strike.plan.mode];
+  if (strike.phase !== "done") {
+    strike.t += dt;
+    let dur = STRIKE_T[strike.phase];
+    while (strike.phase !== "done" && dur && strike.t >= dur) {
+      strike.t -= dur;
+      strike.phase = seq[seq.indexOf(strike.phase) + 1];
+      dur = STRIKE_T[strike.phase];
+      strikeShowNote(); strikeButtons();
+    }
+  }
+  strikeComputeOffsets();
+}
+$("strikeBtn").onclick = strikeStart;
+$("strikeReset").onclick = strikeReset;
+/* 검증 전용 훅 — 화면에는 아무것도 표시하지 않는다(§5 금지-⑧) */
+window.__MINERAL_STRIKE__ = function () {
+  return {
+    phase: strike.phase, mnrId: strike.mnrId,
+    repelDrawn: strikeRepelDrawn, rUnitNow: strikeRUnitNow
+  };
+};
 
 /* ── 성능: DPR 상한·저사양 자동 강하 ── */
 let dprCapUser = Math.min(window.devicePixelRatio || 1, 2);
@@ -1768,6 +2184,7 @@ function loop(ts) {
   const dtSec = last ? Math.min(0.08, (ts - last) / 1000) : 0; last = ts;
   trackPerf(dtSec * 1000);
   if (spinning && !dragging) spin += dtSec * 0.35;
+  strikeStep(dtSec);
   drawGL();
   rafId = requestAnimationFrame(loop);
 }
