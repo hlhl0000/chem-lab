@@ -54,9 +54,14 @@
   .ros .wide{grid-column:1 / -1}
   .stagewrap{display:grid; grid-template-columns:minmax(0,1fr) 176px; gap:0}
   #thermoWrap{border-left:0; border-top-left-radius:0; border-bottom-left-radius:0}
+  /* 4단계 전용 — 왼쪽 온도계 | 무대 | 오른쪽 온도계 (2026-08-25 재작업).
+     클래스 2개(0,2,0)로 써서 아래 미디어쿼리(0,1,0)를 특이도로 이긴다 (매뉴얼 §12④) */
+  .stagewrap.stagewrap--tri{grid-template-columns:176px minmax(0,1fr) 176px}
+  #thermoWrapL{border-right:0; border-top-right-radius:0; border-bottom-right-radius:0}
   .thermolegend{display:none; margin:6px 0 0; font-size:13px; color:var(--t2); line-height:1.5}
   @media(max-width:743px){
     .stagewrap{grid-template-columns:minmax(0,1fr) 100px}
+    .stagewrap.stagewrap--tri{grid-template-columns:76px minmax(0,1fr) 76px}
   }
   /* 1단계 증발 탭(온도계 없음) 전용 — 176px/100px 빈 트랙을 없앤다.
      ⚠ 클래스 2개(0,2,0)로 써서 위 미디어쿼리(0,1,0)를 특이도로 이긴다 (매뉴얼 §12④) */
@@ -152,6 +157,9 @@
         <span>열린 용기 (뚜껑 없음)</span><span>닫힌 용기 (밀폐)</span>
       </div>
       <div class="stagewrap" id="stageWrap">
+        <div class="stage stage--light" id="thermoWrapL" style="display:none">
+          <canvas id="thermoL" aria-label="왼쪽 비커의 온도계."></canvas>
+        </div>
         <div class="stage stage--light" id="glWrap">
           <canvas id="gl" aria-label="비커에 담긴 액체. 뒤쪽 벽의 줄무늬가 액체를 지나며 굴절되어 좌우가 뒤집혀 보입니다. 끓기 시작하면 바닥에서 기포가 올라오고 액면 위로 증기가 피어오릅니다."></canvas>
           <div id="glFallback">

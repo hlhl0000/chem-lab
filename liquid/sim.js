@@ -955,16 +955,24 @@ function sealConclusion() {
    WebGL 셰이더 안이 아니라 여기서 그린다(§5 금지10) — 폴백 시에도 계속 그려진다.
    데이터 색 정확히 3색: --d-blue(선택된 액체 마커) · --d-red(액주) · --t1(눈금·비선택 마커). */
 const tcv = $("thermo"), tctx = tcv.getContext("2d");
+/* 4단계 전용 왼쪽 온도계 — 비커 무대 왼쪽에 따로 선다 (2026-08-25 사용자 지시 재작업:
+   반쪽 액주 하나가 아니라 「왼쪽에 하나, 오른쪽에 하나」). 그리기 코드는 같은 함수를 쓴다(F-1). */
+const tcvL = $("thermoL"), tctxL = tcvL ? tcvL.getContext("2d") : null;
 /* 이름 표기 맵 — F-1이 허용한 유일한 예외(LIQ.LIST 순서 고정). 온도계·60 ℃ 줄이 함께 쓴다.
    mid = 중간명(온도계 풀 폭 · vp60line), ab = 1글자 약칭(온도계 좁은 폭) */
 const DISPLAY = {
   ether: { mid: "에터", ab: "에" }, ethanol: { mid: "에탄올", ab: "탄" },
   water: { mid: "물", ab: "물" }, acetic: { mid: "아세트산", ab: "산" }
 };
-function drawThermo() {
+/* 온도계 한 개를 그린다.
+   spec = { t 지금 온도 · color 액주 색 · tag 액주 옆 이름표(없으면 null) · bp 끓는점 마커를 그리는가 }
+   ★ 4단계는 이 함수를 두 번 부른다(왼쪽 캔버스 · 오른쪽 캔버스). 나머지 단계는 오른쪽 하나만. */
+function paintThermo(cv, ctx, spec) {
+  if (!cv || !ctx) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const W = tcv.width / dpr, H = tcv.height / dpr;
+  const W = cv.width / dpr, H = cv.height / dpr;
   if (W < 40 || H < 60) return;   // 매뉴얼 §5 — 숨은/작은 캔버스 방어(arc 반지름 음수 예외 회피)
+  const tctx = ctx;               // 아래 본문은 기존 코드를 그대로 쓴다(오작성 위험을 줄인다)
   tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   tctx.clearRect(0, 0, W, H);
   tctx.fillStyle = C.stageLight; tctx.fillRect(0, 0, W, H);
@@ -988,33 +996,18 @@ function drawThermo() {
   tctx.strokeRect(tubeX - tubeW / 2, y1, tubeW, y0 - y1);
   tctx.beginPath(); tctx.arc(tubeX, y0, bulbR, 0, 6.2832); tctx.stroke();
 
-  if (stage === 4 && duo.L && duo.R) {
-    /* ── 4단계 — 두 비커의 온도를 좌/우 반쪽 액주로 나란히 (2026-08-25 지시).
-       색은 가열 곡선과 같은 배정(왼쪽 = --d-blue, 오른쪽 = --d-gray) + 「왼/오」 직접 레이블(§9).
-       소진된 비커는 duoFill 과 같은 규칙(붙잡아 둔 값)을 읽는다 — 판정을 두 곳에서 내리지 않는다. */
-    const tL = Math.max(TMIN, Math.min(TMAX, duoTemp(duo.L)));
-    const tR = Math.max(TMIN, Math.min(TMAX, duoTemp(duo.R)));
-    const yL2 = Y(tL), yR2 = Y(tR);
-    const half = (tubeW - 2) / 2;
-    tctx.fillStyle = C.blue;
-    tctx.beginPath(); tctx.arc(tubeX, y0, bulbR - 1, 1.5708, 4.7124); tctx.fill();
-    tctx.fillRect(tubeX - tubeW / 2 + 1, yL2, half, y0 - yL2 + bulbR);
-    tctx.fillStyle = C.gray;
-    tctx.beginPath(); tctx.arc(tubeX, y0, bulbR - 1, -1.5708, 1.5708); tctx.fill();
-    tctx.fillRect(tubeX + tubeW / 2 - 1 - half, yR2, half, y0 - yR2 + bulbR);
-    /* 「왼/오」 레이블 — 각 액주 꼭대기 오른쪽. 겹치면 위아래로 벌린다 */
+  // 액주 — 구근에서 지금 온도까지 채운다. 범위 밖은 양끝에서 자른다
+  const tClamped = Math.max(TMIN, Math.min(TMAX, spec.t));
+  const colY = Y(tClamped);
+  tctx.fillStyle = spec.color;
+  tctx.beginPath(); tctx.arc(tubeX, y0, bulbR - 1, 0, 6.2832); tctx.fill();
+  tctx.fillRect(tubeX - tubeW / 2 + 1, colY, tubeW - 2, y0 - colY + bulbR);
+  /* 이름표 — 4단계에서 어느 비커의 온도계인지 액주 옆에 직접 적는다(§9 두 번째 채널).
+     색만으로 구분하지 않는다. 액주 꼭대기가 눈금 위로 붙지 않게 y1+6 아래로 민다. */
+  if (spec.tag) {
     tctx.font = "700 12px sans-serif"; tctx.textAlign = "left"; tctx.textBaseline = "middle";
-    let ly1 = yL2, ly2 = yR2;
-    if (Math.abs(ly1 - ly2) < 13) { const mid = (ly1 + ly2) / 2; ly1 = mid - 6.5; ly2 = mid + 6.5; }
-    tctx.fillStyle = C.blue; tctx.fillText("왼", afterTubeX, Math.max(y1 + 6, ly1));
-    tctx.fillStyle = C.gray; tctx.fillText("오", afterTubeX, Math.max(y1 + 6, ly2));
-  } else {
-    // 액주 — 구근에서 현재 온도까지 --d-red로 채움. 범위 밖은 양끝에서 자른다
-    const tClamped = Math.max(TMIN, Math.min(TMAX, st.t));
-    const colY = Y(tClamped);
-    tctx.fillStyle = C.red;
-    tctx.beginPath(); tctx.arc(tubeX, y0, bulbR - 1, 0, 6.2832); tctx.fill();
-    tctx.fillRect(tubeX - tubeW / 2 + 1, colY, tubeW - 2, y0 - colY + bulbR);
+    tctx.fillStyle = spec.color;
+    tctx.fillText(spec.tag, afterTubeX, Math.max(y1 + 6, colY));
   }
 
   // 눈금선 10 ℃ 간격 + 숫자 20 ℃ 간격(눈금 숫자는 유리관 왼쪽)
@@ -1038,8 +1031,9 @@ function drawThermo() {
   const wideLabel = l => "▶ " + DISPLAY[l.id].mid + " " + boilingPoint(l, st.pext).toFixed(1);
   const narrow = LIQ.LIST.some(l => tctx.measureText(wideLabel(l)).width > labelMaxW);
   /* ★ 마커와 범례는 같은 판정 하나를 읽는다 (매뉴얼 4부 ⑭ — 표기 판정을 두 곳에서 내리지 않는다).
-     노출 표 B-3: 「4액체 끓는점 눈금·레이블」·「#thermolegend」는 1~3단계 —, 4단계는 「답 확인」 후. */
-  const showBp = thermoBpShown();
+     노출 표 B-3: 「4액체 끓는점 눈금·레이블」·「#thermolegend」는 5단계 「답 확인」 후에만.
+     ★ 4단계의 두 온도계는 spec.bp = false 라 이 블록을 건너뛴다 — 범례 판정은 drawThermo() 가 맡는다. */
+  const showBp = spec.bp && thermoBpShown();
   $("thermolegend").style.display = (narrow && showBp) ? "block" : "none";
 
   tctx.textAlign = "left"; tctx.textBaseline = "middle";
@@ -1059,6 +1053,20 @@ function drawThermo() {
     tctx.fillText(text, afterTubeX, y);
   });
   tctx.textAlign = "left"; tctx.textBaseline = "alphabetic";
+}
+
+/* 온도계 배치 판정 — 한 곳에서만 내린다(F-1).
+   4단계: 왼쪽 캔버스 = 왼쪽 비커(--d-blue) · 오른쪽 캔버스 = 오른쪽 비커(--d-gray).
+          색 배정은 가열 곡선의 두 선과 같다. 소진된 비커는 duoTemp() 가 붙잡아 둔 값을 준다.
+   그 밖: 오른쪽 온도계 하나에 --d-red(계측기 관습색 · §4 예외). */
+function drawThermo() {
+  if (stage === 4 && duo.L && duo.R) {
+    paintThermo(tcvL, tctxL, { t: duoTemp(duo.L), color: C.blue, tag: "왼", bp: false });
+    paintThermo(tcv, tctx, { t: duoTemp(duo.R), color: C.gray, tag: "오", bp: false });
+    const lg = $("thermolegend"); if (lg) lg.style.display = "none";
+    return;
+  }
+  paintThermo(tcv, tctx, { t: st.t, color: C.red, tag: null, bp: true });
 }
 
 /* ── 그래프 ── */
@@ -1153,6 +1161,9 @@ function drawChart() {
       cctx.fillStyle = C.red; cctx.font = "600 10.5px sans-serif";
       cctx.fillText(`끓는점 ${Tb.toFixed(1)} ℃ (외부 ${duo.L.st.pext.toFixed(2)} atm)`, pad.l + 6, Y(Tb) - 5);
     }
+    /* 레이블이 붙는 자리 — 「꺾이는 자리」(끓기 시작 지점), 아직 안 끓었으면 곡선 끝.
+       ★ 이 규칙은 여기 한 곳에만 둔다(F-1) — 아래 one() 과 위아래 배치 판정이 같은 점을 읽는다. */
+    const anchorOf = b => (b.trace.length < 2 ? null : (b.trace.find(p => p.b) || b.trace[b.trace.length - 1]));
     /* 소진된 뒤에는 그 곡선을 더 연장하지 않는다 — trace 가 done 시점에서 멈춘다(stepDuoOne) */
     const one = (b, dash, col, dy) => {
       if (b.trace.length < 2) return;
@@ -1164,7 +1175,7 @@ function drawChart() {
          양쪽이 함께 끓는 동안 두 끝점이 같은 자리(같은 시각·같은 온도)에 겹쳐
          나중에 그린 레이블이 앞의 것을 덮는다(실측 C2-boiling-1194 — 「50 mL」가 사라졌다).
          끓기 시작 시각은 두 비커가 서로 다르므로 겹치지 않는다. */
-      const anchor = b.trace.find(p => p.b) || b.trace[b.trace.length - 1];
+      const anchor = anchorOf(b);
       /* 2라운드는 다른 변인(가열 출력)이 레이블이다 (2026-08-25) */
       const lab = duo.round === 2 ? `${b.st.heat} W` : `${b.startVol} mL`;
       cctx.font = "700 12px sans-serif";
@@ -1177,9 +1188,15 @@ function drawChart() {
       cctx.fillStyle = col; cctx.fillText(lab, lx, ly);
     };
     /* dy 는 끓는점 점선 레이블(Y(Tb)−5 자리)과 겹치지 않도록 벌린 값이다 —
-       −8 로 두면 먼저 끓는 쪽의 레이블 배경판이 「끓는점 … (외부 1.00 atm)」을 덮는다(실측) */
-    one(duo.L, [], C.blue, -24);       // 왼쪽(적은 쪽) 레이블은 곡선 위
-    one(duo.R, [5, 4], C.gray, 18);    // 오른쪽(많은 쪽) 레이블은 곡선 아래
+       −8 로 두면 먼저 끓는 쪽의 레이블 배경판이 「끓는점 … (외부 1.00 atm)」을 덮는다(실측).
+       ★ 위/아래는 «그 순간 어느 곡선이 위에 있는가»로 정한다 (2026-08-25 실측 수정).
+         위 곡선의 레이블은 위로, 아래 곡선의 레이블은 아래로 — 두 레이블이 가운데에서 만나지 않는다.
+         2라운드(300 W vs 600 W)는 같은 시각에 두 곡선의 «높이»가 크게 벌어지는데, 고정 배치로 두면
+         아래 곡선의 「위 레이블」과 위 곡선의 「아래 레이블」이 정면으로 겹친다(실측 r2-1194). */
+    const aL = anchorOf(duo.L), aR = anchorOf(duo.R);
+    const lUp = !(aL && aR) || aL.t >= aR.t;          // 왼쪽이 위에 있으면 왼쪽 레이블이 위
+    one(duo.L, [], C.blue, lUp ? -24 : 18);
+    one(duo.R, [5, 4], C.gray, lUp ? 18 : -24);
     if (!all.length) {
       /* 360 px 폭에서는 한 줄이 눈금 밖으로 넘친다 — 문구를 줄이지 않고 두 줄로 나눈다 */
       cctx.fillStyle = C.t3; cctx.font = "12.5px sans-serif";
@@ -1589,7 +1606,8 @@ const SHOW = {
   ctlT2:        [1, 0, 0, 0, 0],   // 1단계 — 온도 슬라이더
   ctlSealSpd:   [1, 0, 0, 0, 0],   // 1단계 — 시간 배속 (2026-08-25 피드백)
   speedNote:    [0, 0, 0, 0, null],// 5단계 액체별 권장 배속 안내 — applyLiqSpeed() 가 판정(추정 6)
-  thermoWrap:   [0, 1, 1, 1, 1],   // ★ 4단계도 온도계(왼/오 두 액주 · 2026-08-25 지시)
+  thermoWrap:   [0, 1, 1, 1, 1],   // 오른쪽 온도계 — 4단계에서는 「오른쪽 비커」용(2026-08-25)
+  thermoWrapL:  [0, 0, 0, 1, 0],   // ★ 왼쪽 온도계 — 4단계 전용(2026-08-25 재작업 지시)
   thermolegend: [null, null, null, null, null],  // drawThermo() 가 마커 노출과 함께 판정(매뉴얼 4부 ⑭)
   glFallback:   [null, null, null, null, null],  // ◐ initGL() 실패 시에만
   roTemp:       [0, 1, 1, 0, 1],   // 4단계는 좌·우 각각(실행 C)
@@ -1629,7 +1647,7 @@ const BLOCK = { ctlHeat: "block", ctlSpeed: "block" };
 
 const thermoBpShown = () => stage === 5 && answerShown;
 const thermoAria = () => stage === 4
-  ? "온도계. 왼쪽 비커(파란 액주)와 오른쪽 비커(회색 액주)의 지금 온도를 나란히 표시합니다."
+  ? "오른쪽 비커의 온도계. 지금 온도를 표시합니다."
   : thermoBpShown()
   ? "온도계. 지금 온도와 네 액체의 끓는점 눈금이 함께 표시됩니다."
   : "온도계. 지금 온도를 표시합니다.";
@@ -1744,8 +1762,10 @@ function applyStage(n) {
   /* answerShown 을 껐으니 답을 품고 있던 것들을 다시 그린다 —
      5단계에서 답을 켠 채 다른 단계로 갔다가 돌아오면 카드·물성·기록표에 답이 남는다 */
   buildLiquidPicker(); info(); renderTable();
-  /* 1단계(증발)는 온도계 트랙이 없는 한 칸 배치를 쓴다. 4단계는 온도계가 돌아왔다(2026-08-25) */
+  /* 1단계(증발)는 온도계 트랙이 없는 한 칸 배치.
+     4단계는 「왼쪽 온도계 | 무대 | 오른쪽 온도계」 세 칸 배치다 (2026-08-25 재작업). */
   $("stageWrap").classList.toggle("stagewrap--duo", n === 1);
+  $("stageWrap").classList.toggle("stagewrap--tri", n === 4);
   $("stageTitle").textContent = STAGE[n].title;
   $("designTitle").textContent = n === 4 ? "무엇을 비교할까?" : "실험 설계 — 무엇을 바꿀지 먼저 정한다";
   $("stageDesc").textContent = STAGE[n].desc;                              // ⑶
@@ -2145,6 +2165,7 @@ function resize() {
   gcv.style.height = h + "px";
   fit2d(zcv, h);
   fit2d(tcv, h);   // 온도계는 비커 캔버스와 높이를 공유한다(3-B)
+  if (tcvL) fit2d(tcvL, h);   // 4단계 왼쪽 온도계도 같은 높이(2026-08-25)
   if (dcv) fit2d(dcv, h);   // 2D 이중 비커도 같은 높이를 쓴다(실행 C)
   if (mcv) mcv.style.height = h + "px";   // 3D 분자 캔버스 — 폭·버퍼는 m3dFlush 가 스스로 맞춘다
   fit2d(ccv, Math.max(220, Math.min(300, (ccv.clientWidth || 300) * 0.42)));
