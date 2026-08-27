@@ -161,6 +161,16 @@ const SIMS = [
     ready: false,
     desc: "온도를 낮출 때 석출되는 양을 용해도 곡선 위에서 계산하고 확인합니다.",
     tags: ["용해도","포화 용액","재결정"]
+  },
+  {
+    id: "redox",
+    title: "산화와 환원",
+    cat: "통합과학",
+    path: "redox/",
+    icon: "redox",
+    ready: true,
+    desc: "검은 산화 구리(Ⅱ)와 탄소 가루를 가열해 붉은색 구리가 생기고, 발생한 기체가 고무관을 지나 석회수를 뿌옇게 흐리는 과정을 사실적인 3D 장치로 재현합니다. 분자 크기로 확대하면 산소가 구리를 떠나 탄소에게 가는 것이 보입니다 — 산소를 잃는 환원과 산소를 얻는 산화는 항상 동시에 일어납니다.",
+    tags: ["산화","환원","산소의 이동","동시성","산화 구리(Ⅱ)","석회수","이산화 탄소"]
   }
 ];
 
@@ -242,5 +252,13 @@ const ICONS = {
           <path d="M46 22h14M46 31h14M46 41h14" stroke="currentColor" stroke-width="3"/>`,
   crystal:`<path d="M32 6l22 14v24L32 58 10 44V20z" fill="none" stroke="currentColor"
            stroke-width="4" stroke-linejoin="round"/><path d="M32 6v52M10 20l44 24M54 20L10 44"
-           stroke="currentColor" stroke-width="2.5" opacity=".45"/>`
+           stroke="currentColor" stroke-width="2.5" opacity=".45"/>`,
+  redox:`<rect x="5" y="16" width="35" height="14" rx="7" fill="none" stroke="currentColor" stroke-width="4"/>
+         <circle cx="14" cy="23" r="2.4"/><circle cx="21" cy="23" r="2.4"/><circle cx="28" cy="23" r="2.4"/>
+         <path d="M22 36c-3.5 4.5-5.5 7.2-5.5 9.8a5.5 5.5 0 0 0 11 0c0-2.6-2-5.3-5.5-9.8z"
+           fill="none" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round"/>
+         <path d="M44 23h7l-3-3m3 3-3 3" fill="none" stroke="currentColor" stroke-width="3"
+           stroke-linecap="round" stroke-linejoin="round"/>
+         <path d="M46 36v14h13V36" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/>
+         <path d="M46 44h13" stroke="currentColor" stroke-width="2.5" opacity=".5"/>`
 };
