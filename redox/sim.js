@@ -272,6 +272,332 @@ function redoxT1() {
     Math.log((REDOX.T_EQ - REDOX.T_AMB) / (REDOX.T_EQ - REDOX.T_START));
 }
 
+/* ================================================================
+   마그네슘의 연소 — 탭2 계산부 (설계지시안_마그네슘연소_v1 v1.1 §3 단계 1)
+
+   반응식  2Mg + O₂ → 2MgO                  (교과서 35쪽 반응식 박스)
+   「마그네슘(Mg)은 전자를 잃어 마그네슘 이온(Mg²⁺)이 되고 산소(O)는 전자를
+     얻어 산화 이온(O²⁻)이 되며, 두 이온이 결합하여 산화 마그네슘(MgO)이
+     생성된다.」 (교과서 35쪽 본문 원문)
+
+   모델
+   ① 이벤트 단위 화학량론 — 1이벤트 = Mg 2개 + O₂ 1개 소비 = 전자 4개 이동
+      (Mg 하나가 2개 잃고 O 하나가 2개 얻음) = MgO 2단위. 총 12이벤트
+      (Mg 24 · O₂ 12, 화학량론 2:1).
+   ② 점화 모형 — 토치 유지 중 T가 T_TORCH로 지수 수렴(§14 ③-1 오일러 금지).
+      T≥T_IGN에서 개시. 개시 후에는 «자기 지속»(발열 산화 — 문헌 근거, 지시안
+      §1-1 #10): 토치를 떼도 목표 T_BURN으로 완결까지 진행. 완결 후 냉각.
+      ⚠ 온도·시간 상수는 전부 «임의 모형값»(실제 점화 온도 문헌값 ≈454~507 ℃
+      와 다른 압축 연출값) — 화면에 숫자로 표시하지 않는다(지시안 추정 2).
+   ③ 전자 48개를 «개별로» 추적한다. 미시 배치 함수 mgbLayout()이 렌더와 검증이
+      함께 쓰는 단일 원천이다(원칙 11).
+   ④ 동시성 카운터 두 원천 — 「마그네슘이 잃은 전자」는 mg 장부(lost 합),
+      「산소가 얻은 전자」는 ⒜ mgbLayout()이 내는 O 입자 배열의 소유 상태(렌더
+      원천)와 ⒝ oxy 장부, 두 축에서 독립적으로 센다(검사군 13 — P-검토 MF-1 ⑶).
+      소유는 반응 사건 시점에 넘어간다(v1 §10 존치 결정과 같은 관례).
+   ================================================================ */
+
+const MGB = {
+  N_MG: 24, N_O2: 12, EVENTS: 12,          // 화학량론 2:1 (교과서 35쪽 계수)
+  E_PER_MG: 2, E_PER_EVENT: 4,             // Mg²⁺의 2+ = 전자 2개 잃음 (중2 선행)
+  T_AMB: 20, T_TORCH: 1000, T_IGN: 600,    // 임의 모형값 — 화면 비표시
+  T_BURN: 3000, TAU_H: 3, TAU_C: 6,
+  K_P: 1 / 20,                             // 진행률/s — 개시 후 20 s 완결
+  FLIGHT: 0.9,                             // 전자 비행 시간 s (미시)
+  APPROACH: 1.8,                           // O₂ 접근→안착 시간 s (미시)
+  M: { Mg: 24.305, O: 15.999 }             // 몰질량 g/mol (문헌값)
+};
+
+/* 미시 배치 기하 — 렌더·검사 공용 (원칙 13: 매직 넘버 금지 — 접촉 간격은
+   반지름 합에서 유도). 좌측 Mg 금속 격자(4열×6행), 우측 공기 중 O₂ 분자(가로
+   O=O, 2열×6행). 소비는 공기와 닿는 오른쪽 열부터 윗행 우선 — 표면부터 탄다. */
+const GEO_MG = {
+  R: { Mg: 1.0, O: 0.9, E: 0.28 },         // 공 반지름 (전자는 원자와 뚜렷이 작게 — 지시안 추정 3)
+  COLS: 4, ROWS: 6,                        // Mg 격자 4×6 = 24
+  DX: 2.2, DY: 2.2,                        // 격자 간격 (> 2×R.Mg — 겹침 0)
+  O2_BOND: 1.85,                           // O=O 표시 간격 (> 2×R.O = 1.8)
+  O2_X0: 12.6, O2_DX: 3.8, O2_DY: 2.2,     // O₂ 대기(공기) 영역 — 가로 분자 2열×6행
+  Z_APPROACH: 4.0,                         // O₂ 이동 고도 (격자 앞·전자보다 뒤)
+  Z_FLY: 6.0,                              // 전자 비행 고도 — 어느 것보다 앞
+  E_OFF: { x: 0.5, y: 0.55, z: 0.7 }       // Mg 표면의 원자가 전자 2개 자리 (±y)
+};
+GEO_MG.MGO_Z = GEO_MG.R.Mg + GEO_MG.R.O;   // O²⁻ 안착 깊이 = 접촉 간격 (유도값 1.9)
+
+/* Mg 자리 — i번째 원자. 오른쪽 열부터(공기 접촉면), 열 안에서는 윗행부터 소비 */
+function mgSite(i) {
+  const col = GEO_MG.COLS - 1 - Math.floor(i / GEO_MG.ROWS);
+  const row = GEO_MG.ROWS - 1 - (i % GEO_MG.ROWS);
+  return { x: col * GEO_MG.DX, y: row * GEO_MG.DY, z: 0 };
+}
+/* O₂ 분자 m의 대기(공기) 중심 자리 — 가로 분자, 2열×6행 */
+function o2Home(m) {
+  return {
+    x: GEO_MG.O2_X0 + Math.floor(m / GEO_MG.ROWS) * GEO_MG.O2_DX,
+    y: (m % GEO_MG.ROWS) * GEO_MG.O2_DY, z: 0
+  };
+}
+/* O 원자 j(0~23)의 공기 중 자리 — 분자 m=⌊j/2⌋의 좌(짝수)/우(홀수) */
+function oAirSite(j) {
+  const h = o2Home(Math.floor(j / 2));
+  const s = (j % 2 === 0) ? -GEO_MG.O2_BOND / 2 : GEO_MG.O2_BOND / 2;
+  return { x: h.x + s, y: h.y, z: h.z };
+}
+
+function mgbInit() {
+  const mg = [], oxy = [], elec = [];
+  for (let i = 0; i < MGB.N_MG; i++)
+    mg.push({ i: i, lost: 0, firedAt: NaN });          // 장부 ①: Mg가 잃은 전자
+  for (let j = 0; j < 2 * MGB.N_O2; j++)
+    oxy.push({ j: j, gained: 0, at: NaN });            // 장부 ②: O가 얻은 전자
+  for (let k = 0; k < MGB.E_PER_MG * MGB.N_MG; k++)
+    elec.push({ k: k, mgIdx: Math.floor(k / 2), oIdx: null, born: NaN });
+  return {
+    t: 0, T: MGB.T_AMB, torch: false, ignited: false, done: false,
+    p: 0, E: 0, mg: mg, oxy: oxy, elec: elec
+  };
+}
+
+/* 반응 이벤트 — Mg 2개가 전자를 2개씩 잃고(산화) O 2개가 2개씩 얻는다(환원).
+   전자 k의 목적지: Mg(2e)의 전자 → O(2e), Mg(2e+1)의 전자 → O(2e+1). */
+function mgbFireEvent(s) {
+  const e = s.E;
+  for (const i of [2 * e, 2 * e + 1]) {
+    s.mg[i].lost = MGB.E_PER_MG; s.mg[i].firedAt = s.t;
+    s.oxy[i].gained = MGB.E_PER_MG; s.oxy[i].at = s.t;
+    for (const k of [2 * i, 2 * i + 1]) {
+      s.elec[k].oIdx = i; s.elec[k].born = s.t;
+    }
+  }
+  s.E = e + 1;
+}
+
+function mgbStep(s, dt) {
+  const target = s.ignited && !s.done ? MGB.T_BURN
+    : (s.torch && !s.done ? MGB.T_TORCH : MGB.T_AMB);
+  const tau = target > s.T ? MGB.TAU_H : MGB.TAU_C;
+  s.T = target + (s.T - target) * Math.exp(-dt / tau);   // 지수 해 (§14 ③-1)
+  if (!s.ignited && s.T >= MGB.T_IGN) s.ignited = true;
+  if (s.ignited && s.p < 1) s.p = Math.min(1, s.p + MGB.K_P * dt);
+  const eTarget = Math.floor(s.p * MGB.EVENTS + 1e-9);
+  while (s.E < eTarget) mgbFireEvent(s);
+  if (s.p >= 1 && !s.done) s.done = true;
+  s.t += dt;
+  return s;
+}
+
+/* ── 동시성 카운터 — 서로 다른 원천에서 독립적으로 센다 (검사군 13·화면 공용) ── */
+function mgbLostByMg(s) {
+  let n = 0;
+  for (let i = 0; i < s.mg.length; i++) n += s.mg[i].lost;
+  return n;
+}
+function mgbGainedByO(s) {
+  let n = 0;
+  for (let j = 0; j < s.oxy.length; j++) n += s.oxy[j].gained;
+  return n;
+}
+function mgbCounts(s) {
+  return {
+    mgLeft: MGB.N_MG - 2 * s.E, o2Left: MGB.N_O2 - s.E,
+    mgIon: 2 * s.E, oIon: 2 * s.E, mgo: 2 * s.E,
+    lost: mgbLostByMg(s), gained: mgbGainedByO(s)
+  };
+}
+
+/* 빛 — 연소 중에만 1 (개시 전 0·완결 후 0). 세기 연출은 FX가 이 값을 평활한다 */
+function mgbLight(s) { return s.ignited && s.p < 1 ? 1 : 0; }
+
+/* ── 미시 배치 — 렌더와 검사가 함께 쓰는 단일 원천 (원칙 11) ──
+   반환: { atoms: [{el:'Mg'|'O'|'E', x,y,z, …}], pairs: [[a,b,kind]] }
+   pairs 는 «허용 접촉»(겹침 검사 면제)이자 표시선의 근거다:
+     kind 'o2'  = O=O 분자 표시 (공기 중·접근 초반)
+     kind 'mgo' = Mg²⁺–O²⁻ 이온쌍 «인접» (막대를 그리지 않는다 — §5-7 접촉 배열)
+     kind 'eat' = 전자가 원자에 붙어 있음 (자기 원자와의 접촉 면제) */
+function mgbLayout(s) {
+  const atoms = [], pairs = [];
+  const mgAt = new Array(MGB.N_MG), oAt = new Array(2 * MGB.N_O2);
+  for (let i = 0; i < MGB.N_MG; i++) {
+    const p = mgSite(i);
+    mgAt[i] = atoms.length;
+    atoms.push({ el: "Mg", x: p.x, y: p.y, z: p.z, i: i, ion: s.mg[i].lost > 0 });
+  }
+  for (let j = 0; j < 2 * MGB.N_O2; j++) {
+    const o = s.oxy[j];
+    let pos, phase;
+    if (o.gained === 0) {
+      pos = oAirSite(j); phase = "air";
+    } else {
+      /* 분자는 «강체»로 난다 — 두 O를 각자 선형 보간하면 중간에서 간격이 1.85→1.31로
+         수렴해 겹친다(검사군 15-1이 잡은 실측). 분자 중심이 경로를 날고, 방향만
+         가로(공기) → 세로(표적 Mg 쌍)로 회전한다: 간격은 내내 O2_BOND 그대로다. */
+      const mp = mgSite(j);
+      const tgt = { x: mp.x, y: mp.y, z: GEO_MG.MGO_Z };   // 자기 Mg²⁺ 바로 앞(접촉)
+      const m = Math.floor(j / 2), h = o2Home(m), mpp = mgSite(j ^ 1);
+      const cen = { x: mp.x, y: (mp.y + mpp.y) / 2 };      // 표적 Mg 쌍의 중앙
+      const sSign = (j % 2 === 0) ? -1 : 1;                // 공기 중 좌/우
+      const tSign = mp.y > mpp.y ? 1 : -1;                 // 표적이 위/아래
+      const half = GEO_MG.O2_BOND / 2;
+      const f = Math.min(1, Math.max(0, (s.t - o.at) / MGB.APPROACH));
+      if (f >= 1) {
+        pos = tgt; phase = "bound";
+      } else if (f < 0.22) {                    // ① 제자리에서 이동 고도로
+        pos = { x: h.x + sSign * half, y: h.y, z: GEO_MG.Z_APPROACH * (f / 0.22) };
+        phase = "approach";
+      } else if (f < 0.78) {                    // ② 고도에서 중심 이동 + 강체 회전
+        const g = (f - 0.22) / 0.56, th = g * Math.PI / 2;
+        const cx = h.x + (cen.x - h.x) * g, cy = h.y + (cen.y - h.y) * g;
+        pos = { x: cx + sSign * half * Math.cos(th),
+                y: cy + tSign * half * Math.sin(th), z: GEO_MG.Z_APPROACH };
+        phase = "approach";
+      } else {                                  // ③ 갈라지며 자기 Mg²⁺ 앞으로 내려앉음
+        const g = (f - 0.78) / 0.22;
+        const y0 = cen.y + tSign * half;
+        pos = { x: tgt.x, y: y0 + (tgt.y - y0) * g,
+                z: GEO_MG.Z_APPROACH + (GEO_MG.MGO_Z - GEO_MG.Z_APPROACH) * g };
+        phase = "approach";
+      }
+    }
+    oAt[j] = atoms.length;
+    atoms.push({ el: "O", x: pos.x, y: pos.y, z: pos.z, j: j,
+                 phase: phase, ion: o.gained > 0 });
+  }
+  /* O=O 표시 — 공기 중 + 전자가 도착하기 전(f<0.5·비행 0.9 s = 접근의 절반)까지.
+     전자를 얻어 O²⁻가 되면 분자 표시를 끊는다. 강체 회전이라 표시 여부와 무관하게
+     기하 간격은 내내 O2_BOND(1.85 > R합 1.8)다 — 겹침 검사에 면제가 필요 없다 */
+  for (let m = 0; m < MGB.N_O2; m++) {
+    const a = s.oxy[2 * m], b = s.oxy[2 * m + 1];
+    const preSplit = t0 => !isFinite(t0) || (s.t - t0) / MGB.APPROACH < 0.5;
+    if (a.gained === 0 && b.gained === 0) pairs.push([oAt[2 * m], oAt[2 * m + 1], "o2"]);
+    else if (preSplit(a.at) && preSplit(b.at)) pairs.push([oAt[2 * m], oAt[2 * m + 1], "o2"]);
+  }
+  /* MgO 이온쌍 «인접» — 안착 완료(bound)만. 막대가 아니라 접촉의 표식이다 */
+  for (let j = 0; j < 2 * MGB.N_O2; j++)
+    if (atoms[oAt[j]].phase === "bound") pairs.push([mgAt[j], oAt[j], "mgo"]);
+  /* 전자 — Mg 표면(원자가 전자 2개) → 비행 → O 표면. 상태는 배열이 원천(검사군 12) */
+  for (let k = 0; k < s.elec.length; k++) {
+    const e = s.elec[k], i = e.mgIdx, sy = (k % 2 === 0) ? 1 : -1;
+    let pos, state, host = null;
+    if (e.oIdx === null) {
+      const p = mgSite(i);
+      pos = { x: p.x + GEO_MG.E_OFF.x, y: p.y + sy * GEO_MG.E_OFF.y, z: p.z + GEO_MG.E_OFF.z };
+      state = "mg"; host = mgAt[i];
+    } else {
+      const f = Math.min(1, Math.max(0, (s.t - e.born) / MGB.FLIGHT));
+      const oa = atoms[oAt[e.oIdx]];
+      const to = { x: oa.x + 0.4, y: oa.y + sy * 0.5, z: oa.z + 0.6 };
+      if (f >= 1) { pos = to; state = "o"; host = oAt[e.oIdx]; }
+      else {
+        const p = mgSite(i);
+        const fr = { x: p.x + GEO_MG.E_OFF.x, y: p.y + sy * GEO_MG.E_OFF.y, z: p.z + GEO_MG.E_OFF.z };
+        /* 비행은 모든 것보다 앞(Z_FLY)에서 — 위상 3분할(이탈·수평·안착) */
+        if (f < 0.2) pos = { x: fr.x, y: fr.y, z: fr.z + (GEO_MG.Z_FLY - fr.z) * (f / 0.2) };
+        else if (f < 0.8) {
+          const g = (f - 0.2) / 0.6;
+          pos = { x: fr.x + (to.x - fr.x) * g, y: fr.y + (to.y - fr.y) * g, z: GEO_MG.Z_FLY };
+        } else pos = { x: to.x, y: to.y, z: GEO_MG.Z_FLY + (to.z - GEO_MG.Z_FLY) * ((f - 0.8) / 0.2) };
+        state = "flight";
+      }
+    }
+    const idx = atoms.length;
+    atoms.push({ el: "E", x: pos.x, y: pos.y, z: pos.z, k: k, state: state });
+    if (host !== null) pairs.push([host, idx, "eat"]);
+    /* 비행 중에는 출발 Mg를 «떠나는» 순간과 목표 O에 «내려앉는» 순간의 접촉이
+       필연이다 — 두 끝점과의 접촉만 면제한다(그 외 원자와의 겹침은 그대로 검사) */
+    if (state === "flight") {
+      pairs.push([mgAt[i], idx, "eat"]);
+      if (e.oIdx !== null) pairs.push([oAt[e.oIdx], idx, "eat"]);
+    }
+  }
+  return { atoms: atoms, pairs: pairs };
+}
+
+/* 탭2 미시 배경 — Mg 금속 벌크(은회색) → MgO 흰 배열(명도 상한 RGB≤235: 지시안
+   추정 6 — 전자·기호 대비 확보). 거시 재 축적과 같은 p에서 유도(F-1) */
+function mgbBulkColor(p) {
+  const a = [0.788, 0.812, 0.831], b = [0.906, 0.886, 0.851]; // #C9CFD4 → #E7E2D9
+  const t = Math.min(1, Math.max(0, p));
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
+/* 단계 배지 — 전부 코어 값에서 유도 (J-N5). 0.5는 「흰 재가 눈에 띄게 쌓인」
+   경계의 임의 모형값이다 */
+function mgbStage(s) {
+  if (s.p >= 1) return 5;                   // 완결
+  if (s.ignited && s.p >= 0.5) return 4;    // 흰 재
+  if (s.ignited) return 3;                  // 연소 — 밝은 빛
+  if (s.torch) return 2;                    // 점화
+  return 1;                                 // 점화 전
+}
+
+/* 점화 시각 해석해 — 검사군 11-⑸가 수치해와 대조한다 */
+function mgbT1() {
+  return MGB.TAU_H *
+    Math.log((MGB.T_TORCH - MGB.T_AMB) / (MGB.T_TORCH - MGB.T_IGN));
+}
+
+/* ================================================================
+   실험 등록 표 — 탭·배지·학생에게 닿는 문자열의 «단일 원천» (F-1 · P-검토 A-2).
+   3번째 실험은 여기 항목 추가 + UI부 씬 빌더 연결만으로 성립해야 한다(확장 대비 —
+   사용자 확정 4). 검사군 16이 이 표를 재귀 순회한다: id 'cuo' 항목의 문자열에는
+   「전자」·「이온」이 없어야 한다(X-1 ⒝ — 로드맵 「산소 먼저」).
+   ⚠ 씬 빌더·상태 연결은 UI부(마커 아래)에서 이 표를 참조해 배선한다 —
+   여기는 데이터만 둔다(node 검사가 화면 없이 순회할 수 있어야 한다). */
+const EXPERIMENTS_DATA = [
+  {
+    id: "cuo",
+    tab: "1. 산화 구리(Ⅱ) 실험",
+    sub: "검은 산화 구리(Ⅱ)와 탄소 가루를 섞어 가열한다. 산소는 구리를 떠나 탄소에게 간다 —\n      산소를 <b>잃는</b> 환원과 산소를 <b>얻는</b> 산화가 <b>항상 동시에</b> 일어나는 것을 눈으로 확인해 보자.",
+    stages: ["", "① 가열 전", "② 가열 중", "③ 색 변화", "④ 기체 이동", "⑤ 석회수 흐려짐", "⑥ 완결"],
+    chips: [
+      { cls: "mh-red", sw: "#C88033", html: "구리는 산소를 <b>잃는다</b> = 환원" },
+      { cls: "mh-ox", sw: "#404040", html: "탄소는 산소를 <b>얻는다</b> = 산화" }
+    ],
+    chipsDone: [
+      { cls: "mh-red", sw: "#C88033", html: "구리 — 산소를 모두 <b>잃었다</b> (환원)" },
+      { cls: "mh-ox", sw: "#404040", html: "탄소 — 산소를 <b>얻어</b> 떠났다 (산화)" }
+    ],
+    counterLabels: ["구리가 잃은 산소", "탄소가 얻은 산소"],
+    concHtml: "산화가 있으면 환원이 반드시 있다 — 지금 잃은 산소 <span id=\"concL\">0</span>개 = 얻은 산소 <span id=\"concG\">0</span>개",
+    heatBtnOn: "알코올램프 켜기", heatBtnOff: "알코올램프 끄기",
+    heatNote: "가열해야 반응이 일어납니다. 램프를 켠 채 지켜보세요 — 램프를 끄면 잠시 뒤 반응도 멈춥니다.",
+    trace: {
+      none: "산소 원자를 누르면 그 원자를 따라갑니다.",
+      wait: "선택한 산소 — 아직 산화 구리(Ⅱ) 안에 있습니다. 가열하면 떠나는 순간을 볼 수 있어요.",
+      move: "선택한 산소 — 구리를 떠나(구리: 환원) 탄소에게 가는 중(탄소: 산화)입니다.",
+      done: "선택한 산소 — 구리를 떠나(구리: 환원) 탄소에 붙어(탄소: 산화) 이산화 탄소가 되었습니다. 같은 원자가 두 사건의 주인공입니다."
+    },
+    ariaMacro: "산화 구리(Ⅱ)와 탄소 혼합 가루가 든 시험관을 스탠드에 고정하고 알코올램프로 가열하는 장치. 발생한 기체는 고무관을 지나 석회수가 든 비커로 갑니다.",
+    ariaMicro: "시험관 속을 입자 크기로 확대한 모식 그림. 왼쪽 산화 구리(Ⅱ) 배열에서 산소가 떠나 오른쪽 탄소에 붙어 이산화 탄소가 되어 떠오릅니다. 산소 원자를 누르면 그 원자의 이동을 따라갑니다."
+  },
+  {
+    id: "mgburn",
+    tab: "2. 마그네슘의 연소",
+    sub: "마그네슘 리본에 불을 붙이면 밝은 빛을 내며 타고 흰색 산화 마그네슘이 남는다.\n      산소와 결합하는 그 이면에서 — 마그네슘은 전자를 <b>잃고</b>(산화) 산소는 전자를 <b>얻는다</b>(환원)는 것을 눈으로 확인해 보자.",
+    stages: ["", "① 점화 전", "② 점화", "③ 연소 — 밝은 빛", "④ 흰 재", "⑤ 완결"],
+    chips: [
+      { cls: "mh-red", sw: "#8AFF00", html: "마그네슘은 전자를 <b>잃는다</b> = 산화" },
+      { cls: "mh-ox", sw: "#FF0D0D", html: "산소는 전자를 <b>얻는다</b> = 환원" }
+    ],
+    chipsDone: [
+      { cls: "mh-red", sw: "#8AFF00", html: "마그네슘 — 전자를 모두 <b>잃었다</b> (산화)" },
+      { cls: "mh-ox", sw: "#FF0D0D", html: "산소 — 전자를 <b>얻어</b> 산화 이온이 되었다 (환원)" }
+    ],
+    counterLabels: ["마그네슘이 잃은 전자", "산소가 얻은 전자"],
+    concHtml: "전자를 잃으면 산화, 얻으면 환원 — 지금 잃은 전자 <span id=\"concLMg\">0</span>개 = 얻은 전자 <span id=\"concGMg\">0</span>개",
+    heatBtnOn: "마그네슘에 불 붙이기", heatBtnOff: "연소 중…",
+    heatBtnLighting: "점화 중…", heatBtnDone: "연소 완료 — 「처음부터」로 다시",
+    heatNote: "한번 불이 붙으면 끌 수 없습니다 — 마그네슘은 스스로 계속 탑니다. 산화 구리(Ⅱ) 실험과 비교해 보세요.",
+    trace: {
+      none: "전자(⊖)를 누르면 그 전자를 따라갑니다.",
+      wait: "선택한 전자 — 아직 마그네슘 원자에 있습니다. 불을 붙이면 떠나는 순간을 볼 수 있어요.",
+      move: "선택한 전자 — 마그네슘을 떠나(마그네슘: 산화) 산소에게 가는 중(산소: 환원)입니다.",
+      done: "선택한 전자 — 마그네슘을 떠나(마그네슘: 산화) 산소에 도착해(산소: 환원) 산화 이온의 일부가 되었습니다. 같은 전자가 두 사건의 주인공입니다."
+    },
+    ariaMacro: "접시 위 마그네슘 리본에 점화기로 불을 붙이는 장치. 리본이 밝은 빛을 내며 타고 흰색 산화 마그네슘이 남습니다.",
+    ariaMicro: "마그네슘 조각과 공기 속 산소를 입자 크기로 확대한 모식 그림. 마그네슘이 전자를 잃어 마그네슘 이온이 되고 산소가 전자를 얻어 산화 이온이 되며, 두 이온이 결합해 산화 마그네슘이 됩니다. 전자를 누르면 그 전자의 이동을 따라갑니다."
+  }
+];
+
 /* ================= UI + WebGL ================= */
 /* ↑ 위쪽(계산부)은 화면과 무관하다. 검증 스크립트가 이 주석줄을 기준으로 잘라
    Node 에서 그대로 돌린다. 이 줄을 지우거나 바꾸지 말 것. */
@@ -733,6 +1059,501 @@ function redoxT1() {
   });
 }(window));
 
+/* ================= Codex FX 모듈 — 마그네슘 연소 (조달: Codex 플러그인 2026-08-28 ·
+   원본 보존: 검증스크립트/_redox_fx/redox_mgfx.part.orig.js · 통합 보정 ①(GLSL 예약어)은
+   코드 내 주석 · 발주서: _redox_fx/발주_마그네슘FX_v1.md · REDOX_MGFX «별도 동결 객체» —
+   기존 REDOX_FX 동결 객체에 대입하지 않는다(P-검토 A-1) ==== */
+(function (root) {
+  "use strict";
+
+  var MAX_FLAME_PARTICLES = 180;
+  var MAX_ASH_PARTICLES = 360;
+  var MAX_SMOKE_PARTICLES = 140;
+  var TAU = Math.PI * 2;
+
+  function clamp01(value) {
+    value = Number(value);
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(1, value));
+  }
+
+  function finiteOr(value, fallback) {
+    value = Number(value);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function limitedCount(value, fallback, maximum) {
+    var count = value == null ? fallback : Math.floor(Number(value));
+    if (!Number.isFinite(count)) count = fallback;
+    return Math.max(1, Math.min(maximum, count));
+  }
+
+  function seededRandom(seed) {
+    var value = (Number(seed) || 2463534242) >>> 0;
+    return function () {
+      value = (1664525 * value + 1013904223) >>> 0;
+      return value / 4294967296;
+    };
+  }
+
+  function setGroupPosition(group, position) {
+    if (!position) return;
+    if (Array.isArray(position)) {
+      group.position.set(finiteOr(position[0], 0), finiteOr(position[1], 0), finiteOr(position[2], 0));
+    } else if (position.isVector3) {
+      group.position.copy(position);
+    }
+  }
+
+  function frameDelta(time, clock) {
+    var dt = clock.ready ? Math.max(0, Math.min(0.1, time - clock.last)) : 1 / 60;
+    clock.ready = true;
+    clock.last = time;
+    return dt;
+  }
+
+  function follow(current, target, rate, dt) {
+    return current + (target - current) * (1 - Math.exp(-rate * dt));
+  }
+
+  function makeRadialMaterial(THREE, color) {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(color) },
+        uOpacity: { value: 0 }
+      },
+      vertexShader: [
+        "varying vec2 vUv;",
+        "void main() {",
+        "  vUv = uv;",
+        "  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);",
+        "}"
+      ].join("\n"),
+      fragmentShader: [
+        "uniform vec3 uColor;",
+        "uniform float uOpacity;",
+        "varying vec2 vUv;",
+        "void main() {",
+        "  float r = length((vUv - vec2(0.5)) * 2.0);",
+        "  if (r >= 1.0) discard;",
+        "  float halo = pow(1.0 - smoothstep(0.04, 1.0, r), 2.2);",
+        "  gl_FragColor = vec4(uColor, halo * uOpacity);",
+        "}"
+      ].join("\n"),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+  }
+
+  function makeMgFlame(THREE, opts) {
+    opts = opts || {};
+    var group = new THREE.Group();
+    var height = Math.max(0.2, finiteOr(opts.height, 1.2));
+    var radius = Math.max(0.05, finiteOr(opts.radius, 0.35));
+    var count = limitedCount(opts.count, 112, MAX_FLAME_PARTICLES);
+    var random = seededRandom(opts.seed == null ? 73129 : opts.seed);
+    var positions = new Float32Array(count * 3);
+    var phases = new Float32Array(count);
+    var sizes = new Float32Array(count);
+    var orders = new Float32Array(count);
+    var i;
+
+    for (i = 0; i < count; i += 1) {
+      var angle = random() * TAU;
+      var spread = Math.sqrt(random()) * radius;
+      positions[i * 3] = Math.cos(angle) * spread;
+      positions[i * 3 + 1] = random();
+      positions[i * 3 + 2] = Math.sin(angle) * spread * 0.7;
+      phases[i] = random();
+      sizes[i] = 8 + random() * 18;
+      orders[i] = (i + 0.5) / count;
+    }
+
+    var sparkGeometry = new THREE.BufferGeometry();
+    sparkGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    sparkGeometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
+    sparkGeometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
+    sparkGeometry.setAttribute("aOrder", new THREE.BufferAttribute(orders, 1));
+
+    var timeUniform = { value: 0 };
+    var strengthUniform = { value: 0 };
+    var sparkMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: timeUniform,
+        uStrength: strengthUniform,
+        uHeight: { value: height },
+        uRadius: { value: radius }
+      },
+      vertexShader: [
+        "uniform float uTime;",
+        "uniform float uStrength;",
+        "uniform float uHeight;",
+        "uniform float uRadius;",
+        "attribute float aPhase;",
+        "attribute float aSize;",
+        "attribute float aOrder;",
+        "varying float vAlpha;",
+        "varying float vCool;",
+        "void main() {",
+        "  float life = fract(aPhase + uTime * (0.22 + aPhase * 0.16));",
+        "  vec3 p = position;",
+        "  p.y = life * uHeight * (0.42 + aPhase * 0.75);",
+        "  p.x *= 0.8 - life * 0.38;",
+        "  p.z *= 0.75 - life * 0.3;",
+        "  p.x += sin(uTime * 3.8 + aPhase * 31.0 + life * 5.0) * uRadius * 0.16 * life;",
+        "  p.z += cos(uTime * 2.9 + aPhase * 23.0) * uRadius * 0.09 * life;",
+        "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
+        "  gl_Position = projectionMatrix * mv;",
+        "  gl_PointSize = aSize * (18.0 / max(1.0, -mv.z)) * (0.3 + uStrength * 0.7);",
+        "  float envelope = smoothstep(0.0, 0.12, life) * (1.0 - smoothstep(0.62, 1.0, life));",
+        "  vAlpha = envelope * smoothstep(aOrder * 0.55, aOrder * 0.55 + 0.22, uStrength);",
+        "  vCool = life;",
+        "}"
+      ].join("\n"),
+      fragmentShader: [
+        "uniform float uStrength;",
+        "varying float vAlpha;",
+        "varying float vCool;",
+        "void main() {",
+        "  vec2 q = (gl_PointCoord - vec2(0.5)) * 2.0;",
+        "  float r = length(q);",
+        "  if (r >= 1.0 || vAlpha <= 0.001) discard;",
+        "  float soft = 1.0 - smoothstep(0.12, 1.0, r);",
+        "  vec3 whiteHot = vec3(1.0, 0.995, 0.96);",
+        "  vec3 paleBlue = vec3(0.74, 0.9, 1.0);",
+        "  vec3 color = mix(whiteHot, paleBlue, smoothstep(0.28, 0.9, vCool));",
+        "  gl_FragColor = vec4(color, soft * vAlpha * uStrength * 0.82);",
+        "}"
+      ].join("\n"),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    var sparks = new THREE.Points(sparkGeometry, sparkMaterial);
+    sparks.frustumCulled = false;
+    sparks.renderOrder = 6;
+    group.add(sparks);
+
+    var coreGeometry = new THREE.SphereGeometry(1, 18, 22);
+    var outerMaterial = new THREE.MeshBasicMaterial({
+      color: 0xcfeeff,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    var innerMaterial = new THREE.MeshBasicMaterial({
+      color: 0xfffff4,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    });
+    var outerCore = new THREE.Mesh(coreGeometry, outerMaterial);
+    var innerCore = new THREE.Mesh(coreGeometry, innerMaterial);
+    outerCore.position.y = height * 0.38;
+    innerCore.position.y = height * 0.26;
+    outerCore.renderOrder = 4;
+    innerCore.renderOrder = 5;
+    group.add(outerCore, innerCore);
+
+    var glowMaterial = makeRadialMaterial(THREE, 0xd9f3ff);
+    var glow = new THREE.Sprite(glowMaterial);
+    glow.position.y = height * 0.34;
+    glow.renderOrder = 3;
+    group.add(glow);
+
+    var localLight = new THREE.PointLight(0xe9f7ff, 0, Math.max(1.2, radius * 7.2), 2);
+    localLight.position.set(0, height * 0.34, radius * 0.4);
+    group.add(localLight);
+    setGroupPosition(group, opts.position);
+    group.userData.particleCount = count;
+
+    var currentOn = 0;
+    var currentLight = 0;
+    var clock = { ready: false, last: 0 };
+
+    function update(t, state) {
+      var time = finiteOr(t, 0);
+      var dt = frameDelta(time, clock);
+      var onTarget = clamp01(state && state.on);
+      var lightTarget = clamp01(state && state.light) * onTarget;
+      currentOn = follow(currentOn, onTarget, 9.0, dt);
+      currentLight = follow(currentLight, lightTarget, 7.0, dt);
+      if (currentOn < 0.0005 && onTarget === 0) currentOn = 0;
+      if (currentLight < 0.0005 && lightTarget === 0) currentLight = 0;
+
+      var decorativeTime = state && state.rm ? 2.75 : time;
+      var pulse = 0.965 + 0.025 * Math.sin(decorativeTime * TAU * 1.2) + 0.01 * Math.sin(decorativeTime * TAU * 0.47 + 1.1);
+      var strength = currentOn * (0.2 + currentLight * 0.8) * pulse;
+      timeUniform.value = decorativeTime;
+      strengthUniform.value = strength;
+
+      outerCore.scale.set(radius * 0.92, height * (0.3 + strength * 0.18), radius * 0.7);
+      innerCore.scale.set(radius * 0.54, height * (0.23 + strength * 0.13), radius * 0.42);
+      outerMaterial.opacity = strength * 0.48;
+      innerMaterial.opacity = strength * 0.86;
+      glow.scale.set(radius * 4.0, radius * 4.0, 1);
+      glowMaterial.uniforms.uOpacity.value = strength * 0.46;
+      localLight.intensity = strength * 2.15;
+      group.visible = strength > 0.0002 || currentOn > 0.0002;
+    }
+
+    return { group: group, update: update };
+  }
+
+  function makeMgBurnFront(THREE, opts) {
+    opts = opts || {};
+    var ribbon = opts.ribbon || {};
+    var length = Math.max(0.4, finiteOr(ribbon.length, 3.2));
+    var width = Math.max(0.06, finiteOr(ribbon.width, 0.35));
+    var thickness = Math.max(0.015, finiteOr(ribbon.thickness, 0.06));
+    var bandWidth = Math.min(length * 0.18, Math.max(0.08, finiteOr(opts.bandWidth, 0.15)));
+    var group = new THREE.Group();
+
+    var spent = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial({ color: 0xd8d5ce, roughness: 0.96, metalness: 0.02 })
+    );
+    spent.position.y = thickness * 0.22;
+    spent.receiveShadow = true;
+    group.add(spent);
+
+    var bandMaterial = new THREE.MeshStandardMaterial({
+      color: 0xfffdf0,
+      emissive: 0xe8f5ff,
+      emissiveIntensity: 0,
+      roughness: 0.4,
+      metalness: 0
+    });
+    var band = new THREE.Mesh(new THREE.BoxGeometry(bandWidth, thickness * 1.75, width * 1.14), bandMaterial);
+    band.position.y = thickness * 0.7;
+    band.renderOrder = 4;
+    group.add(band);
+
+    var glowMaterial = makeRadialMaterial(THREE, 0xe7f7ff);
+    var glow = new THREE.Sprite(glowMaterial);
+    glow.position.y = thickness * 1.5;
+    glow.scale.set(width * 2.15, width * 2.15, 1);
+    glow.renderOrder = 3;
+    group.add(glow);
+    setGroupPosition(group, opts.position);
+    group.userData.particleCount = 0;
+
+    var currentHeat = 0;
+    var clock = { ready: false, last: 0 };
+
+    function update(t, state) {
+      var time = finiteOr(t, 0);
+      var dt = frameDelta(time, clock);
+      var p = clamp01(state && state.p);
+      var active = p < 0.9995 && !!(state && (state.on || state.ignited)) && !(state && state.done);
+      var heatTarget = active ? clamp01(state && state.light) : 0;
+      currentHeat = follow(currentHeat, heatTarget, active ? 8.0 : 5.0, dt);
+      if (currentHeat < 0.0005 && heatTarget === 0) currentHeat = 0;
+
+      var spentLength = length * p;
+      spent.visible = spentLength > 0.001;
+      spent.scale.set(Math.max(0.0001, spentLength), thickness * 0.8, width * 1.035);
+      spent.position.x = -length * 0.5 + spentLength * 0.5;
+
+      var frontX = -length * 0.5 + length * p;
+      var decorativeTime = state && state.rm ? 1.625 : time;
+      var pulse = 0.975 + 0.025 * Math.sin(decorativeTime * TAU * 0.8 + 0.4);
+      var heat = currentHeat * pulse;
+      band.position.x = frontX;
+      glow.position.x = frontX;
+      band.visible = heat > 0.001;
+      glow.visible = heat > 0.001;
+      bandMaterial.emissiveIntensity = 1.35 + heat * 2.2;
+      glowMaterial.uniforms.uOpacity.value = heat * 0.42;
+    }
+
+    return { group: group, update: update };
+  }
+
+  function makeMgAsh(THREE, opts) {
+    opts = opts || {};
+    var area = opts.area || {};
+    var areaX = Math.max(0.3, finiteOr(area.x, 3.6));
+    var areaZ = Math.max(0.12, finiteOr(area.z, 0.8));
+    var count = limitedCount(opts.count, 248, MAX_ASH_PARTICLES);
+    var random = seededRandom(opts.seed == null ? 98173 : opts.seed);
+    var group = new THREE.Group();
+    var pieces = [];
+    var i;
+
+    for (i = 0; i < count; i += 1) {
+      var x = (random() - 0.5) * areaX;
+      var z = (random() - 0.5) * areaZ;
+      var edge = Math.max(0.12, 1 - Math.pow(Math.abs(z) / (areaZ * 0.5), 1.7));
+      pieces.push({
+        order: clamp01(x / areaX + 0.5 + (random() - 0.5) * 0.06),
+        x: x,
+        y: 0.015 + random() * 0.12 * edge,
+        z: z,
+        rx: random() * TAU,
+        ry: random() * TAU,
+        rz: random() * TAU,
+        sx: 0.45 + random() * 1.15,
+        sy: 0.3 + random() * 0.9,
+        sz: 0.42 + random() * 1.1,
+        shade: random()
+      });
+    }
+    pieces.sort(function (a, b) { return a.order - b.order; });
+
+    var geometry = new THREE.DodecahedronGeometry(0.062, 0);
+    var material = new THREE.MeshStandardMaterial({
+      color: 0xf2efe8,
+      roughness: 0.98,
+      metalness: 0.01
+    });
+    var mesh = new THREE.InstancedMesh(geometry, material, count);
+    var dummy = new THREE.Object3D();
+    var color = new THREE.Color();
+    var base = new THREE.Color(0xf2efe8);
+    for (i = 0; i < count; i += 1) {
+      var piece = pieces[i];
+      dummy.position.set(piece.x, piece.y, piece.z);
+      dummy.rotation.set(piece.rx, piece.ry, piece.rz);
+      dummy.scale.set(piece.sx, piece.sy, piece.sz);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      var shade = 0.9 + piece.shade * 0.1;
+      color.setRGB(base.r * shade, base.g * shade, base.b * shade).convertSRGBToLinear();
+      mesh.setColorAt(i, color);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.count = 0;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    setGroupPosition(group, opts.position);
+    group.userData.particleCount = count;
+
+    var lastVisible = -1;
+
+    function update(t, state) {
+      var visible = Math.max(0, Math.min(count, Math.ceil(count * clamp01(state && state.p))));
+      if (visible === lastVisible) return;
+      lastVisible = visible;
+      mesh.count = visible;
+      group.visible = visible > 0;
+    }
+
+    return { group: group, update: update };
+  }
+
+  function makeMgSmoke(THREE, opts) {
+    opts = opts || {};
+    var count = limitedCount(opts.count, 76, MAX_SMOKE_PARTICLES);
+    var rate = clamp01(opts.rate == null ? 0.58 : opts.rate);
+    var random = seededRandom(opts.seed == null ? 45077 : opts.seed);
+    var group = new THREE.Group();
+    var positions = new Float32Array(count * 3);
+    var phases = new Float32Array(count);
+    var sizes = new Float32Array(count);
+    var orders = new Float32Array(count);
+    var i;
+
+    for (i = 0; i < count; i += 1) {
+      positions[i * 3] = (random() - 0.5) * 0.28;
+      positions[i * 3 + 1] = random();
+      positions[i * 3 + 2] = (random() - 0.5) * 0.22;
+      phases[i] = random();
+      sizes[i] = 18 + random() * 30;
+      orders[i] = (i + 0.5) / count;
+    }
+
+    var geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
+    geometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
+    geometry.setAttribute("aOrder", new THREE.BufferAttribute(orders, 1));
+
+    var timeUniform = { value: 0 };
+    var amountUniform = { value: 0 };
+    var material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: timeUniform,
+        uAmount: amountUniform
+      },
+      vertexShader: [
+        "uniform float uTime;",
+        "uniform float uAmount;",
+        "attribute float aPhase;",
+        "attribute float aSize;",
+        "attribute float aOrder;",
+        "varying float vAlpha;",
+        "varying float vTone;",
+        "void main() {",
+        "  float life = fract(aPhase + uTime * (0.11 + aPhase * 0.055));",
+        "  vec3 p = position;",
+        "  p.y = life * (1.0 + aPhase * 0.65);",
+        "  p.x += sin(uTime * 0.72 + aPhase * 19.0 + life * 4.0) * (0.09 + life * 0.17);",
+        "  p.z += cos(uTime * 0.58 + aPhase * 17.0) * (0.05 + life * 0.1);",
+        "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
+        "  gl_Position = projectionMatrix * mv;",
+        "  gl_PointSize = aSize * (18.0 / max(1.0, -mv.z)) * (0.7 + life * 0.75);",
+        "  float lifeFade = smoothstep(0.0, 0.12, life) * (1.0 - smoothstep(0.62, 1.0, life));",
+        /* [통합 보정 ①] 'active' 는 GLSL 예약어 — 컴파일 실패(VALIDATE_STATUS)로 연기가
+           통째로 사라졌다. 식별자만 개명. 원본: redox_mgfx.part.orig.js */
+        "  float vis = 1.0 - smoothstep(uAmount, uAmount + 0.16, aOrder);",
+        "  vAlpha = lifeFade * vis * uAmount;",
+        "  vTone = aPhase;",
+        "}"
+      ].join("\n"),
+      fragmentShader: [
+        "varying float vAlpha;",
+        "varying float vTone;",
+        "void main() {",
+        "  vec2 q = (gl_PointCoord - vec2(0.5)) * 2.0;",
+        "  float r = length(q);",
+        "  if (r >= 1.0 || vAlpha <= 0.001) discard;",
+        "  float soft = pow(1.0 - smoothstep(0.05, 1.0, r), 1.45);",
+        "  vec3 color = mix(vec3(0.78, 0.8, 0.8), vec3(0.94, 0.93, 0.9), vTone);",
+        "  gl_FragColor = vec4(color, soft * vAlpha * 0.2);",
+        "}"
+      ].join("\n"),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.NormalBlending
+    });
+    var smoke = new THREE.Points(geometry, material);
+    smoke.frustumCulled = false;
+    smoke.renderOrder = 7;
+    group.add(smoke);
+    setGroupPosition(group, opts.position);
+    group.userData.particleCount = count;
+
+    var currentAmount = 0;
+    var clock = { ready: false, last: 0 };
+
+    function update(t, state) {
+      var time = finiteOr(t, 0);
+      var dt = frameDelta(time, clock);
+      var target = state && state.on ? rate * (0.3 + 0.7 * clamp01(state.light)) : 0;
+      currentAmount = follow(currentAmount, target, target > currentAmount ? 3.5 : 1.65, dt);
+      if (currentAmount < 0.0005 && target === 0) currentAmount = 0;
+      timeUniform.value = state && state.rm ? 4.25 : time;
+      amountUniform.value = currentAmount;
+      group.visible = currentAmount > 0.0002;
+    }
+
+    return { group: group, update: update };
+  }
+
+  root.REDOX_MGFX = Object.freeze({
+    makeMgFlame: makeMgFlame,
+    makeMgBurnFront: makeMgBurnFront,
+    makeMgAsh: makeMgAsh,
+    makeMgSmoke: makeMgSmoke
+  });
+}(window));
+
 const $ = id => document.getElementById(id);
 const CSSV = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -742,10 +1563,26 @@ const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: redu
 const CPK = { Cu: "#C88033", O: "#FF0D0D", C: "#404040" };
 const CPK_EDGE = { Cu: "#7a4e1f", O: "#990808", C: "#262626" };
 
-let S = redoxInit();          // 모형 상태 — 단 하나(F-1). 거시·미시가 같은 것을 읽는다
+let S = redoxInit();          // 탭1 모형 상태 — 쓰기 가능한 전역으로 유지(§5-15 프로브 계약)
 let zoom = false;             // 거시 ↔ 미시 전환 플래그(§14 ①) — 렌더러 교체일 뿐 실험은 계속
-let selectedO = -1;           // 추적 중인 산소 원자 index (반박 장치)
+let selectedO = -1;           // 추적 중인 산소 원자 index (반박 장치 · 탭1)
 let heatVis = 0, bubbleVis = 0;
+
+/* ================= 실험 탭 인프라 (설계지시안_마그네슘연소_v1 §3 단계 4) =================
+   활성 탭만 시간이 흐른다(§5-13 — 숨은 탭은 일시정지·복귀 시 이어짐). 학생에게 닿는
+   문자열은 EXPERIMENTS_DATA(계산부)가 단일 원천이다(F-1 · 검사군 16). 3번째 실험은
+   EXPERIMENTS_DATA에 항목을 추가하고 아래 SCENES에 씬 빌더를 연결하면 성립한다 —
+   연결이 없으면 기본값(빈 씬·빈 상태)으로 탭 자체는 뜬다(확장 대비 — 확정 4). */
+let EXP = "cuo";              // 활성 실험 id
+let SMG = mgbInit();          // 탭2 모형 상태
+let selectedE = -1;           // 추적 중인 전자 index (반박 장치 · 탭2)
+let lightVis = 0;             // 탭2 빛 세기 평활값 (FX·배지 공용)
+function expData() {
+  for (let i = 0; i < EXPERIMENTS_DATA.length; i++)
+    if (EXPERIMENTS_DATA[i].id === EXP) return EXPERIMENTS_DATA[i];
+  return EXPERIMENTS_DATA[0];
+}
+const CUO_D = EXPERIMENTS_DATA[0];   // 탭1 문자열 (setHeat 등 탭1 전용 경로가 읽는다)
 
 /* ================= 거시 무대 (three.js r147 · 체험형 규범 §1-4) ================= */
 let T3 = null;                // { renderer, scene, camera, fx, anchors }
@@ -906,6 +1743,11 @@ function macroResize() {
   T3.camera.fov = hFov >= MIN_H ? 38
     : 2 * Math.atan(Math.tan(MIN_H / 2) / aspect) * 180 / Math.PI;
   T3.camera.updateProjectionMatrix();
+  if (T3MG) {                                  // 탭2 카메라도 같은 규칙(가로 FOV 하한 54°)
+    T3MG.camera.aspect = T3.camera.aspect;
+    T3MG.camera.fov = T3.camera.fov;
+    T3MG.camera.updateProjectionMatrix();
+  }
 }
 function macroRender(t) {
   if (!T3) return;
@@ -941,6 +1783,159 @@ function placeLabel(id, v3) {
   const ly = (-p.y * 0.5 + 0.5) * h - el.offsetHeight / 2;
   el.style.left = clamp(lx, 4, Math.max(4, w - el.offsetWidth - 4)) + "px";
   el.style.top = clamp(ly, 4, Math.max(4, h - el.offsetHeight - 4)) + "px";
+}
+
+/* ================= 탭2 거시 무대 — 마그네슘의 연소 (three.js · 렌더러 공유) =================
+   캔버스·WebGL 컨텍스트는 탭1과 공유한다(§1-1 #14 — 탭은 씬 교체이지 캔버스 추가가 아님).
+   교과서 35쪽 그림 I-12 구도: 접시 위 마그네슘 리본. 리본·접시·점화기는 절차적(에셋 manifest
+   1·2), 불꽃·연소 전선·재·연기는 Codex FX(REDOX_MGFX — 단계 3 산출물, 없으면 기본 연출만). */
+let T3MG = null;              // { scene, camera, fx, anchors, ribbon }
+const RIBBON = { len: 1.6, w: 0.13, th: 0.022, y: 0.47, seg: 24 };
+function buildMacroMg() {
+  if (!T3) return null;                       // 렌더러가 없으면(폴백) 탭2 거시도 없다
+  const scene = new THREE.Scene();
+  /* 어두운 무대(§5 `--stage-dark`) — 이 실험의 관찰 대상은 «빛»이다. 밝은 무대에서는
+     백열 글로우(가산 혼합)가 흰 배경에 씻겨 사라진다(통합 실측 — v1 보정 ②와 같은 유형).
+     §5 「한 페이지 안에서 섞지 않는다」는 «동시 표시» 금지로 해석한다 — 탭은 한 번에
+     하나만 보이고, 사용자가 승인한 FX 데모(정지점 1-B)도 어두운 무대였다(§7 판단 기록) */
+  scene.background = new THREE.Color("#0f172a");
+  scene.add(new THREE.HemisphereLight("#cfe0ec", "#1c232e", 0.5));
+  const key = new THREE.DirectionalLight("#e8eef4", 0.85);
+  key.position.set(5, 9, 6); key.castShadow = true; key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.left = -3; key.shadow.camera.right = 3;
+  key.shadow.camera.top = 4; key.shadow.camera.bottom = -1;
+  scene.add(key);
+  const fill = new THREE.DirectionalLight("#9fb6c8", 0.3); fill.position.set(-5, 6, 4); scene.add(fill);
+  const front = new THREE.DirectionalLight("#dfe7ee", 0.25); front.position.set(0, 4, 8); scene.add(front);
+  const camera = new THREE.PerspectiveCamera(38, 2, 0.1, 60);
+
+  const M = {
+    table: new THREE.MeshStandardMaterial({ color: "#e7e2d8", roughness: 0.85 }),
+    dish: new THREE.MeshStandardMaterial({ color: "#f4f1ea", roughness: 0.55 }),
+    ribbon: new THREE.MeshStandardMaterial({ color: "#cdd4d8", metalness: 0.85, roughness: 0.35 }),
+    metal: new THREE.MeshStandardMaterial({ color: "#5b6570", metalness: 0.75, roughness: 0.35 }),
+    metalDark: new THREE.MeshStandardMaterial({ color: "#3a4148", metalness: 0.7, roughness: 0.45 }),
+    ember: new THREE.MeshStandardMaterial({ color: "#ffdba1", emissive: "#ff8c2e",
+      emissiveIntensity: 0.0, roughness: 0.6 })   // 백열 — 흰 무대에서도 보이는 주황 계열
+  };
+
+  const table = new THREE.Mesh(new THREE.BoxGeometry(7.5, 0.14, 4.2), M.table);
+  table.position.set(0.3, -0.07, 0); table.receiveShadow = true; scene.add(table);
+
+  /* 도자기 접시 (그림 I-12 — 접시 위 리본). 개방 원통은 위에서 보면 «흰 고리»로만
+     읽힌다(실측) — 몸통·바닥을 닫힌 메시로 만들고 배경과 살짝 톤을 가른다 */
+  const dishM = new THREE.MeshStandardMaterial({ color: "#efe9dd", roughness: 0.5 });
+  const dishBody = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 0.72, 0.2, 40), dishM);
+  dishBody.position.set(0, 0.24, 0); dishBody.castShadow = true; dishBody.receiveShadow = true;
+  scene.add(dishBody);
+  const dishInner = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.68, 0.16, 40),
+    new THREE.MeshStandardMaterial({ color: "#e2dbcb", roughness: 0.6 }));
+  dishInner.position.set(0, 0.28, 0); dishInner.receiveShadow = true; scene.add(dishInner);
+  const dishRim = new THREE.Mesh(new THREE.TorusGeometry(1.03, 0.035, 12, 44), dishM);
+  dishRim.rotation.x = Math.PI / 2; dishRim.position.set(0, 0.345, 0); scene.add(dishRim);
+
+  /* 마그네슘 리본 — 얇은 은백색 띠를 조각(seg)으로 나눠, 진행률 p 만큼 왼쪽부터 소진한다.
+     소진 경계 조각은 백열(ember)로 빛난다 — Codex FX(makeMgBurnFront)가 오면 그 위에 얹는다 */
+  const ribbonG = new THREE.Group();
+  const slices = [];
+  for (let i = 0; i < RIBBON.seg; i++) {
+    const sl = new THREE.Mesh(
+      new THREE.BoxGeometry(RIBBON.len / RIBBON.seg * 0.98, RIBBON.th, RIBBON.w), M.ribbon);
+    sl.position.set(-RIBBON.len / 2 + (i + 0.5) * RIBBON.len / RIBBON.seg,
+      0, Math.sin(i * 0.55) * 0.03);          // 살짝 물결진 띠 — 실물 리본의 감김 잔형
+    sl.castShadow = true;
+    ribbonG.add(sl); slices.push(sl);
+  }
+  const emberTip = new THREE.Mesh(new THREE.BoxGeometry(RIBBON.len / RIBBON.seg * 1.3, RIBBON.th * 2.2, RIBBON.w * 1.25), M.ember);
+  emberTip.visible = false; ribbonG.add(emberTip);
+  ribbonG.position.set(0, RIBBON.y, 0);
+  scene.add(ribbonG);
+
+  /* 점화기(토치) — 점화 유지 동안 리본 왼끝으로 다가간다 (대기 위치도 화면 안 왼쪽) */
+  const torchG = new THREE.Group();
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.55, 14), M.metalDark);
+  torchG.add(handle);
+  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.028, 0.22, 12), M.metal);
+  nozzle.position.set(0, 0.38, 0); torchG.add(nozzle);
+  torchG.rotation.z = 0.75;                   // 끝이 리본 왼끝(오른쪽 아래)을 향하게 기울임
+  torchG.position.set(-1.75, 0.7, 0);         // 대기 위치 — 화면 안 왼쪽
+  scene.add(torchG);
+
+  /* ── Codex FX 접합점 (REDOX_MGFX — 설계지시안 §3 단계 3. 병합·교체 규격은 A-1) ── */
+  const fx = {};
+  if (typeof window.REDOX_MGFX === "object" && window.REDOX_MGFX) {
+    const F = window.REDOX_MGFX;
+    try {
+      if (F.makeMgFlame) {
+        fx.flame = F.makeMgFlame(THREE, { height: 1.2, radius: 0.35 });
+        fx.flame.group.position.set(0, RIBBON.y + RIBBON.th, 0);
+        scene.add(fx.flame.group);
+      }
+      if (F.makeMgBurnFront) {
+        fx.front = F.makeMgBurnFront(THREE, { ribbon: { length: RIBBON.len, width: RIBBON.w, thickness: RIBBON.th } });
+        fx.front.group.position.copy(ribbonG.position);
+        scene.add(fx.front.group);
+      }
+      if (F.makeMgAsh) {
+        fx.ash = F.makeMgAsh(THREE, { area: { x: RIBBON.len * 1.15, z: RIBBON.w * 3 } });
+        fx.ash.group.position.set(0, RIBBON.y - 0.05, 0);
+        scene.add(fx.ash.group);
+      }
+      if (F.makeMgSmoke) {
+        fx.smoke = F.makeMgSmoke(THREE, {});
+        fx.smoke.group.position.set(0, RIBBON.y + 0.3, 0);
+        scene.add(fx.smoke.group);
+      }
+    } catch (e) { console.error("REDOX_MGFX 접합 실패", e); }
+  }
+
+  const anchors = {
+    ribbon: new THREE.Vector3(0, RIBBON.y + 0.32, 0),
+    dish: new THREE.Vector3(0.95, 0.12, 0.4)
+  };
+  return { scene, camera, fx, anchors, ribbonG, slices, emberTip, torchG, torchVis: 0 };
+}
+
+function macroRenderMg(t) {
+  if (!T3 || !T3MG) return;
+  const c = T3MG.camera;
+  c.position.set(
+    cam.tx + cam.dist * Math.sin(cam.yaw) * Math.cos(cam.pitch),
+    cam.ty + cam.dist * Math.sin(cam.pitch),
+    cam.dist * Math.cos(cam.yaw) * Math.cos(cam.pitch));
+  c.lookAt(cam.tx, cam.ty, 0);
+  /* 리본 소진 — 진행률 p 만큼 왼쪽부터 사라진다(코어 값 유도 — 함정 ③: 그림이 물리를
+     배신하지 않게 렌더가 SMG.p 를 직접 읽는다) */
+  const burned = SMG.p * RIBBON.seg;
+  for (let i = 0; i < RIBBON.seg; i++) T3MG.slices[i].visible = i >= burned;
+  const burning = SMG.ignited && SMG.p < 1;
+  T3MG.emberTip.visible = burning;
+  if (burning) {
+    T3MG.emberTip.position.set(-RIBBON.len / 2 + clamp(burned, 0, RIBBON.seg - 0.5) * RIBBON.len / RIBBON.seg, 0, 0);
+    /* 백열 세기 — 저주파(≤2 Hz) 숨쉬기만. 1초 3회 초과 점멸 금지(§5-6) · RM이면 고정 */
+    T3MG.emberTip.material.emissiveIntensity =
+      2.4 + (RM ? 0 : 0.4 * Math.sin(2 * Math.PI * 1.2 * t));
+  } else T3MG.emberTip.material.emissiveIntensity = 0;
+  /* 점화기 — 토치 유지 동안 리본 왼끝(-len/2)으로 접근, 점화 후 물러난다 */
+  const wantTorch = SMG.torch && !SMG.ignited ? 1 : 0;
+  T3MG.torchVis += (wantTorch - T3MG.torchVis) * Math.min(1, ((RM ? 1 : 0.08)));
+  const tv = T3MG.torchVis;
+  T3MG.torchG.position.set(-1.75 + tv * 0.62, 0.7 + tv * 0.12, 0);
+  const st = { on: SMG.ignited && SMG.p < 1 ? 1 : 0, light: lightVis, p: SMG.p,
+               ignited: SMG.ignited, done: SMG.done, rm: RM, t: t };
+  if (T3MG.fx.flame) T3MG.fx.flame.update(t, st);
+  if (T3MG.fx.front) T3MG.fx.front.update(t, st);
+  if (T3MG.fx.ash) T3MG.fx.ash.update(t, st);
+  if (T3MG.fx.smoke) T3MG.fx.smoke.update(t, st);
+  T3.renderer.render(scene3(), T3MG.camera);
+  placeLabelMg("lblPowder", null);            // 탭1 라벨은 탭2에서 숨긴다
+  placeLabelMg("lblLime", null);
+  placeLabelMg("lblLamp", null);
+}
+function scene3() { return T3MG.scene; }
+function placeLabelMg(id, v3) {
+  const el = $(id); if (!el) return;
+  if (!v3) { el.classList.add("is-hidden"); return; }
 }
 
 /* ================= 미시 무대 (M3D — liquid/sim.js 이식 · raw WebGL) =================
@@ -1129,12 +2124,23 @@ let mYaw = MV.yaw, mPitch = MV.pitch;
 function updateMicroView() {
   const cw = mcv.clientWidth || 1, ch = mcv.clientHeight || 1;
   const aspect = cw / ch;
-  /* 앞줄 격자(6×6)에 «꽉 차게» 맞춘다 — 여분 고리가 가장자리를 넘어가 잘리면서
-     배열이 화면 밖으로 계속 이어지는 것으로 읽힌다(사용자 지시: solid 시뮬 방식) */
-  const xMin = -GEO.R.Cu - 0.4;
-  const xMax = (GEO.COLS - 1) * GEO.DX + GEO.CUO_OFF + GEO.R.O + 0.4;
-  const yMin = -GEO.R.Cu - 0.4;
-  const yMax = (GEO.ROWS - 1) * GEO.DY + GEO.R.Cu + 0.4;
+  let xMin, xMax, yMin, yMax;
+  if (EXP === "mgburn") {
+    /* 탭2 — 좌 Mg 격자부터 우 O₂ 공기 영역까지 전부 담는다. 가로로 긴 장면이라
+       기본 yaw 회전(0.5 rad)이 깊이로 접는 몫을 여유 1.25배로 흡수한다(우측 잘림 방지) */
+    xMin = -GEO_MG.R.Mg - 0.6;
+    xMax = -GEO_MG.R.Mg - 0.6 +
+      (GEO_MG.O2_X0 + GEO_MG.O2_DX + GEO_MG.O2_BOND / 2 + GEO_MG.R.O + 1.2 - (-GEO_MG.R.Mg - 0.6)) * 1.25;
+    yMin = -GEO_MG.R.Mg - 0.6;
+    yMax = (GEO_MG.ROWS - 1) * GEO_MG.DY + GEO_MG.R.Mg + 0.6;
+  } else {
+    /* 탭1 — 앞줄 격자(6×6)에 «꽉 차게» 맞춘다 — 여분 고리가 가장자리를 넘어가 잘리면서
+       배열이 화면 밖으로 계속 이어지는 것으로 읽힌다(사용자 지시: solid 시뮬 방식) */
+    xMin = -GEO.R.Cu - 0.4;
+    xMax = (GEO.COLS - 1) * GEO.DX + GEO.CUO_OFF + GEO.R.O + 0.4;
+    yMin = -GEO.R.Cu - 0.4;
+    yMax = (GEO.ROWS - 1) * GEO.DY + GEO.R.Cu + 0.4;
+  }
   MV.cx = (xMax + xMin) / 2;
   MV.cy = (yMax + yMin) / 2;
   const halfH = Math.tan(M3D_CAM.fovy / 2) * M3D_CAM.z;
@@ -1219,18 +2225,199 @@ function pickOxy(px, py) {
   return best;
 }
 
+/* ================= 탭2 미시 — 전자 이동 (같은 M3D 렌더러) ================= */
+/* 색 — Mg 는 Jmol CPK(사이트 8색이 전부 Jmol 값 — P-검토 확인), 전자는 원자와 다른
+   시각 언어(작음 + 어두운 림 + 밝은 코어 + ⊖) — 지시안 추정 3 확정값 */
+const CPK_MG = { Mg: "#8AFF00", O: "#FF0D0D" };
+const COL_MG = {
+  Mg: h2r(CPK_MG.Mg), O: h2r(CPK_MG.O),
+  eCore: h2r("#FFE94D"), eRim: h2r("#6B5500"),
+  ionTint: [0.93, 0.91, 0.87],               // MgO 로 수렴하는 흰 기운(명도 상한 안 — 추정 6)
+  stick: h2r(CSSV("--d-gray") || "#5f6b7a"),
+  halo: h2r(CSSV("--d-violet") || "#6d28d9"),
+  trace: h2r(CSSV("--d-violet") || "#6d28d9")
+};
+function tint(col, k) {
+  return [col[0] + (COL_MG.ionTint[0] - col[0]) * k,
+          col[1] + (COL_MG.ionTint[1] - col[1]) * k,
+          col[2] + (COL_MG.ionTint[2] - col[2]) * k];
+}
+function microProject(x, y, z) {
+  const w = mcv.clientWidth, h = mcv.clientHeight || 300;
+  const aspect = w / h, f = 1 / Math.tan(M3D_CAM.fovy / 2);
+  const v = mView(x, y, z);
+  if (v[2] > -0.1) return null;
+  return [(v[0] * (f / aspect) / -v[2] * 0.5 + 0.5) * w,
+          (-v[1] * f / -v[2] * 0.5 + 0.5) * h];
+}
+/* 대표 라벨 오버레이 — §9 «계열 4개↑는 두 번째 채널 필수»의 직접 레이블 채널.
+   전 원자가 아니라 대표 입자 하나씩에 붙인다(하이브리드 도식 오버레이 — §0) */
+function placeMgLabel(id, wx, wy, wz) {
+  const el = $(id); if (!el) return;
+  if (wx === null) { el.classList.add("is-hidden"); return; }
+  const pt = microProject(wx, wy, wz);
+  if (!pt) { el.classList.add("is-hidden"); return; }
+  el.classList.remove("is-hidden");
+  const w = mcv.clientWidth, h = mcv.clientHeight || 300;
+  el.style.left = clamp(pt[0] + 10, 4, Math.max(4, w - el.offsetWidth - 4)) + "px";
+  el.style.top = clamp(pt[1] - el.offsetHeight - 8, 4, Math.max(4, h - el.offsetHeight - 4)) + "px";
+}
+function drawMicroMg() {
+  if (!m3d) return;
+  updateMicroView();
+  M3D_BG = mgbBulkColor(SMG.p);               // 여백 = Mg 금속 → MgO 흰 배열 (F-1)
+  m3dBegin(mYaw, mPitch);
+  const lay = mgbLayout(SMG);
+  const A = lay.atoms;
+  const vp = new Array(A.length);
+  for (let i = 0; i < A.length; i++) vp[i] = mView(A[i].x, A[i].y, A[i].z);
+  /* 표시선 — O=O 분자만. MgO 인접쌍(mgo)·전자 부착(eat)에는 막대를 그리지 않는다(§5-7) */
+  for (let b = 0; b < lay.pairs.length; b++) {
+    const pr = lay.pairs[b];
+    if (pr[2] === "o2") m3dStick(vp[pr[0]], vp[pr[1]], 0.016, COL_MG.stick, 1);
+  }
+  let selIdx = -1;
+  const rep = { mg: null, o2: null, mgo: null, e: null };
+  for (let i = 0; i < A.length; i++) {
+    const a = A[i];
+    if (a.el === "E") {
+      /* 전자 — 어두운 림(뒤) + 밝은 코어(앞) + ⊖ 가로줄 (추정 3) */
+      const r = GEO_MG.R.E * MV.s * MV.scale;
+      const rim = vp[i].slice(); rim[2] -= 0.006;
+      m3dSphere(rim, r * 1.45, COL_MG.eRim, 1);
+      m3dSphere(vp[i], r, COL_MG.eCore, 1);
+      const m1 = vp[i].slice(), m2 = vp[i].slice();
+      m1[0] -= r * 0.62; m2[0] += r * 0.62; m1[2] += 0.004; m2[2] += 0.004;
+      m3dStick(m1, m2, 0.006, COL_MG.eRim, 1);
+      if (a.k === selectedE) selIdx = i;
+      if (rep.e === null && (a.state === "flight" || a.state === "mg")) rep.e = i;
+    } else if (a.el === "Mg") {
+      const k = a.ion ? 0.45 : 0;             // Mg²⁺ — 흰 기운으로 수렴(라벨은 칩·범례가 맡는다)
+      m3dSphere(vp[i], GEO_MG.R.Mg * MV.s * MV.scale, k ? tint(COL_MG.Mg, k) : COL_MG.Mg, 1);
+      if (rep.mg === null && !a.ion) rep.mg = i;
+    } else {
+      const bound = a.phase === "bound";
+      const k = bound ? 0.55 : 0;
+      m3dSphere(vp[i], GEO_MG.R.O * MV.s * MV.scale, k ? tint(COL_MG.O, k) : COL_MG.O, 1);
+      if (rep.o2 === null && a.phase === "air") rep.o2 = i;
+      if (rep.mgo === null && bound) rep.mgo = i;
+    }
+  }
+  if (selIdx >= 0) {
+    const a = A[selIdx];
+    m3dSphere(vp[selIdx], GEO_MG.R.E * MV.s * MV.scale * 2.6, COL_MG.halo, 0.3);
+    const e = SMG.elec[selectedE];
+    if (e.oIdx !== null) {                    // 이동 경로 자취 — 반박 장치의 핵심 시각
+      const mp = mgSite(e.mgIdx), sy = (selectedE % 2 === 0) ? 1 : -1;
+      const fr = { x: mp.x + GEO_MG.E_OFF.x, y: mp.y + sy * GEO_MG.E_OFF.y, z: GEO_MG.E_OFF.z };
+      const oa = A[24 + e.oIdx];              // atoms 배열: Mg 24 → O 24 → E 48
+      const pts = [
+        mView(fr.x, fr.y, fr.z), mView(fr.x, fr.y, GEO_MG.Z_FLY),
+        mView(oa.x + 0.4, oa.y + sy * 0.5, GEO_MG.Z_FLY), vp[selIdx]
+      ];
+      for (let k2 = 0; k2 < pts.length - 1; k2++)
+        m3dStick(pts[k2], pts[k2 + 1], 0.008, COL_MG.trace, 0.55);
+    }
+  }
+  m3dFlush();
+  /* 대표 라벨 — 대표 입자가 없으면 그 라벨은 숨긴다 */
+  placeMgLabel("mgLblMg", rep.mg !== null ? A[rep.mg].x : null,
+    rep.mg !== null ? A[rep.mg].y : 0, rep.mg !== null ? A[rep.mg].z : 0);
+  placeMgLabel("mgLblO2", rep.o2 !== null ? A[rep.o2].x : null,
+    rep.o2 !== null ? A[rep.o2].y : 0, rep.o2 !== null ? A[rep.o2].z : 0);
+  placeMgLabel("mgLblMgO", rep.mgo !== null ? A[rep.mgo].x : null,
+    rep.mgo !== null ? A[rep.mgo].y : 0, rep.mgo !== null ? A[rep.mgo].z : 0);
+  placeMgLabel("mgLblE", rep.e !== null ? A[rep.e].x : null,
+    rep.e !== null ? A[rep.e].y : 0, rep.e !== null ? A[rep.e].z : 0);
+}
+/* 전자 픽킹 — 화면 투영 최근접 (반박 장치: 전자 추적 · 탭2) */
+function pickElec(px, py) {
+  if (!m3d || !m3dView) return -1;
+  updateMicroView();
+  const lay = mgbLayout(SMG);
+  let best = -1, bestD = 24;
+  for (let i = 0; i < lay.atoms.length; i++) {
+    const a = lay.atoms[i];
+    if (a.el !== "E") continue;
+    const pt = microProject(a.x, a.y, a.z);
+    if (!pt) continue;
+    const d = Math.hypot(pt[0] - px, pt[1] - py);
+    if (d < bestD) { bestD = d; best = a.k; }
+  }
+  return best;
+}
+
 /* ================= 조작 · 판독 ================= */
 function setHeat(on) {
   S.heat = on;
   const b = $("heatBtn");
-  b.textContent = on ? "알코올램프 끄기" : "알코올램프 켜기";
+  b.textContent = on ? CUO_D.heatBtnOff : CUO_D.heatBtnOn;
   b.setAttribute("aria-pressed", on ? "true" : "false");
 }
-$("heatBtn").onclick = () => setHeat(!S.heat);
-$("resetBtn").onclick = () => {
-  S = redoxInit(); selectedO = -1; heatVis = 0; bubbleVis = 0;
-  setHeat(false); updateTrace();
+/* 점화 버튼 상태(탭2) — 문자열은 등록 표에서. 매 프레임 DOM 쓰기를 피하는 캐시 키 */
+let heatBtnKey = "";
+function updateHeatBtn() {
+  const b = $("heatBtn"), d = expData();
+  let key, txt, dis, pressed;
+  if (EXP === "cuo") {
+    key = "cuo:" + (S.heat ? 1 : 0);
+    txt = S.heat ? d.heatBtnOff : d.heatBtnOn; dis = false; pressed = S.heat;
+  } else if (EXP !== "mgburn") {                // 미지 id — 조작 없음(확장 대비 기본값)
+    key = "x:" + EXP; txt = d.heatBtnOn || "—"; dis = true; pressed = false;
+  } else if (SMG.done) { key = "mg:done"; txt = d.heatBtnDone; dis = true; pressed = false; }
+  else if (SMG.ignited) { key = "mg:burn"; txt = d.heatBtnOff; dis = true; pressed = true; }
+  else if (SMG.torch) { key = "mg:torch"; txt = d.heatBtnLighting; dis = true; pressed = true; }
+  else { key = "mg:idle"; txt = d.heatBtnOn; dis = false; pressed = false; }
+  if (key === heatBtnKey) return;
+  heatBtnKey = key;
+  b.textContent = txt; b.disabled = dis;
+  b.setAttribute("aria-pressed", pressed ? "true" : "false");
+}
+$("heatBtn").onclick = () => {
+  if (EXP === "cuo") setHeat(!S.heat);
+  else if (!SMG.torch && !SMG.ignited && !SMG.done) { SMG.torch = true; updateHeatBtn(); }
 };
+$("resetBtn").onclick = () => {                 // 활성 탭만 초기화 — 숨은 탭 상태는 §5-13
+  if (EXP === "cuo") {
+    S = redoxInit(); selectedO = -1; heatVis = 0; bubbleVis = 0;
+    setHeat(false);
+  } else {
+    SMG = mgbInit(); selectedE = -1; lightVis = 0;
+    heatBtnKey = ""; updateHeatBtn();
+  }
+  updateTrace();
+};
+
+/* ── 탭 전환 (가시성은 이 함수 하나가 쓴다 — §13 ①. 숨은 탭은 loop 가 시간을 멈춘다) ── */
+function applyExp() {
+  const d = expData();
+  document.querySelectorAll("#expTabs .stg").forEach(b => {
+    b.setAttribute("aria-pressed", b.getAttribute("data-expid") === EXP ? "true" : "false");
+  });
+  document.querySelectorAll("[data-exp]").forEach(el => {
+    const mine = el.getAttribute("data-exp") === EXP;
+    el.style.display = mine ? (el.getAttribute("data-disp") || "block") : "none";
+  });
+  /* 진행 배지 — 등록 표가 원천(F-1). 초기 정적 마크업(탭1)과 같은 문자열을 다시 그린다 */
+  const bwrap = $("stageBadges");
+  bwrap.innerHTML = "";
+  for (let n = 1; n < d.stages.length; n++) {
+    const sp = document.createElement("span");
+    sp.className = "stagebadge";
+    sp.setAttribute("data-stage", String(n));
+    sp.textContent = d.stages[n];
+    bwrap.appendChild(sp);
+  }
+  document.querySelector(".redox-head .sub").innerHTML = d.sub;
+  $("macro").setAttribute("aria-label", d.ariaMacro);
+  $("micro").setAttribute("aria-label", d.ariaMicro);
+  $("heatNote").textContent = d.heatNote;
+  heatBtnKey = ""; updateHeatBtn();
+  updateTrace();
+  applyZoom();
+  updateReadouts();
+}
+/* 탭 클릭 배선은 initAll 이 등록 표 순회로 단다(생성 버튼 포함) */
 $("camBtn").onclick = () => {
   zAnim = null; camPre = null;
   cam = Object.assign({}, CAM0); mYaw = MV.yaw; mPitch = MV.pitch;
@@ -1243,14 +2430,17 @@ let zAnim = null, camPre = null;
 const ZOOM_CAM = { yaw: -0.08, pitch: 0.14, dist: 1.35, tx: -1.0, ty: 1.38 };
 function applyZoom() {
   $("microWrap").style.display = zoom ? "block" : "none";
-  $("microCaption").classList.toggle("is-hidden", !zoom);
+  $("microCaption").classList.toggle("is-hidden", !(zoom && EXP === "cuo"));
+  $("microCaptionMg").classList.toggle("is-hidden", !(zoom && EXP === "mgburn"));
   $("traceCard").classList.toggle("is-hidden", !zoom);
   $("zoomBtn").textContent = zoom ? "실험 장치로 돌아가기" : "분자 크기로 확대해 보기";
   $("zoomBtn").setAttribute("aria-pressed", zoom ? "true" : "false");
   $("camHint").classList.toggle("is-hidden", zoom || !T3);
   ["lblPowder", "lblLime", "lblLamp"].forEach(id => {
-    if (zoom) $(id).classList.add("is-hidden");   // 거시 라벨은 미시 화면에 남기지 않는다
+    if (zoom || EXP !== "cuo") $(id).classList.add("is-hidden");   // 거시 라벨은 미시·타 탭에 남기지 않는다
   });
+  if (!zoom || EXP !== "mgburn")
+    ["mgLblMg", "mgLblO2", "mgLblMgO", "mgLblE"].forEach(id => $(id).classList.add("is-hidden"));
   if (zoom && !m3d) $("microFallback").style.display = "block";
 }
 function finishZoomAnim() {
@@ -1304,8 +2494,13 @@ function bindOrbit(cv, isMicro) {
   cv.addEventListener("pointerup", e => {
     if (isMicro && down && !down.moved) {
       const r = cv.getBoundingClientRect();
-      const hit = pickOxy(e.clientX - r.left, e.clientY - r.top);
-      if (hit >= 0) { selectedO = hit; updateTrace(); }
+      if (EXP === "cuo") {
+        const hit = pickOxy(e.clientX - r.left, e.clientY - r.top);
+        if (hit >= 0) { selectedO = hit; updateTrace(); }
+      } else {
+        const hit = pickElec(e.clientX - r.left, e.clientY - r.top);
+        if (hit >= 0) { selectedE = hit; updateTrace(); }
+      }
     }
     down = null;
   });
@@ -1318,59 +2513,102 @@ function bindOrbit(cv, isMicro) {
 }
 
 function updateTrace() {
-  const el = $("traceCard");
-  if (selectedO < 0) { el.textContent = "산소 원자를 누르면 그 원자를 따라갑니다."; return; }
-  const o = S.oxy[selectedO];
-  if (o.state === "cuo")
-    el.textContent = "선택한 산소 — 아직 산화 구리(Ⅱ) 안에 있습니다. 가열하면 떠나는 순간을 볼 수 있어요.";
-  else if (o.state === "transit")
-    el.textContent = "선택한 산소 — 구리를 떠나(구리: 환원) 탄소에게 가는 중(탄소: 산화)입니다.";
-  else
-    el.textContent = "선택한 산소 — 구리를 떠나(구리: 환원) 탄소에 붙어(탄소: 산화) 이산화 탄소가 되었습니다. 같은 원자가 두 사건의 주인공입니다.";
+  const el = $("traceCard"), tr = expData().trace || { none: "" };  // 문자열은 등록 표가 원천(F-1)
+  if (EXP !== "cuo" && EXP !== "mgburn") { el.textContent = tr.none; return; }
+  if (EXP === "cuo") {
+    if (selectedO < 0) { el.textContent = tr.none; return; }
+    const o = S.oxy[selectedO];
+    el.textContent = o.state === "cuo" ? tr.wait : (o.state === "transit" ? tr.move : tr.done);
+  } else {
+    if (selectedE < 0) { el.textContent = tr.none; return; }
+    const e = SMG.elec[selectedE];
+    el.textContent = e.oIdx === null ? tr.wait
+      : ((SMG.t - e.born) < MGB.FLIGHT ? tr.move : tr.done);
+  }
 }
 
 const STAGE_TXT = ["", "가열 전", "가열 중", "색 변화", "기체 이동", "석회수 흐려짐", "완결"];
-function updateReadouts() {
-  const lost = redoxLostByCu(S), gained = redoxGainedByC(S);
-  $("lostVal").textContent = lost;
-  $("gainVal").textContent = gained;
-  $("co2Val").textContent = S.absorbed;
-  $("limeState").textContent =
-    S.turb >= 1 ? "뿌옇게 흐려짐" : (S.absorbed > 0 ? "흐려지는 중" : "맑음");
-  const stg = redoxStage(S);
-  const badges = document.querySelectorAll("#stageBadges .stagebadge");
-  badges.forEach(b => {
+function setBadges(stg) {
+  document.querySelectorAll("#stageBadges .stagebadge").forEach(b => {
     const n = +b.getAttribute("data-stage");
     b.classList.toggle("is-on", n === stg);
     b.classList.toggle("is-done", n < stg);
   });
-  $("eqOxBk").classList.toggle("is-hot", gained > 0);
-  $("eqOxLbl").classList.toggle("is-hot", gained > 0);
-  $("eqRedBk").classList.toggle("is-hot", lost > 0);
-  $("eqRedLbl").classList.toggle("is-hot", lost > 0);
-  const conc = $("concLine");
-  if (zoom && lost >= 2 && lost === gained) { // J-N5 — 미시 화면에서, 지금 수치가 근거일 때만
-    conc.classList.remove("is-hidden");
-    $("concL").textContent = lost; $("concG").textContent = gained;
-  } else conc.classList.add("is-hidden");
-  /* 미시 라벨도 화면 상태와 모순되지 않게(J-N5) — 완결이면 남은 것은 구리뿐이다 */
-  const done = lost >= REDOX.N_CUO;
+}
+function setChips(done) {                       // 미시 칩 — 문자열은 등록 표가 원천(F-1 · J-N5)
+  const d = expData(), arr = (done ? d.chipsDone : d.chips) || [];
   const hl = $("microHeadline");
-  hl.children[0].innerHTML = '<i class="sw" style="background:' + CPK.Cu + '"></i>' + (done
-    ? "구리 — 산소를 모두 <b>잃었다</b> (환원)"
-    : "구리는 산소를 <b>잃는다</b> = 환원");
-  hl.children[1].innerHTML = '<i class="sw" style="background:' + CPK.C + '"></i>' + (done
-    ? "탄소 — 산소를 <b>얻어</b> 떠났다 (산화)"
-    : "탄소는 산소를 <b>얻는다</b> = 산화");
-  if (selectedO >= 0) updateTrace();
+  /* 루프 상한은 «배열 길이»까지 묶는다 — chips: [] 인 확장 항목에서 arr[0].cls가 매 프레임
+     throw 하던 결함(S-검토 A-1 실측: 3탭 스모크 명제 ⓑ 오류 57건). 칩이 모자라면 남는
+     칩 요소는 숨긴다 — 빈 칩 실험도 등록 표 추가만으로 성립해야 한다(확장 대비) */
+  const n = Math.min(2, arr.length, hl.children.length);
+  for (let i = 0; i < hl.children.length; i++) {
+    if (i < n) {
+      hl.children[i].style.display = "";
+      hl.children[i].className = arr[i].cls;
+      hl.children[i].innerHTML = '<i class="sw" style="background:' + arr[i].sw + '"></i>' + arr[i].html;
+    } else hl.children[i].style.display = "none";
+  }
+}
+function updateReadouts() {
+  if (EXP === "cuo") {
+    const lost = redoxLostByCu(S), gained = redoxGainedByC(S);
+    $("lostVal").textContent = lost;
+    $("gainVal").textContent = gained;
+    $("co2Val").textContent = S.absorbed;
+    $("limeState").textContent =
+      S.turb >= 1 ? "뿌옇게 흐려짐" : (S.absorbed > 0 ? "흐려지는 중" : "맑음");
+    setBadges(redoxStage(S));
+    $("eqOxBk").classList.toggle("is-hot", gained > 0);
+    $("eqOxLbl").classList.toggle("is-hot", gained > 0);
+    $("eqRedBk").classList.toggle("is-hot", lost > 0);
+    $("eqRedLbl").classList.toggle("is-hot", lost > 0);
+    const conc = $("concLine");
+    if (zoom && lost >= 2 && lost === gained) { // J-N5 — 미시 화면에서, 지금 수치가 근거일 때만
+      conc.classList.remove("is-hidden");
+      $("concL").textContent = lost; $("concG").textContent = gained;
+    } else conc.classList.add("is-hidden");
+    $("concLineMg").classList.add("is-hidden");
+    /* 미시 칩도 화면 상태와 모순되지 않게(J-N5) — 완결이면 남은 것은 구리뿐이다 */
+    setChips(lost >= REDOX.N_CUO);
+    if (selectedO >= 0) updateTrace();
+  } else if (EXP !== "mgburn") {                // 미지 id(확장 대비 기본값) — 배지·칩만
+    setBadges(1);
+    setChips(false);                            // 빈 chips도 setChips가 안전 처리(S-검토 A-1)
+    $("concLine").classList.add("is-hidden");
+    $("concLineMg").classList.add("is-hidden");
+    updateHeatBtn();
+  } else {
+    const c = mgbCounts(SMG);
+    $("mgLostVal").textContent = c.lost;
+    $("mgGainVal").textContent = c.gained;
+    $("mgLeftState").textContent = c.mgLeft + "개";
+    $("mgoState").textContent = c.mgo + "단위";
+    setBadges(mgbStage(SMG));
+    $("mgOxBk").classList.toggle("is-hot", c.lost > 0);
+    $("mgOxLbl").classList.toggle("is-hot", c.lost > 0);
+    $("mgRedBk").classList.toggle("is-hot", c.gained > 0);
+    $("mgRedLbl").classList.toggle("is-hot", c.gained > 0);
+    const conc = $("concLineMg");
+    if (zoom && c.lost >= 4 && c.lost === c.gained) {   // J-N5 — n≥4(이벤트 1회분)부터
+      conc.classList.remove("is-hidden");
+      $("concLMg").textContent = c.lost; $("concGMg").textContent = c.gained;
+    } else conc.classList.add("is-hidden");
+    $("concLine").classList.add("is-hidden");
+    setChips(c.lost >= MGB.E_PER_MG * MGB.N_MG);
+    updateHeatBtn();
+    if (selectedE >= 0) updateTrace();
+  }
 }
 
 /* CSV — 학번 + 활동지 답 (liquid 방식) */
 $("csvBtn").onclick = () => {
   const esc = s => '"' + String(s).replace(/"/g, '""') + '"';
-  const heads = ["학번", "문항1", "문항2", "문항3", "문항4", "문항5", "문항6", "문항7"];
+  const heads = ["학번", "문항1", "문항2", "문항3", "문항4", "문항5", "문항6", "문항7",
+                 "마그네슘1", "마그네슘2", "마그네슘3", "마그네슘4"];
   const row = [$("seat").value.trim() || "무기명"];
   for (let i = 1; i <= 7; i++) row.push($("q" + i).value);
+  for (let i = 1; i <= 4; i++) row.push($("mgq" + i).value);
   const csv = "﻿" + heads.map(esc).join(",") + "\r\n" + row.map(esc).join(",");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
@@ -1392,14 +2630,21 @@ function loop(now) {
       cam[f] = zAnim.from[f] + (zAnim.to[f] - zAnim.from[f]) * e;
     if (k >= 1) finishZoomAnim();
   }
-  redoxStep(S, dt);
-  heatVis += ((S.heat ? 1 : 0) - heatVis) * Math.min(1, dt * 4);
-  /* 기포는 CO₂가 석회수에 «도달한 뒤» 3초 동안 — 도달 전에 미리 솟지 않는다(S-검토 B-2) */
-  const wantBub = S.tubeArrivals.some(a => a <= S.t && a > S.t - 3) ? 1 : 0;
-  bubbleVis += (wantBub - bubbleVis) * Math.min(1, dt * 3);
+  /* 활성 탭만 시간이 흐른다(§5-13) — 숨은 탭은 일시정지, 복귀하면 이어진다 */
+  if (EXP === "cuo") {
+    redoxStep(S, dt);
+    heatVis += ((S.heat ? 1 : 0) - heatVis) * Math.min(1, dt * 4);
+    /* 기포는 CO₂가 석회수에 «도달한 뒤» 3초 동안 — 도달 전에 미리 솟지 않는다(S-검토 B-2) */
+    const wantBub = S.tubeArrivals.some(a => a <= S.t && a > S.t - 3) ? 1 : 0;
+    bubbleVis += (wantBub - bubbleVis) * Math.min(1, dt * 3);
+  } else if (EXP === "mgburn") {
+    mgbStep(SMG, dt);
+    if (SMG.ignited && SMG.torch) { SMG.torch = false; heatBtnKey = ""; }  // 점화되면 토치 회수
+    lightVis += (mgbLight(SMG) - lightVis) * Math.min(1, dt * 5);
+  }                                             // 미지 id(확장 대비 기본값) — 빈 상태·시간 정지
   updateReadouts();
-  if (zoom) drawMicro();
-  else macroRender(now / 1000);
+  if (zoom) { if (EXP === "cuo") drawMicro(); else if (EXP === "mgburn") drawMicroMg(); }
+  else { if (EXP === "cuo") macroRender(now / 1000); else if (EXP === "mgburn") macroRenderMg(now / 1000); }
 }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) { if (rafId) cancelAnimationFrame(rafId); rafId = null; lastT = null; }
@@ -1409,6 +2654,7 @@ document.addEventListener("visibilitychange", () => {
 /* ================= 초기화 ================= */
 (function initAll() {
   try { T3 = buildMacro(); } catch (e) { console.error(e); T3 = null; }
+  try { T3MG = buildMacroMg(); } catch (e) { console.error(e); T3MG = null; }
   if (!T3) {
     $("macroFallback").style.display = "block";
     $("macro").style.display = "none";
@@ -1421,7 +2667,29 @@ document.addEventListener("visibilitychange", () => {
   }
   initM3D();
   if (mcv && m3d) bindOrbit(mcv, true);
-  updateTrace();
-  updateReadouts();
+  /* 탭 버튼 — 등록 표가 원천(F-1). 정적 버튼(2개)을 라벨링하고, 등록 표가 더 길면
+     «부족분을 생성»한다 — 3번째 실험은 EXPERIMENTS_DATA 항목 추가만으로 탭이 성립한다
+     (확장 대비 — 확정 4. 씬·상태 연결이 없는 항목은 기본값: 빈 무대·빈 상태) */
+  const tabWrap = $("expTabs");
+  const btns = tabWrap.querySelectorAll(".stg");
+  for (let i = 0; i < EXPERIMENTS_DATA.length; i++) {
+    let b = btns[i];
+    if (!b) {
+      b = document.createElement("button");
+      b.className = "stg tab";
+      b.setAttribute("data-tab", String(i + 1));
+      b.setAttribute("aria-pressed", "false");
+      tabWrap.appendChild(b);
+    }
+    b.textContent = EXPERIMENTS_DATA[i].tab;
+    b.setAttribute("data-expid", EXPERIMENTS_DATA[i].id);
+    b.onclick = () => {
+      const id = b.getAttribute("data-expid");
+      if (id === EXP) return;
+      EXP = id;
+      applyExp();
+    };
+  }
+  applyExp();
   rafId = requestAnimationFrame(loop);
 })();
