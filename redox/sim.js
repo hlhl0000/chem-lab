@@ -27,12 +27,14 @@
    ================================================================ */
 
 const REDOX = {
-  N_CUO: 24, N_C: 12, EVENTS: 12,          // 화학량론 2:1 (교과서 34쪽 계수)
+  N_CUO: 192, N_C: 96, EVENTS: 96,         // 화학량론 2:1 (교과서 34쪽 계수) — 2026-08-29 증설
   T_AMB: 20, T_EQ: 900, TAU_H: 8,          // 임의 모형값 — 화면 비표시
   T_START: 400,                            // 반응 개시 문턱(임의 모형값)
   K_P: 1 / 40,                             // 진행률/s — 활성 가열 40 s 완결
   TRANSIT: 2.5,                            // CO₂ 고무관 이동 지연 s
-  FLIGHT: 1.2,                             // 미시 산소 비행 시간 s
+  /* 이벤트 간격 = 1/(K_P·EVENTS) = 0.417 s. 비행이 그보다 짧아야 두 이벤트의 산소가
+     «동시에» 날지 않는다(동시에 날면 경로가 서로를 관통한다) */
+  FLIGHT: 0.36,                            // 미시 산소 비행 시간 s
   RISE: 2.0,                               // CO₂ 상승 속도 (배치 단위/s · 상한 없음 — 화면 위로 떠나
                                            //   거시의 「관을 지나 석회수로」와 이어진다. 같은 자리에
                                            //   여러 분자가 멈춰 겹치는 것을 상한이 만들었었다)
@@ -48,14 +50,24 @@ const REDOX = {
    탄소와 CO₂를 이루어 표면 앞으로 빠져나와 위로 떠난다. */
 const GEO = {
   R: { Cu: 1.0, O: 0.9, C: 0.85 },         // 공 반지름 (배치 단위)
-  COLS: 6, ROWS: 6,                        // 앞줄(반응하는) 격자 6×6 = 셀 36 = CuO 24 + C 12
-  DX: 4.4, DY: 3.0,                        // 셀 간격
-  CUO_OFF: 2.2,                            // Cu → O (Cu–O 결합 길이)
-  C_OFF: 1.1,                              // 셀 안 탄소의 x 치우침 — 양옆 간격이 3.3으로 대칭
+  /* 2026-08-29 증설 — 「거시에서 미시로 확대했다」는 인상이 나도록 원자 수를 늘렸다
+     (사용자 지시). 9열×12행 = 셀 108 = CuO 72 + C 36, 이벤트 36 */
+  COLS: 24, ROWS: 12,                      // 셀 288 = CuO 192 + C 96 (카메라가 전선을 따라간다)
+  /* 2026-08-29 조밀화(지시안 v1.3 §3-C C-2 — 사용자 지시: 거시가 차지하는 공간만큼
+     원자가 차 있어야 한다). 근거 부등식(검사군 17이 재확인):
+       셀 간 최소 간격 DX − CUO_OFF = 2.1 ≥ R.O + R.Cu(1.9) + 2·VIB(0.2)
+       행 간          DY = 2.2       ≥ 2·R.Cu(2.0)        + 2·VIB(0.2)
+       셀 내          CUO_OFF = 2.0  ≥ 1.9  (결합쌍은 «같은 위상»으로 진동 → 상대 거리 불변)
+       탄소 양옆      C_OFF + (DX−CUO_OFF) = DX − C_OFF = 3.1 (대칭) ≥ R.C + R.O(1.75) + 0.2 */
+  DX: 4.1, DY: 2.2,                        // 셀 간격
+  CUO_OFF: 2.0,                            // Cu → O (Cu–O 결합 길이)
+  C_OFF: 1.0,                              // 셀 안 탄소의 x 치우침 — 양옆 간격이 3.1로 대칭
   CO2_BOND: 1.9,                           // O=C=O 표시 간격 (> r_C+r_O = 1.75)
   Z_OUT: 4.5,                              // CO₂가 빠져나와 떠오르는 깊이(격자 표면 «앞»)
   Z_FLY: 7.0,                              // 산소 비행 고도 — 격자·CO₂ 어느 것보다 앞
-  RING: 2                                  // 가장자리 너머로 이어 그리는 여분 셀 고리 수
+  RING: 3,                                 // 가장자리 너머로 이어 그리는 여분 셀 고리 수
+  VIEW_H: 30,                              // 미시 카메라가 담는 세로 범위(전선을 따라 x 팬)
+  VIB: 0.1                                 // 고체 제자리 진동 진폭 (셀 단위 — 결합 길이 불변)
 };
 
 /* 셀 종류 — 한 줄이 [CuO, CuO, C] 의 반복. 화학량론 2:1이 배열 자체에 들어 있다 */
@@ -177,25 +189,37 @@ function cellReacted(col, row, p) {
 
 /* ── 미시 배치 — 렌더와 검사가 함께 쓰는 단일 원천 (원칙 11) ──
    반환: { atoms: [{el,x,y,z,i}], bonds: [[a,b]] }  (bonds는 atoms 배열 인덱스 쌍) */
-function redoxLayout(s) {
+function redoxLayout(s, opts) {
+  /* 고체(격자에 남아 있는 Cu·O·C)는 제자리에서 미세 진동한다 — 「고체 = 완전 정지」
+     오개념 방지(사용자 확정 2026-08-29). 위상은 «셀» 단위라 Cu–O 결합 길이는 불변이고,
+     CO₂가 되어 떠나는 입자는 진동하지 않는다. opts.vib === false 면 진폭 0(RM 경로) */
+  const vib = !(opts && opts.vib === false);
+  const cellVib = (col, row) => vib
+    ? vibOff(col * 31.7 + row * 7.3, s.t, GEO.VIB) : [0, 0, 0];
   const atoms = [], bonds = [];
   const oxyAt = new Array(REDOX.N_CUO), cuAt = new Array(REDOX.N_CUO),
         cAt = new Array(REDOX.N_C);
   for (let i = 0; i < REDOX.N_CUO; i++) {
-    const p = cuSite(i);
+    const p = cuSite(i), t = triadCell(Math.floor(i / 2));
+    const v = cellVib(t.g * 3 + (i % 2), t.r);
     cuAt[i] = atoms.length;
-    atoms.push({ el: "Cu", x: p.x, y: p.y, z: p.z, i: i });
+    atoms.push({ el: "Cu", x: p.x + v[0], y: p.y + v[1], z: p.z + v[2], i: i });
   }
   for (let k = 0; k < REDOX.N_C; k++) {
-    const p = cSite(k), c = s.carbons[k];
+    const p = cSite(k), c = s.carbons[k], t = triadCell(k);
+    const moving = isFinite(c.firedAt);                 // 떠나는 중이면 진동하지 않는다
+    const v = moving ? [0, 0, 0] : cellVib(t.g * 3 + 2, t.r);
     cAt[k] = atoms.length;
-    atoms.push({ el: "C", x: p.x, y: p.y + co2Rise(c, s.t), z: cZ(c, s.t), i: k });
+    atoms.push({ el: "C", x: p.x + v[0], y: p.y + co2Rise(c, s.t) + v[1],
+                 z: cZ(c, s.t) + v[2], i: k });
   }
   for (let i = 0; i < REDOX.N_CUO; i++) {
     const o = s.oxy[i];
     let pos;
     if (o.state === "cuo") {
-      pos = oxySite(i);
+      const q = oxySite(i), tc = triadCell(Math.floor(i / 2));
+      const v = cellVib(tc.g * 3 + (i % 2), tc.r);    // 짝 Cu와 «같은» 위상 → 결합 길이 불변
+      pos = { x: q.x + v[0], y: q.y + v[1], z: q.z + v[2] };
       bonds.push([cuAt[i], atoms.length]);            // Cu–O (자기 짝)
     } else {
       /* CO₂ 는 격자 «앞»(z = Z_OUT)에서 가로(x축)로 이룬다 — 섞인 격자 안에서 만들면
@@ -234,12 +258,13 @@ function redoxLayout(s) {
       const ring = Math.max(-col, col - (GEO.COLS - 1), -row, row - (GEO.ROWS - 1));
       const dim = ring <= 1 ? 0.6 : 0.32;
       const done = cellReacted(col, row, s.p);
-      const x0 = col * GEO.DX, y0 = row * GEO.DY;
+      const bv = cellVib(col, row);
+      const x0 = col * GEO.DX + bv[0], y0 = row * GEO.DY + bv[1];
       if (cellIsCarbon(col)) {
-        if (!done) back.push({ el: "C", x: x0 + GEO.C_OFF, y: y0, z: 0, dim: dim });
+        if (!done) back.push({ el: "C", x: x0 + GEO.C_OFF, y: y0, z: bv[2], dim: dim });
       } else {
-        back.push({ el: "Cu", x: x0, y: y0, z: 0, dim: dim });
-        if (!done) back.push({ el: "O", x: x0 + GEO.CUO_OFF, y: y0, z: 0, dim: dim });
+        back.push({ el: "Cu", x: x0, y: y0, z: bv[2], dim: dim });
+        if (!done) back.push({ el: "O", x: x0 + GEO.CUO_OFF, y: y0, z: bv[2], dim: dim });
       }
     }
   }
@@ -273,99 +298,177 @@ function redoxT1() {
 }
 
 /* ================================================================
-   마그네슘의 연소 — 탭2 계산부 (설계지시안_마그네슘연소_v1 v1.1 §3 단계 1)
+   마그네슘의 연소 — 탭2 계산부 (설계지시안_마그네슘연소_v1 v1.4 §3-C)
 
    반응식  2Mg + O₂ → 2MgO                  (교과서 35쪽 반응식 박스)
    「마그네슘(Mg)은 전자를 잃어 마그네슘 이온(Mg²⁺)이 되고 산소(O)는 전자를
      얻어 산화 이온(O²⁻)이 되며, 두 이온이 결합하여 산화 마그네슘(MgO)이
      생성된다.」 (교과서 35쪽 본문 원문)
 
-   모델
-   ① 이벤트 단위 화학량론 — 1이벤트 = Mg 2개 + O₂ 1개 소비 = 전자 4개 이동
-      (Mg 하나가 2개 잃고 O 하나가 2개 얻음) = MgO 2단위. 총 12이벤트
-      (Mg 24 · O₂ 12, 화학량론 2:1).
-   ② 점화 모형 — 토치 유지 중 T가 T_TORCH로 지수 수렴(§14 ③-1 오일러 금지).
-      T≥T_IGN에서 개시. 개시 후에는 «자기 지속»(발열 산화 — 문헌 근거, 지시안
-      §1-1 #10): 토치를 떼도 목표 T_BURN으로 완결까지 진행. 완결 후 냉각.
-      ⚠ 온도·시간 상수는 전부 «임의 모형값»(실제 점화 온도 문헌값 ≈454~507 ℃
-      와 다른 압축 연출값) — 화면에 숫자로 표시하지 않는다(지시안 추정 2).
-   ③ 전자 48개를 «개별로» 추적한다. 미시 배치 함수 mgbLayout()이 렌더와 검증이
-      함께 쓰는 단일 원천이다(원칙 11).
-   ④ 동시성 카운터 두 원천 — 「마그네슘이 잃은 전자」는 mg 장부(lost 합),
-      「산소가 얻은 전자」는 ⒜ mgbLayout()이 내는 O 입자 배열의 소유 상태(렌더
-      원천)와 ⒝ oxy 장부, 두 축에서 독립적으로 센다(검사군 13 — P-검토 MF-1 ⑶).
-      소유는 반응 사건 시점에 넘어간다(v1 §10 존치 결정과 같은 관례).
+   모델 (v1.4 — 사용자 피드백 2026-08-29 2차)
+   ① 화학량론 — 1이벤트 = Mg 2개 + O₂ 1개 = 전자 4개 이동 = MgO 2단위.
+      40이벤트로 Mg 80 · O 80 · 전자 160 완결(v1.3의 24/24/48에서 증설 —
+      「거시에서 미시로 확대했다」는 인상이 나도록).
+   ② **금속은 움직이지 않는다.** 산소가 마그네슘 쪽으로 «와서» 전자를 받으며
+      그 앞에 붙는다(사용자 지시). Mg는 제자리에서 전자를 잃어 작아질 뿐이다.
+   ③ 산화층은 표면 행 왼쪽부터 자란다 — 붙은 O²⁻가 금속 표면을 덮어 나간다.
+   ④ 기체 O₂는 자기 타일 안에서 자유 배회(강체 회전). 반응할 분자는 그 순간
+      표적에 «가장 가까이 와 있는» 것이다.
+   ⑤ 고체는 제자리 미세 진동(「고체 = 완전 정지」 오개념 방지).
+   ⑥ mgbLayout()이 렌더와 검증의 단일 원천이다(원칙 11).
    ================================================================ */
 
 const MGB = {
-  N_MG: 24, N_O2: 12, EVENTS: 12,          // 화학량론 2:1 (교과서 35쪽 계수)
+  N_MG: 240, N_O2: 120, EVENTS: 120,       // 2026-08-29 증설 — 카메라가 전선을 따라간다
   E_PER_MG: 2, E_PER_EVENT: 4,             // Mg²⁺의 2+ = 전자 2개 잃음 (중2 선행)
   T_AMB: 20, T_TORCH: 1000, T_IGN: 600,    // 임의 모형값 — 화면 비표시
   T_BURN: 3000, TAU_H: 3, TAU_C: 6,
-  K_P: 1 / 20,                             // 진행률/s — 개시 후 20 s 완결
-  FLIGHT: 0.9,                             // 전자 비행 시간 s (미시)
-  APPROACH: 1.8,                           // O₂ 접근→안착 시간 s (미시)
+  K_P: 1 / 40,                             // 진행률/s — 개시 후 40 s 완결(이벤트 120개)
+  /* 이벤트 간격 = 1/(K_P·EVENTS) = 0.333 s. 접근이 그보다 짧아야 두 이벤트의 산소가
+     «동시에» 날지 않는다(동시에 날면 경로가 서로를 관통한다 — 검사 19-7이 지킨다) */
+  APPROACH: 0.15,                          // O₂가 표적 Mg 앞으로 오는 시간 s (간격 0.333의 절반)
+  FLIGHT: 0.08,                            // 전자가 Mg → O로 건너가는 시간 s (접근 중)
+  E_START: 0.30,                           // 접근 진행도 얼마에서 전자가 떠나는가
+  SPLIT: 0.35,                             // O=O 결합이 끊어지며 두 O가 갈라지는 거리
   M: { Mg: 24.305, O: 15.999 }             // 몰질량 g/mol (문헌값)
 };
 
-/* 미시 배치 기하 — 렌더·검사 공용 (원칙 13: 매직 넘버 금지 — 접촉 간격은
-   반지름 합에서 유도). 좌측 Mg 금속 격자(4열×6행), 우측 공기 중 O₂ 분자(가로
-   O=O, 2열×6행). 소비는 공기와 닿는 오른쪽 열부터 윗행 우선 — 표면부터 탄다. */
+/* 미시 기하 — 렌더·검사 공용 (원칙 13: 간격은 반지름 합에서 유도한다).
+   근거 부등식(검사군 17이 재확인):
+     금속 격자 DX = DY = 2.3 ≥ 2·R.Mg(2.0) + 2·VIB(0.18)
+     산화 접촉 MGO_Z = R.MgIon + R.OIon = 1.67 — O²⁻는 자기 Mg²⁺ «앞»에 붙는다
+     이웃 O²⁻ 간격 = DX(2.3) > 2·R.OIon(2.10)
+     기체 타일 GAS_TW/2 = 2.75 > 진폭 0.6 + 분자 반경(O2_BOND/2 + R.O = 1.825) */
 const GEO_MG = {
-  R: { Mg: 1.0, O: 0.9, E: 0.28 },         // 공 반지름 (전자는 원자와 뚜렷이 작게 — 지시안 추정 3)
-  COLS: 4, ROWS: 6,                        // Mg 격자 4×6 = 24
-  DX: 2.2, DY: 2.2,                        // 격자 간격 (> 2×R.Mg — 겹침 0)
-  O2_BOND: 1.85,                           // O=O 표시 간격 (> 2×R.O = 1.8)
-  O2_X0: 12.6, O2_DX: 3.8, O2_DY: 2.2,     // O₂ 대기(공기) 영역 — 가로 분자 2열×6행
-  Z_APPROACH: 4.0,                         // O₂ 이동 고도 (격자 앞·전자보다 뒤)
-  Z_FLY: 6.0,                              // 전자 비행 고도 — 어느 것보다 앞
-  E_OFF: { x: 0.5, y: 0.55, z: 0.7 }       // Mg 표면의 원자가 전자 2개 자리 (±y)
+  R: { Mg: 1.0, O: 0.9, E: 0.20, MgIon: 0.62, OIon: 1.05 },
+  COLS: 60, ROWS: 4,                       // 앞줄 Mg 240 = 60×4 (리본 단면 — 화면보다 훨씬 길다)
+  DX: 2.3, DY: 2.3,
+  RING_X: 5, RING_BELOW: 6,                // 여분 금속 — 화면 밖까지 이어진다
+  VIB: 0.09,                               // 고체 진동 진폭 (R.Mg의 9 %)
+  O2_BOND: 1.85,                           // O=O 간격 (> 2·R.O = 1.8)
+  MGO_Z: 1.67,                             // O²⁻가 Mg²⁺ 앞에 접촉하는 깊이
+  GAS_X0: -1.2, GAS_Y0: 9.6,               // 기체 배회 영역 원점(금속 표면 바로 위)
+  GAS_COLS: 30, GAS_ROWS: 4,               // 타일 30×4 = 분자 120개
+  GAS_TW: 4.6, GAS_TH: 4.8,
+  GAS_AX: 0.4, GAS_AY: 0.4, GAS_AZ: 0.7,   // 리사주 진폭(타일이 좁아진 만큼)
+  VIEW_H: 28,                              // 미시 카메라가 담는 세로 범위(전선을 따라 x 팬)
+  /* 접근 고도 — 이미 붙어 있는 산소(z = MGO_Z 1.67) 위를 지나므로 그보다 충분히 앞이어야
+     한다: 4.2 − 1.67 = 2.53 > R.O + R.OIon(1.95). 3.6이면 0.02 모자라 스친다(실측) */
+  Z_APPROACH: 4.2, Z_LANE: 1.1,
+  Z_FLY: 6.2, Z_FLY_GAP: 0.55,             // 전자 비행 고도 — 어느 것보다 앞
+  E_OFF: { x: 0.58, y: 0.68, z: 0.82 }     // 원자가 전자 2개의 자리 (거리 ≈ R.Mg + R.E)
 };
-GEO_MG.MGO_Z = GEO_MG.R.Mg + GEO_MG.R.O;   // O²⁻ 안착 깊이 = 접촉 간격 (유도값 1.9)
 
-/* Mg 자리 — i번째 원자. 오른쪽 열부터(공기 접촉면), 열 안에서는 윗행부터 소비 */
-function mgSite(i) {
-  const col = GEO_MG.COLS - 1 - Math.floor(i / GEO_MG.ROWS);
-  const row = GEO_MG.ROWS - 1 - (i % GEO_MG.ROWS);
-  return { x: col * GEO_MG.DX, y: row * GEO_MG.DY, z: 0 };
+/* 고체 미세 진동 — 결정적(Math.random 금지: 매 프레임 배열이 흔들리면 안 된다) */
+function vibOff(key, t, amp) {
+  const a = cellHash01(key, 17.13), b = cellHash01(key * 1.7 + 3.1, 91.7);
+  return [amp * Math.sin(t * 5.1 + a * 6.2832),
+          amp * Math.sin(t * 6.7 + b * 6.2832),
+          amp * 0.6 * Math.sin(t * 4.3 + (a + b) * 3.1416)];
 }
-/* O₂ 분자 m의 대기(공기) 중심 자리 — 가로 분자, 2열×6행 */
-function o2Home(m) {
-  return {
-    x: GEO_MG.O2_X0 + Math.floor(m / GEO_MG.ROWS) * GEO_MG.O2_DX,
-    y: (m % GEO_MG.ROWS) * GEO_MG.O2_DY, z: 0
-  };
+
+/* 금속 격자 — 인덱스 n은 «소비 순서»다: **열 우선** — 왼쪽 열의 표면부터 바닥까지 태우고
+   다음 열로 넘어간다. 그래야 반응 전선이 왼쪽에서 오른쪽으로 «단조» 이동하고, 미시 카메라가
+   그 전선을 따라갈 수 있다(사용자 지시 2026-08-29). 거시 리본이 왼쪽부터 타는 것과 같다 */
+function mgCell(n) {
+  return { col: Math.floor(n / GEO_MG.ROWS),
+           row: GEO_MG.ROWS - 1 - (n % GEO_MG.ROWS) };
 }
-/* O 원자 j(0~23)의 공기 중 자리 — 분자 m=⌊j/2⌋의 좌(짝수)/우(홀수) */
-function oAirSite(j) {
-  const h = o2Home(Math.floor(j / 2));
-  const s = (j % 2 === 0) ? -GEO_MG.O2_BOND / 2 : GEO_MG.O2_BOND / 2;
-  return { x: h.x + s, y: h.y, z: h.z };
+/* 반응 전선의 x — 카메라가 이 값을 따라간다(렌더·검사 공용) */
+function mgFrontX(s) {
+  const n = Math.min(MGB.N_MG - 1, 2 * s.E);
+  return Math.floor(n / GEO_MG.ROWS) * GEO_MG.DX;
+}
+function mgSite(n) {
+  const c = mgCell(n);
+  return { x: c.col * GEO_MG.DX, y: c.row * GEO_MG.DY, z: 0 };
+}
+/* 산소가 와서 붙는 자리 — 자기 Mg의 «앞»(z). 금속은 움직이지 않는다(사용자 지시) */
+function oBoundSite(n) {
+  const p = mgSite(n);
+  /* 거리는 접촉(MGO_Z)이되 «살짝 위»로 얹는다 — 정면에서 O²⁻(1.05)가 Mg²⁺(0.62)를
+     통째로 가리면 이온화가 보이지 않는다(육안 실측). √(0.5²+1.592²) = MGO_Z */
+  return { x: p.x, y: p.y + 0.5, z: Math.sqrt(GEO_MG.MGO_Z * GEO_MG.MGO_Z - 0.25) };
+}
+
+/* 기체 O₂ — 자기 타일 안에서 리사주 배회 + 축 회전. 분자는 «강체»라 두 O 간격은
+   내내 O2_BOND다(선형 보간은 간격을 수축시켜 겹친다 — v1 실측) */
+function gasPhase(m) {
+  return { h1: cellHash01(m * 3.7 + 1.3, 5.1), h2: cellHash01(m * 7.1 + 2.9, 8.3),
+           h3: cellHash01(m * 11.3 + 4.7, 13.9), h4: cellHash01(m * 5.9 + 0.7, 21.1) };
+}
+function gasCenter(m, t) {
+  const tx = m % GEO_MG.GAS_COLS, ty = Math.floor(m / GEO_MG.GAS_COLS);
+  const cx = GEO_MG.GAS_X0 + (tx + 0.5) * GEO_MG.GAS_TW;
+  const cy = GEO_MG.GAS_Y0 + (ty + 0.5) * GEO_MG.GAS_TH;
+  const h = gasPhase(m);
+  return { x: cx + GEO_MG.GAS_AX * Math.sin(t * (0.42 + h.h1 * 0.35) + h.h1 * 6.2832),
+           y: cy + GEO_MG.GAS_AY * Math.sin(t * (0.37 + h.h2 * 0.31) + h.h2 * 6.2832),
+           z: GEO_MG.GAS_AZ * Math.sin(t * (0.29 + h.h3 * 0.27) + h.h3 * 6.2832) };
+}
+function gasAxis(m, t) {
+  const h = gasPhase(m);
+  return h.h4 * 6.2832 + t * (0.25 + h.h4 * 0.3);
+}
+function o2AtomPos(m, t, side) {                     // side = −1 | +1
+  const c = gasCenter(m, t), th = gasAxis(m, t), r = GEO_MG.O2_BOND / 2;
+  return { x: c.x + side * r * Math.cos(th), y: c.y + side * r * Math.sin(th), z: c.z };
 }
 
 function mgbInit() {
-  const mg = [], oxy = [], elec = [];
-  for (let i = 0; i < MGB.N_MG; i++)
-    mg.push({ i: i, lost: 0, firedAt: NaN });          // 장부 ①: Mg가 잃은 전자
+  const mg = [], oxy = [], o2 = [], elec = [];
+  for (let n = 0; n < MGB.N_MG; n++)
+    mg.push({ n: n, lost: 0, firedAt: NaN });               // 장부 ①: Mg가 잃은 전자
   for (let j = 0; j < 2 * MGB.N_O2; j++)
-    oxy.push({ j: j, gained: 0, at: NaN });            // 장부 ②: O가 얻은 전자
+    oxy.push({ j: j, gained: 0, at: NaN, mgIdx: -1, fx: 0, fy: 0, fz: 0, ux: 0, uy: 0 });
+  for (let m = 0; m < MGB.N_O2; m++)
+    o2.push({ m: m, used: false, at: NaN });
   for (let k = 0; k < MGB.E_PER_MG * MGB.N_MG; k++)
     elec.push({ k: k, mgIdx: Math.floor(k / 2), oIdx: null, born: NaN });
-  return {
-    t: 0, T: MGB.T_AMB, torch: false, ignited: false, done: false,
-    p: 0, E: 0, mg: mg, oxy: oxy, elec: elec
-  };
+  return { t: 0, T: MGB.T_AMB, torch: false, ignited: false, done: false,
+           p: 0, E: 0, mg: mg, oxy: oxy, o2: o2, elec: elec };
+}
+
+/* 반응할 O₂ — 아직 반응하지 않은 분자 중 «그 순간» 표적에 가장 가까운 것.
+   동률이면 낮은 인덱스(결정성 보장 — 같은 t·같은 상태면 언제나 같은 선택) */
+function mgbPickO2(s, cx, cy) {
+  let best = -1, bestD = Infinity;
+  for (let m = 0; m < MGB.N_O2; m++) {
+    if (s.o2[m].used) continue;
+    const c = gasCenter(m, s.t);
+    const d = (c.x - cx) * (c.x - cx) + (c.y - cy) * (c.y - cy) + c.z * c.z;
+    if (d < bestD - 1e-12) { bestD = d; best = m; }
+  }
+  return best;
 }
 
 /* 반응 이벤트 — Mg 2개가 전자를 2개씩 잃고(산화) O 2개가 2개씩 얻는다(환원).
-   전자 k의 목적지: Mg(2e)의 전자 → O(2e), Mg(2e+1)의 전자 → O(2e+1). */
+   산소가 마그네슘 쪽으로 와서 붙는다 — 금속은 제자리다 */
 function mgbFireEvent(s) {
-  const e = s.E;
-  for (const i of [2 * e, 2 * e + 1]) {
-    s.mg[i].lost = MGB.E_PER_MG; s.mg[i].firedAt = s.t;
-    s.oxy[i].gained = MGB.E_PER_MG; s.oxy[i].at = s.t;
-    for (const k of [2 * i, 2 * i + 1]) {
-      s.elec[k].oIdx = i; s.elec[k].born = s.t;
+  const e = s.E, nA = 2 * e, nB = 2 * e + 1;
+  const pA = mgSite(nA), pB = mgSite(nB);
+  const m = mgbPickO2(s, (pA.x + pB.x) / 2, (pA.y + pB.y) / 2);
+  s.o2[m].used = true; s.o2[m].at = s.t;
+  /* 위치 순서를 보존해 짝짓는다 — 뒤집히면 두 산소의 경로가 교차한다.
+     열 우선 소비에서는 표적 두 개의 x가 «같으므로»(같은 열) y로 가른다 */
+  const qA = o2AtomPos(m, s.t, -1), qB = o2AtomPos(m, s.t, 1);
+  const byY = Math.abs(pA.x - pB.x) < 1e-9;
+  const key = byY ? (q => q.y) : (q => q.x);
+  const jFirst = key(qA) <= key(qB) ? 2 * m : 2 * m + 1;
+  const jSecond = key(qA) <= key(qB) ? 2 * m + 1 : 2 * m;
+  const pair = key(pA) <= key(pB) ? [[nA, jFirst], [nB, jSecond]]
+                                  : [[nA, jSecond], [nB, jFirst]];
+  const th = gasAxis(m, s.t);
+  for (let q = 0; q < 2; q++) {
+    const n = pair[q][0], j = pair[q][1];
+    s.mg[n].lost = MGB.E_PER_MG; s.mg[n].firedAt = s.t;
+    const o = s.oxy[j], side = (j % 2 === 0) ? -1 : 1;
+    const fp = o2AtomPos(m, s.t, side);
+    o.gained = MGB.E_PER_MG; o.at = s.t; o.mgIdx = n;
+    o.fx = fp.x; o.fy = fp.y; o.fz = fp.z;                 // 반응 순간 위치를 고정
+    o.ux = side * Math.cos(th); o.uy = side * Math.sin(th);  // 결합이 끊어질 방향
+    for (const k of [2 * n, 2 * n + 1]) {
+      s.elec[k].oIdx = j; s.elec[k].born = s.t + MGB.APPROACH * MGB.E_START;
     }
   }
   s.E = e + 1;
@@ -397,130 +500,149 @@ function mgbGainedByO(s) {
   return n;
 }
 function mgbCounts(s) {
-  return {
-    mgLeft: MGB.N_MG - 2 * s.E, o2Left: MGB.N_O2 - s.E,
-    mgIon: 2 * s.E, oIon: 2 * s.E, mgo: 2 * s.E,
-    lost: mgbLostByMg(s), gained: mgbGainedByO(s)
-  };
+  return { mgLeft: MGB.N_MG - 2 * s.E, o2Left: MGB.N_O2 - s.E,
+           mgIon: 2 * s.E, oIon: 2 * s.E, mgo: 2 * s.E,
+           lost: mgbLostByMg(s), gained: mgbGainedByO(s) };
 }
 
-/* 빛 — 연소 중에만 1 (개시 전 0·완결 후 0). 세기 연출은 FX가 이 값을 평활한다 */
+/* 빛 — 연소 중에만 1 (개시 전 0·완결 후 0) */
 function mgbLight(s) { return s.ignited && s.p < 1 ? 1 : 0; }
 
-/* ── 미시 배치 — 렌더와 검사가 함께 쓰는 단일 원천 (원칙 11) ──
-   반환: { atoms: [{el:'Mg'|'O'|'E', x,y,z, …}], pairs: [[a,b,kind]] }
-   pairs 는 «허용 접촉»(겹침 검사 면제)이자 표시선의 근거다:
-     kind 'o2'  = O=O 분자 표시 (공기 중·접근 초반)
-     kind 'mgo' = Mg²⁺–O²⁻ 이온쌍 «인접» (막대를 그리지 않는다 — §5-7 접촉 배열)
-     kind 'eat' = 전자가 원자에 붙어 있음 (자기 원자와의 접촉 면제) */
-function mgbLayout(s) {
-  const atoms = [], pairs = [];
-  const mgAt = new Array(MGB.N_MG), oAt = new Array(2 * MGB.N_O2);
-  for (let i = 0; i < MGB.N_MG; i++) {
-    const p = mgSite(i);
-    mgAt[i] = atoms.length;
-    atoms.push({ el: "Mg", x: p.x, y: p.y, z: p.z, i: i, ion: s.mg[i].lost > 0 });
+/* ── 위치 함수 — 렌더와 검사가 함께 쓴다(원칙 11) ────────────────────── */
+/* 금속은 «움직이지 않는다» — 전자를 잃어 작아질 뿐이다(사용자 지시) */
+function mgAtomPos(s, n, t, vib) {
+  const g = s.mg[n], home = mgSite(n);
+  const v = vib ? vibOff(n * 2.7 + 11, t, GEO_MG.VIB) : [0, 0, 0];
+  const ionized = g.lost > 0 && t >= g.firedAt + MGB.APPROACH * MGB.E_START + MGB.FLIGHT;
+  return { x: home.x + v[0], y: home.y + v[1], z: home.z + v[2],
+           phase: ionized ? "ion" : "metal" };
+}
+/* 산소 — 기체에서 배회하다 표적 Mg 앞으로 와서 붙는다 */
+function oAtomPos(s, j, t, vib) {
+  const o = s.oxy[j], m = Math.floor(j / 2), side = (j % 2 === 0) ? -1 : 1;
+  if (!(o.gained > 0)) {
+    const p = o2AtomPos(m, t, side);
+    return { x: p.x, y: p.y, z: p.z, phase: "gas" };
   }
-  for (let j = 0; j < 2 * MGB.N_O2; j++) {
-    const o = s.oxy[j];
-    let pos, phase;
-    if (o.gained === 0) {
-      pos = oAirSite(j); phase = "air";
-    } else {
-      /* 분자는 «강체»로 난다 — 두 O를 각자 선형 보간하면 중간에서 간격이 1.85→1.31로
-         수렴해 겹친다(검사군 15-1이 잡은 실측). 분자 중심이 경로를 날고, 방향만
-         가로(공기) → 세로(표적 Mg 쌍)로 회전한다: 간격은 내내 O2_BOND 그대로다. */
-      const mp = mgSite(j);
-      const tgt = { x: mp.x, y: mp.y, z: GEO_MG.MGO_Z };   // 자기 Mg²⁺ 바로 앞(접촉)
-      const m = Math.floor(j / 2), h = o2Home(m), mpp = mgSite(j ^ 1);
-      const cen = { x: mp.x, y: (mp.y + mpp.y) / 2 };      // 표적 Mg 쌍의 중앙
-      const sSign = (j % 2 === 0) ? -1 : 1;                // 공기 중 좌/우
-      const tSign = mp.y > mpp.y ? 1 : -1;                 // 표적이 위/아래
-      const half = GEO_MG.O2_BOND / 2;
-      const f = Math.min(1, Math.max(0, (s.t - o.at) / MGB.APPROACH));
-      if (f >= 1) {
-        pos = tgt; phase = "bound";
-      } else if (f < 0.22) {                    // ① 제자리에서 이동 고도로
-        pos = { x: h.x + sSign * half, y: h.y, z: GEO_MG.Z_APPROACH * (f / 0.22) };
-        phase = "approach";
-      } else if (f < 0.78) {                    // ② 고도에서 중심 이동 + 강체 회전
-        const g = (f - 0.22) / 0.56, th = g * Math.PI / 2;
-        const cx = h.x + (cen.x - h.x) * g, cy = h.y + (cen.y - h.y) * g;
-        pos = { x: cx + sSign * half * Math.cos(th),
-                y: cy + tSign * half * Math.sin(th), z: GEO_MG.Z_APPROACH };
-        phase = "approach";
-      } else {                                  // ③ 갈라지며 자기 Mg²⁺ 앞으로 내려앉음
-        const g = (f - 0.78) / 0.22;
-        const y0 = cen.y + tSign * half;
-        pos = { x: tgt.x, y: y0 + (tgt.y - y0) * g,
-                z: GEO_MG.Z_APPROACH + (GEO_MG.MGO_Z - GEO_MG.Z_APPROACH) * g };
-        phase = "approach";
-      }
-    }
-    oAt[j] = atoms.length;
-    atoms.push({ el: "O", x: pos.x, y: pos.y, z: pos.z, j: j,
-                 phase: phase, ion: o.gained > 0 });
+  const to = oBoundSite(o.mgIdx);
+  const f = Math.min(1, Math.max(0, (t - o.at) / MGB.APPROACH));
+  if (f >= 1) {
+    const v = vib ? vibOff(o.mgIdx * 5.3 + 307, t, GEO_MG.VIB) : [0, 0, 0];
+    return { x: to.x + v[0], y: to.y + v[1], z: to.z + v[2], phase: "bound" };
   }
-  /* O=O 표시 — 공기 중 + 전자가 도착하기 전(f<0.5·비행 0.9 s = 접근의 절반)까지.
-     전자를 얻어 O²⁻가 되면 분자 표시를 끊는다. 강체 회전이라 표시 여부와 무관하게
-     기하 간격은 내내 O2_BOND(1.85 > R합 1.8)다 — 겹침 검사에 면제가 필요 없다 */
-  for (let m = 0; m < MGB.N_O2; m++) {
-    const a = s.oxy[2 * m], b = s.oxy[2 * m + 1];
-    const preSplit = t0 => !isFinite(t0) || (s.t - t0) / MGB.APPROACH < 0.5;
-    if (a.gained === 0 && b.gained === 0) pairs.push([oAt[2 * m], oAt[2 * m + 1], "o2"]);
-    else if (preSplit(a.at) && preSplit(b.at)) pairs.push([oAt[2 * m], oAt[2 * m + 1], "o2"]);
+  /* 결합이 끊어지며 갈라진 뒤, 자기 차선 고도로 떠서 표적 앞으로 내려온다 */
+  const from = { x: o.fx + o.ux * MGB.SPLIT, y: o.fy + o.uy * MGB.SPLIT, z: o.fz };
+  const lane = GEO_MG.Z_APPROACH + (j % 2) * GEO_MG.Z_LANE;
+  let pos;
+  if (f < 0.2) {
+    const g = f / 0.2;
+    pos = { x: o.fx + o.ux * MGB.SPLIT * g, y: o.fy + o.uy * MGB.SPLIT * g,
+            z: o.fz + (lane - o.fz) * g };
+  } else if (f < 0.78) {
+    const g = (f - 0.2) / 0.58;
+    pos = { x: from.x + (to.x - from.x) * g, y: from.y + (to.y - from.y) * g, z: lane };
+  } else {
+    const g = (f - 0.78) / 0.22;
+    pos = { x: to.x, y: to.y, z: lane + (to.z - lane) * g };
   }
-  /* MgO 이온쌍 «인접» — 안착 완료(bound)만. 막대가 아니라 접촉의 표식이다 */
-  for (let j = 0; j < 2 * MGB.N_O2; j++)
-    if (atoms[oAt[j]].phase === "bound") pairs.push([mgAt[j], oAt[j], "mgo"]);
-  /* 전자 — Mg 표면(원자가 전자 2개) → 비행 → O 표면. 상태는 배열이 원천(검사군 12) */
-  for (let k = 0; k < s.elec.length; k++) {
-    const e = s.elec[k], i = e.mgIdx, sy = (k % 2 === 0) ? 1 : -1;
-    let pos, state, host = null;
-    if (e.oIdx === null) {
-      const p = mgSite(i);
-      pos = { x: p.x + GEO_MG.E_OFF.x, y: p.y + sy * GEO_MG.E_OFF.y, z: p.z + GEO_MG.E_OFF.z };
-      state = "mg"; host = mgAt[i];
-    } else {
-      const f = Math.min(1, Math.max(0, (s.t - e.born) / MGB.FLIGHT));
-      const oa = atoms[oAt[e.oIdx]];
-      const to = { x: oa.x + 0.4, y: oa.y + sy * 0.5, z: oa.z + 0.6 };
-      if (f >= 1) { pos = to; state = "o"; host = oAt[e.oIdx]; }
-      else {
-        const p = mgSite(i);
-        const fr = { x: p.x + GEO_MG.E_OFF.x, y: p.y + sy * GEO_MG.E_OFF.y, z: p.z + GEO_MG.E_OFF.z };
-        /* 비행은 모든 것보다 앞(Z_FLY)에서 — 위상 3분할(이탈·수평·안착) */
-        if (f < 0.2) pos = { x: fr.x, y: fr.y, z: fr.z + (GEO_MG.Z_FLY - fr.z) * (f / 0.2) };
-        else if (f < 0.8) {
-          const g = (f - 0.2) / 0.6;
-          pos = { x: fr.x + (to.x - fr.x) * g, y: fr.y + (to.y - fr.y) * g, z: GEO_MG.Z_FLY };
-        } else pos = { x: to.x, y: to.y, z: GEO_MG.Z_FLY + (to.z - GEO_MG.Z_FLY) * ((f - 0.8) / 0.2) };
-        state = "flight";
-      }
-    }
-    const idx = atoms.length;
-    atoms.push({ el: "E", x: pos.x, y: pos.y, z: pos.z, k: k, state: state });
-    if (host !== null) pairs.push([host, idx, "eat"]);
-    /* 비행 중에는 출발 Mg를 «떠나는» 순간과 목표 O에 «내려앉는» 순간의 접촉이
-       필연이다 — 두 끝점과의 접촉만 면제한다(그 외 원자와의 겹침은 그대로 검사) */
-    if (state === "flight") {
-      pairs.push([mgAt[i], idx, "eat"]);
-      if (e.oIdx !== null) pairs.push([oAt[e.oIdx], idx, "eat"]);
-    }
+  return { x: pos.x, y: pos.y, z: pos.z, phase: "approach" };
+}
+function elecAtomPos(s, k, t, vib) {
+  const e = s.elec[k], n = e.mgIdx, sy = (k % 2 === 0) ? 1 : -1;
+  const mp = mgAtomPos(s, n, t, vib);
+  const fr = { x: mp.x + GEO_MG.E_OFF.x, y: mp.y + sy * GEO_MG.E_OFF.y, z: mp.z + GEO_MG.E_OFF.z };
+  if (e.oIdx === null || t < e.born) return { x: fr.x, y: fr.y, z: fr.z, state: "mg" };
+  const op = oAtomPos(s, e.oIdx, t, vib);
+  const to = { x: op.x + 0.3, y: op.y + sy * 0.42, z: op.z + 0.5 };
+  const f = Math.min(1, Math.max(0, (t - e.born) / MGB.FLIGHT));
+  if (f >= 1) return { x: to.x, y: to.y, z: to.z, state: "o" };
+  const zf = GEO_MG.Z_FLY + ((n % 2) * 2 + (k % 2)) * GEO_MG.Z_FLY_GAP;
+  let pos;
+  if (f < 0.2) pos = { x: fr.x, y: fr.y, z: fr.z + (zf - fr.z) * (f / 0.2) };
+  else if (f < 0.8) {
+    const g = (f - 0.2) / 0.6;
+    pos = { x: fr.x + (to.x - fr.x) * g, y: fr.y + (to.y - fr.y) * g, z: zf };
+  } else {
+    const g = (f - 0.8) / 0.2;
+    pos = { x: to.x, y: to.y, z: zf + (to.z - zf) * g };
   }
-  return { atoms: atoms, pairs: pairs };
+  return { x: pos.x, y: pos.y, z: pos.z, state: "flight" };
 }
 
-/* 탭2 미시 배경 — Mg 금속 벌크(은회색) → MgO 흰 배열(명도 상한 RGB≤235: 지시안
-   추정 6 — 전자·기호 대비 확보). 거시 재 축적과 같은 p에서 유도(F-1) */
+/* 여분 금속 — 화면 밖으로 이어지는 덩어리. 앞줄과 같은 방향(표면·왼쪽부터)으로
+   층별 전선이 지나간다. 세는 대상이 아니라 배경이므로 atoms와 분리해 돌려준다 */
+function mgBackAlive(col, row, p) {
+  const below = GEO_MG.ROWS - 1 - row;
+  if (below < 0) return false;
+  /* 여분도 앞줄과 «같은 전선»을 공유한다 — 열 우선이므로 전선은 x 하나로 정해진다.
+     깊은 층(앞줄 아래)은 조금 늦게 탄다 */
+  const frontCol = p * GEO_MG.COLS;
+  const lag = below >= GEO_MG.ROWS ? (below - GEO_MG.ROWS + 1) * 2.5 : 0;
+  return col + GEO_MG.RING_X * 0 > frontCol - lag;
+}
+
+/* ── 미시 배치 — 렌더와 검사가 함께 쓰는 단일 원천 (원칙 11) ──
+   pairs는 «허용 접촉»(겹침 검사 면제)이자 표시선의 근거다:
+     'o2'  = O=O 분자 표시 (기체일 때만)
+     'mgo' = Mg²⁺–O²⁻ 접촉 (막대를 그리지 않는다 — §5-7)
+     'eat' = 전자가 원자에 붙어 있음 */
+function mgbLayout(s, opts) {
+  const vib = !(opts && opts.vib === false), t = s.t;
+  const atoms = [], pairs = [], back = [];
+  const mgAt = new Array(MGB.N_MG), oAt = new Array(2 * MGB.N_O2);
+  for (let n = 0; n < MGB.N_MG; n++) {
+    const p = mgAtomPos(s, n, t, vib);
+    mgAt[n] = atoms.length;
+    atoms.push({ el: "Mg", x: p.x, y: p.y, z: p.z, n: n,
+                 ion: p.phase === "ion", phase: p.phase });
+  }
+  for (let j = 0; j < 2 * MGB.N_O2; j++) {
+    const p = oAtomPos(s, j, t, vib);
+    oAt[j] = atoms.length;
+    /* 전자를 받은 뒤부터 산화 이온 — 크기·색이 «전자가 도착한 뒤»에 바뀐다 */
+    const got = s.oxy[j].gained > 0 &&
+      t >= s.oxy[j].at + MGB.APPROACH * MGB.E_START + MGB.FLIGHT;
+    atoms.push({ el: "O", x: p.x, y: p.y, z: p.z, j: j,
+                 ion: got, phase: p.phase, mgIdx: s.oxy[j].mgIdx });
+  }
+  for (let m = 0; m < MGB.N_O2; m++)
+    if (!s.o2[m].used) pairs.push([oAt[2 * m], oAt[2 * m + 1], "o2"]);
+  /* 붙은 산소 ↔ 자기 마그네슘 — 접촉이므로 겹침 면제(막대는 그리지 않는다) */
+  for (let j = 0; j < 2 * MGB.N_O2; j++) {
+    const ph = atoms[oAt[j]].phase;
+    if ((ph === "bound" || ph === "approach") && s.oxy[j].mgIdx >= 0)
+      pairs.push([mgAt[s.oxy[j].mgIdx], oAt[j], ph === "bound" ? "mgo" : "eat"]);
+  }
+  for (let k = 0; k < s.elec.length; k++) {
+    const p = elecAtomPos(s, k, t, vib), e = s.elec[k];
+    const idx = atoms.length;
+    atoms.push({ el: "E", x: p.x, y: p.y, z: p.z, k: k, state: p.state });
+    pairs.push([mgAt[e.mgIdx], idx, "eat"]);              // 출발 원자와의 접촉은 필연
+    if (e.oIdx !== null) pairs.push([oAt[e.oIdx], idx, "eat"]);
+  }
+  /* 여분 금속 (배경) */
+  for (let col = -GEO_MG.RING_X; col < GEO_MG.COLS + GEO_MG.RING_X; col++) {
+    for (let row = -GEO_MG.RING_BELOW; row < GEO_MG.ROWS; row++) {
+      if (col >= 0 && col < GEO_MG.COLS && row >= 0) continue;   // 앞줄 영역
+      if (!mgBackAlive(col, row, s.p)) continue;
+      const ring = Math.max(-col, col - (GEO_MG.COLS - 1), -row, 0);
+      const dim = ring <= 1 ? 0.5 : 0.26;
+      const v = vib ? vibOff(col * 31.7 + row * 7.3 + 501, t, GEO_MG.VIB) : [0, 0, 0];
+      back.push({ el: "Mg", x: col * GEO_MG.DX + v[0], y: row * GEO_MG.DY + v[1],
+                  z: v[2], dim: dim });
+    }
+  }
+  return { atoms: atoms, pairs: pairs, back: back };
+}
+
+/* 탭2 미시 배경 — Mg 금속 벌크(은회색) → MgO 흰 배열(명도 상한 RGB≤235) */
 function mgbBulkColor(p) {
   const a = [0.788, 0.812, 0.831], b = [0.906, 0.886, 0.851]; // #C9CFD4 → #E7E2D9
   const t = Math.min(1, Math.max(0, p));
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }
 
-/* 단계 배지 — 전부 코어 값에서 유도 (J-N5). 0.5는 「흰 재가 눈에 띄게 쌓인」
-   경계의 임의 모형값이다 */
+/* 단계 배지 — 전부 코어 값에서 유도 (J-N5) */
 function mgbStage(s) {
   if (s.p >= 1) return 5;                   // 완결
   if (s.ignited && s.p >= 0.5) return 4;    // 흰 재
@@ -529,7 +651,7 @@ function mgbStage(s) {
   return 1;                                 // 점화 전
 }
 
-/* 점화 시각 해석해 — 검사군 11-⑸가 수치해와 대조한다 */
+/* 점화 시각 해석해 — 검사군 11-5가 수치해와 대조한다 */
 function mgbT1() {
   return MGB.TAU_H *
     Math.log((MGB.T_TORCH - MGB.T_AMB) / (MGB.T_TORCH - MGB.T_IGN));
@@ -2120,31 +2242,52 @@ function m3dFlush() {
    스케일·중심은 기하 상수에서 유도하고(원칙 13) 캔버스 종횡비에 맞춰 매 프레임 갱신 —
    격자·상승 CO₂가 어느 해상도에서도 가장자리에 잘리지 않게 한다(P4-A2). */
 const MV = { s: 0.08, cx: 28, cy: 8.5, yaw: 0.5, pitch: 0.34, scale: 1.15 };
+/* 탭별 기본 시점 — 탭2는 «아래 금속 띠 + 위 기체 공간»으로 세로가 길어, 탭1과 같은
+   pitch(0.34)를 쓰면 y가 깊이로 크게 접혀 금속만 확대되고 기체가 화면 밖으로 밀린다
+   (육안 실측). 탭2는 정면에 가깝게 본다 */
+const MV_TAB = { cuo: { yaw: 0.5, pitch: 0.34 }, mgburn: { yaw: 0.26, pitch: 0.10 } };
+function microBase() { return MV_TAB[EXP] || MV_TAB.cuo; }
 let mYaw = MV.yaw, mPitch = MV.pitch;
+/* 미시 카메라 — 격자가 화면보다 훨씬 길어졌으므로(사용자 지시 2026-08-29) 세로만 담고
+   가로는 «반응 전선»을 따라 팬한다. 그래서 ⑴ 원자가 크게 보이고 ⑵ 카메라가 지나가며 새
+   원자가 드러나며 ⑶ 반응이 언제나 화면 안에서 일어난다. 팬은 목표로 지수 수렴(부드럽게). */
+let microPanX = null;
+function microTargetX() {
+  if (EXP === "mgburn") {
+    const total = (GEO_MG.COLS - 1) * GEO_MG.DX;
+    const halfW = microHalfW();
+    return clamp(mgFrontX(SMG) + halfW * 0.15, halfW - GEO_MG.DX, total - halfW + GEO_MG.DX);
+  }
+  const total = (GEO.COLS - 1) * GEO.DX;
+  const halfW = microHalfW();
+  const g = Math.min(GEO.COLS / 3 - 1, Math.floor(S.E / GEO.ROWS));
+  return clamp(g * 3 * GEO.DX + halfW * 0.15, halfW - GEO.DX, total - halfW + GEO.DX);
+}
+function microHalfW() {
+  const cw = mcv.clientWidth || 1, ch = mcv.clientHeight || 1;
+  const H = EXP === "mgburn" ? GEO_MG.VIEW_H : GEO.VIEW_H;
+  return H * (cw / ch) / 2;
+}
 function updateMicroView() {
   const cw = mcv.clientWidth || 1, ch = mcv.clientHeight || 1;
   const aspect = cw / ch;
-  let xMin, xMax, yMin, yMax;
-  if (EXP === "mgburn") {
-    /* 탭2 — 좌 Mg 격자부터 우 O₂ 공기 영역까지 전부 담는다. 가로로 긴 장면이라
-       기본 yaw 회전(0.5 rad)이 깊이로 접는 몫을 여유 1.25배로 흡수한다(우측 잘림 방지) */
-    xMin = -GEO_MG.R.Mg - 0.6;
-    xMax = -GEO_MG.R.Mg - 0.6 +
-      (GEO_MG.O2_X0 + GEO_MG.O2_DX + GEO_MG.O2_BOND / 2 + GEO_MG.R.O + 1.2 - (-GEO_MG.R.Mg - 0.6)) * 1.25;
-    yMin = -GEO_MG.R.Mg - 0.6;
-    yMax = (GEO_MG.ROWS - 1) * GEO_MG.DY + GEO_MG.R.Mg + 0.6;
-  } else {
-    /* 탭1 — 앞줄 격자(6×6)에 «꽉 차게» 맞춘다 — 여분 고리가 가장자리를 넘어가 잘리면서
-       배열이 화면 밖으로 계속 이어지는 것으로 읽힌다(사용자 지시: solid 시뮬 방식) */
-    xMin = -GEO.R.Cu - 0.4;
-    xMax = (GEO.COLS - 1) * GEO.DX + GEO.CUO_OFF + GEO.R.O + 0.4;
-    yMin = -GEO.R.Cu - 0.4;
-    yMax = (GEO.ROWS - 1) * GEO.DY + GEO.R.Cu + 0.4;
-  }
-  MV.cx = (xMax + xMin) / 2;
-  MV.cy = (yMax + yMin) / 2;
+  const H = EXP === "mgburn" ? GEO_MG.VIEW_H : GEO.VIEW_H;
   const halfH = Math.tan(M3D_CAM.fovy / 2) * M3D_CAM.z;
-  MV.s = Math.min(halfH * aspect / ((xMax - xMin) / 2), halfH / ((yMax - yMin) / 2));
+  MV.s = halfH / (H / 2);                      // 세로를 기준으로 배율을 정한다
+  const target = microTargetX();
+  if (microPanX === null) microPanX = target;
+  MV.cx = microPanX;
+  /* 세로 중심 — 금속 띠(아래)와 기체 공간(위)이 «함께» 보이게 잡는다 */
+  MV.cy = EXP === "mgburn"
+    ? (GEO_MG.ROWS - 1) * GEO_MG.DY / 2 + H * 0.28
+    : ((GEO.ROWS - 1) * GEO.DY) / 2;
+  MV.aspect = aspect;
+}
+/* 팬은 루프에서 부드럽게 따라간다(렌더 프레임마다 호출) */
+function stepMicroPan(dt) {
+  const target = microTargetX();
+  if (microPanX === null) { microPanX = target; return; }
+  microPanX += (target - microPanX) * Math.min(1, dt * 1.6);
 }
 function mView(x, y, z) { return m3dV((x - MV.cx) * MV.s, (y - MV.cy) * MV.s, z * MV.s); }
 /* 캔버스 색은 토큰을 CSSV 로 읽어 쓴다(§12 ③). CPK 3색만 국제 표준 고정(P6 예외) */
@@ -2163,29 +2306,33 @@ function drawMicro() {
   updateMicroView();
   M3D_BG = bulkColor(S.p);                  // 여백 = 지금 그 가루의 색(사용자 지시)
   m3dBegin(mYaw, mPitch);
-  const lay = redoxLayout(S);
+  const lay = redoxLayout(S, { vib: !RM });   // 진동은 장식 — RM이면 정지(§10)
+  const halfW1 = microHalfW() + 3.0;
+  const vis1 = q => Math.abs(q.x - MV.cx) <= halfW1;
   /* ① 이어지는 가루 — 화면 가장자리를 넘어가며 잘린다 */
   for (let b = 0; b < lay.back.length; b++) {
     const q = lay.back[b];
+    if (!vis1(q)) continue;
     m3dSphere(mView(q.x, q.y, q.z), GEO.R[q.el] * MV.s * MV.scale,
               dimTo(COL[q.el], M3D_BG, q.dim), 1);
   }
   /* ② 앞줄 — 세는 대상 */
   const A = lay.atoms;
   const vp = new Array(A.length);
-  for (let i = 0; i < A.length; i++) vp[i] = mView(A[i].x, A[i].y, A[i].z);
+  for (let i = 0; i < A.length; i++) vp[i] = vis1(A[i]) ? mView(A[i].x, A[i].y, A[i].z) : null;
   for (let b = 0; b < lay.bonds.length; b++) {
     const [i, j] = lay.bonds[b];
-    m3dStick(vp[i], vp[j], 0.016, COL.stick, 1);
+    if (vp[i] && vp[j]) m3dStick(vp[i], vp[j], 0.016, COL.stick, 1);
   }
   let selIdx = -1;
   for (let i = 0; i < A.length; i++) {
     const a = A[i];
+    if (!vp[i]) continue;
     const r = GEO.R[a.el] * MV.s * MV.scale;
     m3dSphere(vp[i], r, COL[a.el], 1);
     if (a.el === "O" && a.i === selectedO) selIdx = i;
   }
-  if (selIdx >= 0) {
+  if (selIdx >= 0 && vp[selIdx]) {
     const a = A[selIdx];
     m3dSphere(vp[selIdx], GEO.R.O * MV.s * MV.scale * 1.7, COL.halo, 0.3);
     if (a.state !== "cuo") {         // 이동 경로 자취 — 반박 장치의 핵심 시각
@@ -2210,7 +2357,7 @@ function pickOxy(px, py) {
   updateMicroView();
   const w = mcv.clientWidth, h = mcv.clientHeight || 300;
   const aspect = w / h, f = 1 / Math.tan(M3D_CAM.fovy / 2);
-  const lay = redoxLayout(S);
+  const lay = redoxLayout(S, { vib: !RM });    // 픽킹은 «보이는 그 좌표»로 한다
   let best = -1, bestD = 24;              // 24px 안에서 가장 가까운 산소
   for (let i = 0; i < lay.atoms.length; i++) {
     const a = lay.atoms[i];
@@ -2267,19 +2414,30 @@ function drawMicroMg() {
   updateMicroView();
   M3D_BG = mgbBulkColor(SMG.p);               // 여백 = Mg 금속 → MgO 흰 배열 (F-1)
   m3dBegin(mYaw, mPitch);
-  const lay = mgbLayout(SMG);
+  const lay = mgbLayout(SMG, { vib: !RM });   // 진동은 장식 — RM이면 정지(§10)
   const A = lay.atoms;
+  /* 화면 밖은 그리지 않는다 — 격자가 화면보다 훨씬 길다(컬링은 렌더만, 판정은 전체) */
+  const halfW = microHalfW() + 2.5;
+  const vis = q => Math.abs(q.x - MV.cx) <= halfW;
+  /* ① 화면 밖으로 이어지는 금속 — 세는 대상이 아니라 배경(벌크 쪽으로 끌어당겨 흐리게) */
+  for (let b = 0; b < lay.back.length; b++) {
+    const q = lay.back[b];
+    if (!vis(q)) continue;
+    m3dSphere(mView(q.x, q.y, q.z), GEO_MG.R.Mg * MV.s * MV.scale,
+              dimTo(COL_MG.Mg, M3D_BG, q.dim), 1);
+  }
   const vp = new Array(A.length);
-  for (let i = 0; i < A.length; i++) vp[i] = mView(A[i].x, A[i].y, A[i].z);
-  /* 표시선 — O=O 분자만. MgO 인접쌍(mgo)·전자 부착(eat)에는 막대를 그리지 않는다(§5-7) */
+  for (let i = 0; i < A.length; i++) vp[i] = vis(A[i]) ? mView(A[i].x, A[i].y, A[i].z) : null;
+  /* ② 표시선 — O=O 분자만. 산화층 인접쌍·전자 부착에는 막대를 그리지 않는다(§5-7) */
   for (let b = 0; b < lay.pairs.length; b++) {
     const pr = lay.pairs[b];
-    if (pr[2] === "o2") m3dStick(vp[pr[0]], vp[pr[1]], 0.016, COL_MG.stick, 1);
+    if (pr[2] === "o2" && vp[pr[0]] && vp[pr[1]]) m3dStick(vp[pr[0]], vp[pr[1]], 0.016, COL_MG.stick, 1);
   }
   let selIdx = -1;
   const rep = { mg: null, o2: null, mgo: null, e: null };
   for (let i = 0; i < A.length; i++) {
     const a = A[i];
+    if (!vp[i]) continue;
     if (a.el === "E") {
       /* 전자 — 어두운 림(뒤) + 밝은 코어(앞) + ⊖ 가로줄 (추정 3) */
       const r = GEO_MG.R.E * MV.s * MV.scale;
@@ -2292,35 +2450,36 @@ function drawMicroMg() {
       if (a.k === selectedE) selIdx = i;
       if (rep.e === null && (a.state === "flight" || a.state === "mg")) rep.e = i;
     } else if (a.el === "Mg") {
-      const k = a.ion ? 0.45 : 0;             // Mg²⁺ — 흰 기운으로 수렴(라벨은 칩·범례가 맡는다)
-      m3dSphere(vp[i], GEO_MG.R.Mg * MV.s * MV.scale, k ? tint(COL_MG.Mg, k) : COL_MG.Mg, 1);
+      /* 전자를 잃으면 «작아진다» — 크기 자체가 이온화의 표시다(추정 7) */
+      /* 이온이 되면 «작아지고» 흰 기운이 돈다. 다만 흰 쪽으로 너무 당기면 Mg²⁺와 O²⁻가
+         서로 구분되지 않는다(쌍 판별 ΔE 8.6 실측) — 구분은 색, 「흰색」 인상은 배경·거시가 맡는다 */
+      const rr = (a.ion ? GEO_MG.R.MgIon : GEO_MG.R.Mg) * MV.s * MV.scale;
+      m3dSphere(vp[i], rr, a.ion ? tint(COL_MG.Mg, 0.22) : COL_MG.Mg, 1);
       if (rep.mg === null && !a.ion) rep.mg = i;
+      if (rep.mgo === null && a.phase === "ion") rep.mgo = i;
     } else {
-      const bound = a.phase === "bound";
-      const k = bound ? 0.55 : 0;
-      m3dSphere(vp[i], GEO_MG.R.O * MV.s * MV.scale, k ? tint(COL_MG.O, k) : COL_MG.O, 1);
-      if (rep.o2 === null && a.phase === "air") rep.o2 = i;
-      if (rep.mgo === null && bound) rep.mgo = i;
+      const rr = (a.ion ? GEO_MG.R.OIon : GEO_MG.R.O) * MV.s * MV.scale;
+      m3dSphere(vp[i], rr, a.ion ? tint(COL_MG.O, 0.34) : COL_MG.O, 1);
+      if (rep.o2 === null && a.phase === "gas") rep.o2 = i;
     }
   }
-  if (selIdx >= 0) {
+  if (selIdx >= 0 && vp[selIdx]) {          // 추적 중인 전자가 화면 밖이면 자취를 그리지 않는다
     const a = A[selIdx];
     m3dSphere(vp[selIdx], GEO_MG.R.E * MV.s * MV.scale * 2.6, COL_MG.halo, 0.3);
     const e = SMG.elec[selectedE];
     if (e.oIdx !== null) {                    // 이동 경로 자취 — 반박 장치의 핵심 시각
-      const mp = mgSite(e.mgIdx), sy = (selectedE % 2 === 0) ? 1 : -1;
-      const fr = { x: mp.x + GEO_MG.E_OFF.x, y: mp.y + sy * GEO_MG.E_OFF.y, z: GEO_MG.E_OFF.z };
-      const oa = A[24 + e.oIdx];              // atoms 배열: Mg 24 → O 24 → E 48
-      const pts = [
-        mView(fr.x, fr.y, fr.z), mView(fr.x, fr.y, GEO_MG.Z_FLY),
-        mView(oa.x + 0.4, oa.y + sy * 0.5, GEO_MG.Z_FLY), vp[selIdx]
-      ];
+      const mp = mgAtomPos(SMG, e.mgIdx, SMG.t, !RM), sy = (selectedE % 2 === 0) ? 1 : -1;
+      const op = oAtomPos(SMG, e.oIdx, SMG.t, !RM);
+      const zf = GEO_MG.Z_FLY + ((e.mgIdx % 2) * 2 + (selectedE % 2)) * GEO_MG.Z_FLY_GAP;
+      const fr = { x: mp.x + GEO_MG.E_OFF.x, y: mp.y + sy * GEO_MG.E_OFF.y, z: mp.z + GEO_MG.E_OFF.z };
+      const pts = [ mView(fr.x, fr.y, fr.z), mView(fr.x, fr.y, zf),
+                    mView(op.x + 0.35, op.y + sy * 0.45, zf), vp[selIdx] ];
       for (let k2 = 0; k2 < pts.length - 1; k2++)
         m3dStick(pts[k2], pts[k2 + 1], 0.008, COL_MG.trace, 0.55);
     }
   }
   m3dFlush();
-  /* 대표 라벨 — 대표 입자가 없으면 그 라벨은 숨긴다 */
+  /* 대표 라벨 — §9 「계열 4개↑는 두 번째 채널 필수」의 직접 레이블 채널 */
   placeMgLabel("mgLblMg", rep.mg !== null ? A[rep.mg].x : null,
     rep.mg !== null ? A[rep.mg].y : 0, rep.mg !== null ? A[rep.mg].z : 0);
   placeMgLabel("mgLblO2", rep.o2 !== null ? A[rep.o2].x : null,
@@ -2330,11 +2489,12 @@ function drawMicroMg() {
   placeMgLabel("mgLblE", rep.e !== null ? A[rep.e].x : null,
     rep.e !== null ? A[rep.e].y : 0, rep.e !== null ? A[rep.e].z : 0);
 }
+
 /* 전자 픽킹 — 화면 투영 최근접 (반박 장치: 전자 추적 · 탭2) */
 function pickElec(px, py) {
   if (!m3d || !m3dView) return -1;
   updateMicroView();
-  const lay = mgbLayout(SMG);
+  const lay = mgbLayout(SMG, { vib: !RM });     // 픽킹은 «보이는 그 좌표»로 한다
   let best = -1, bestD = 24;
   for (let i = 0; i < lay.atoms.length; i++) {
     const a = lay.atoms[i];
@@ -2413,6 +2573,8 @@ function applyExp() {
   $("micro").setAttribute("aria-label", d.ariaMicro);
   $("heatNote").textContent = d.heatNote;
   heatBtnKey = ""; updateHeatBtn();
+  mYaw = microBase().yaw; mPitch = microBase().pitch;   // 탭마다 적정 시점이 다르다
+  microPanX = null;                                     // 전선 추적 팬도 그 탭 기준으로
   updateTrace();
   applyZoom();
   updateReadouts();
@@ -2420,7 +2582,9 @@ function applyExp() {
 /* 탭 클릭 배선은 initAll 이 등록 표 순회로 단다(생성 버튼 포함) */
 $("camBtn").onclick = () => {
   zAnim = null; camPre = null;
-  cam = Object.assign({}, CAM0); mYaw = MV.yaw; mPitch = MV.pitch;
+  cam = Object.assign({}, CAM0);
+  mYaw = microBase().yaw; mPitch = microBase().pitch;
+  microPanX = null;
 };
 
 /* 거시 ↔ 미시 전환. 들어갈 때는 카메라가 시험관 속 가루를 향해 «줌 인»한 뒤 입자 화면으로
@@ -2556,6 +2720,7 @@ function updateReadouts() {
     $("lostVal").textContent = lost;
     $("gainVal").textContent = gained;
     $("co2Val").textContent = S.absorbed;
+    $("co2Max").textContent = REDOX.EVENTS;        // 분모도 코어 상수에서(F-1)
     $("limeState").textContent =
       S.turb >= 1 ? "뿌옇게 흐려짐" : (S.absorbed > 0 ? "흐려지는 중" : "맑음");
     setBadges(redoxStage(S));
@@ -2643,7 +2808,7 @@ function loop(now) {
     lightVis += (mgbLight(SMG) - lightVis) * Math.min(1, dt * 5);
   }                                             // 미지 id(확장 대비 기본값) — 빈 상태·시간 정지
   updateReadouts();
-  if (zoom) { if (EXP === "cuo") drawMicro(); else if (EXP === "mgburn") drawMicroMg(); }
+  if (zoom) { stepMicroPan(dt); if (EXP === "cuo") drawMicro(); else if (EXP === "mgburn") drawMicroMg(); }
   else { if (EXP === "cuo") macroRender(now / 1000); else if (EXP === "mgburn") macroRenderMg(now / 1000); }
 }
 document.addEventListener("visibilitychange", () => {
