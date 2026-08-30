@@ -430,6 +430,7 @@ function renderPhase(phase) {
   renderHistory(phase);
   if (typeof classroomPush === "function") classroomPush();
   if (typeof renderPins === "function") renderPins();
+  if (typeof renderSetupWarn === "function") renderSetupWarn();
 }
 
 /* ★ 가시성은 .is-visible 클래스로만 전환한다 (Codex §4-1 · CSS 가 기본 숨김을 잡는다).
@@ -1226,54 +1227,62 @@ var LIMITS = [
 
 
 /* ==== CLASSROOM-BEGIN ==== */
-/* ── 교실 모드 (설계지시안 v3 §2) ──
-   ★ 통신 코드는 «전부» 이 블록 안에 있다. C20 이 「이 블록을 제거한 나머지」에
-     fetch·EventSource·localStorage 가 0건인지 검사한다 — 정적 배포본의 단독 경로는
-     v2 규약을 그대로 지킨다.
-   ★ 서버가 없으면 조용히 단독 모드로 남는다. 교실 모드는 «추가 기능»이다. */
-var CLASSROOM = { on: false, pins: [] };
+/* ── 교실 모드 — Firebase Realtime Database (설계지시안 v4) ──
+   ★ SDK 를 쓰지 않는다. REST + EventSource 만으로 실시간 구독이 된다
+     → 외부 CDN·ES 모듈 없이 이 프로젝트의 규약을 지킨다.
+   ★ 통신 코드는 «전부» 이 블록 안에 있다. C20 이 「블록을 뺀 단독 경로」에
+     fetch·EventSource·localStorage 가 0건인지 검사한다.
+   ★ 설치 전에는 placeholder 가 남아 조용히 단독 모드로 동작한다(C24). */
 
-function classroomProbe() {
-  if (location.protocol === "file:") return;          // 더블클릭 실행 — 서버가 있을 리 없다
-  /* ★ 교실 모드 힌트가 없으면 «아무 요청도 하지 않는다».
-     정적 호스팅에서 /api/pins 를 찔러 404 를 받으면 콘솔에 오류가 남는다(실측). */
-  if (location.search.indexOf("classroom=1") < 0) return;
-  try {
-    fetch("/api/pins", { method: "GET" }).then(function (r) {
-      return r.ok ? r.json() : null;
-    }).then(function (j) {
-      if (!j) return;
-      CLASSROOM.on = true;
-      CLASSROOM.pins = j.pins || [];
-      renderPins();
-    }).catch(function () { /* 서버 없음 — 단독 모드 유지 */ });
-  } catch (e) { /* 단독 모드 유지 */ }
+var FB = {
+  /* ↓↓↓ 설치 시 이 한 줄만 바꾼다 (설계지시안 v4 §4) ↓↓↓ */
+  databaseURL: "<DATABASE_URL>"
+  /* ↑↑↑ 예: https://popgame-default-rtdb.asia-southeast1.firebasedatabase.app ↑↑↑ */
+};
+function fbReady() {
+  return typeof FB.databaseURL === "string" &&
+    FB.databaseURL.indexOf("<") < 0 && FB.databaseURL.indexOf("http") === 0;
+}
+function fbUrl(path) { return FB.databaseURL.replace(/\/+$/, "") + path + ".json"; }
+
+var CLASSROOM = { on: false, room: null, pins: [], sending: false, queued: false };
+
+/* 방 코드 — 교사 화면이 만든다. 시드는 시각이 아니라 «조 수 + 난수»로 뽑는다. */
+function makeRoomCode() {
+  var s = "";
+  for (var i = 0; i < 4; i++) s += String(Math.floor(Math.random() * 10));
+  return s;
 }
 
-function classroomPush() {
-  if (!CLASSROOM.on) return;
-  var payload = {
-    phase: S.phase, round: S.round, teamCount: S.teamCount,
-    cards: S.cards, cardsSoFar: cardsRevealed()
-  };
-  var t = currentTeam();
-  if (t) {
-    payload.team = {
-      index: teamIndexOf(t), counts: t.alloc ? countsFromAlloc(t.alloc) : null,
-      alloc: t.alloc, pred: t.pred, submitted: !!t.alloc
-    };
+/* 교실 모드 켜기 — 조 수를 고른 «뒤»에 부른다(그때 PIN 을 발급하므로) */
+function classroomStart() {
+  if (!fbReady() || !S.teamCount) return;
+  CLASSROOM.room = makeRoomCode();
+  var pins = [], body = { pins: {}, rooms: {} };
+  var teams = {};
+  for (var i = 0; i < S.teamCount; i++) {
+    var pin = makeRoomCode();
+    pins.push({ name: (i + 1) + "조", pin: pin });
+    teams[i] = { name: (i + 1) + "조", counts: null, alloc: null, pred: null, submitted: false };
   }
-  try {
-    fetch("/api/push", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-      if (j && j.pins) { CLASSROOM.pins = j.pins.map(function (p, i) { return { name: (i + 1) + "조", pin: p }; }); renderPins(); }
-    }).catch(function () {});
-  } catch (e) {}
+  CLASSROOM.pins = pins;
+  /* pins 는 전역 경로에 따로 올린다 — 학생은 PIN 만 알고 방 코드는 모른다 */
+  var pinPatch = {};
+  pins.forEach(function (p, i) { pinPatch[p.pin] = { room: CLASSROOM.room, team: i }; });
+  fbPatch("/pins", pinPatch);
+  fbPut("/rooms/" + CLASSROOM.room, { meta: metaNow(), teams: teams });
+  CLASSROOM.on = true;
+  renderPins();
 }
 
-/* 태블릿에 보낼 «공개된» 카드만 — 아직 안 낸 카드를 보내면 M7 반박 장치가 죽는다 */
+function metaNow() {
+  return {
+    phase: S.phase, round: S.round, teamCount: S.teamCount,
+    cardsSoFar: cardsRevealed(), rev: Math.floor(Math.random() * 1e9)
+  };
+}
+
+/* ★ 태블릿에 보낼 «공개된» 카드만 — 아직 안 낸 카드를 올리면 M7 반박 장치가 죽는다 */
 function cardsRevealed() {
   var n = S.round;
   if (S.phase === "cardReveal" || S.phase === "judge" || S.phase === "roundResult" ||
@@ -1281,13 +1290,70 @@ function cardsRevealed() {
   return S.cards.slice(0, Math.max(0, n));
 }
 
+function fbPut(path, data) {
+  if (!fbReady()) return;
+  try {
+    fetch(fbUrl(path), { method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data) }).catch(function () {});
+  } catch (e) {}
+}
+function fbPatch(path, data) {
+  if (!fbReady()) return;
+  try {
+    fetch(fbUrl(path), { method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data) }).catch(function () {});
+  } catch (e) {}
+}
+
+/* 상태를 올린다 — 국면이 바뀔 때마다 renderPhase() 가 부른다.
+   연속 호출이 몰리면 마지막 것만 보낸다(교실 진행을 붙잡지 않는다). */
+function classroomPush() {
+  if (!CLASSROOM.on || !CLASSROOM.room) return;
+  if (CLASSROOM.sending) { CLASSROOM.queued = true; return; }
+  CLASSROOM.sending = true;
+  var base = "/rooms/" + CLASSROOM.room;
+  fbPatch(base + "/meta", metaNow());
+  var t = currentTeam();
+  if (t) {
+    fbPatch(base + "/teams/" + teamIndexOf(t), {
+      name: t.name,
+      counts: t.alloc ? countsFromAlloc(t.alloc) : null,
+      alloc: t.alloc, pred: t.pred, submitted: !!t.alloc
+    });
+  }
+  window.setTimeout(function () {
+    CLASSROOM.sending = false;
+    if (CLASSROOM.queued) { CLASSROOM.queued = false; classroomPush(); }
+  }, 250);
+}
+
+/* 방 지우기 — 이전 수업 자료를 남기지 않는다(설계지시안 v4 §5) */
+function classroomClear() {
+  if (!CLASSROOM.on || !CLASSROOM.room) return;
+  fbPut("/rooms/" + CLASSROOM.room, null);
+  CLASSROOM.pins.forEach(function (p) { fbPut("/pins/" + p.pin, null); });
+  CLASSROOM.on = false; CLASSROOM.room = null; CLASSROOM.pins = [];
+  renderPins();
+}
+
+function renderSetupWarn() {
+  var w = $("clsSetupWarn");
+  if (!w) return;
+  if (fbReady()) {
+    w.textContent = "설치됨 — 조 수를 고르면 조별 PIN이 위에 나타납니다.";
+    w.className = "cls-note";
+  }
+}
+
 function renderPins() {
   var mount = $("peerMount");
-  if (!mount || !CLASSROOM.on) return;
+  if (!mount) return;
   while (mount.firstChild) mount.removeChild(mount.firstChild);
+  if (!fbReady()) return;                       /* 미설치 — 조용히 단독 모드 */
+  if (!CLASSROOM.on) return;
   if (S.phase !== "design" && S.phase !== "setup" && S.phase !== "rules") return;
   var box = el("div", "pin-list");
-  box.appendChild(el("p", "pin-list-title", "학생 태블릿 접속 — 조별 PIN"));
+  box.appendChild(el("p", "pin-list-title", "학생 태블릿 접속 — 조별 PIN (방 " + CLASSROOM.room + ")"));
   var row = el("div", "pin-row");
   CLASSROOM.pins.forEach(function (p) {
     var chip = el("span", "pin-chip");
@@ -1317,10 +1383,10 @@ function init() {
         for (var i = 0; i < S.teamCount; i++) S.teams.push(newTeam(i));
         for (var m = 0; m < btns.length; m++) btns[m].setAttribute("aria-pressed", btns[m] === b ? "true" : "false");
         renderPhase("setup");
+        if (typeof classroomStart === "function") classroomStart();
       };
     })(btns[k]));
   }
-  if (typeof classroomProbe === "function") classroomProbe();
   var af = $("autoFillButton");
   if (af) af.addEventListener("click", function () {
     var next = autoFill(S.counts);          /* 규칙은 코어가 갖는다(F-1) */

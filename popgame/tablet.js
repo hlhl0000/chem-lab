@@ -620,7 +620,9 @@ function draw() {
    그래야 서버가 모형을 두 벌 갖지 않는다(F-1). */
 function computeView(raw) {
   var v = { teamIndex: raw.teamIndex, teamName: raw.teamName, alloc: raw.alloc,
-    phase: raw.phase, round: raw.round, card: raw.card, alive: [], dead: [], history: [] };
+    phase: raw.phase, round: raw.round,
+    card: (raw.cardsSoFar && raw.cardsSoFar.length) ? raw.cardsSoFar[raw.cardsSoFar.length - 1] : null,
+    alive: [], dead: [], history: [] };
   if (!raw.alloc) return v;
   var pop = makePopulation(raw.alloc);
   var nextId = POP.N + 1;
@@ -675,27 +677,104 @@ function phaseText(v) {
   }[v.phase] || v.phase;
 }
 
-/* ── SSE 연결 ── */
-var es = null;
-function connect(pin) {
-  if (es) { es.close(); es = null; }
-  $("tabStatus").textContent = "연결 중…";
-  es = new EventSource("/api/state?pin=" + encodeURIComponent(pin));
-  es.addEventListener("state", function (ev) {
-    var raw = JSON.parse(ev.data);
-    var prev = ST.view;
-    ST.view = computeView(raw);
-    $("tabStatus").textContent = "연결됨";
-    $("pinPane").style.display = "none";
-    $("gamePane").style.display = "";
-    /* 이번 판정으로 «새로» 죽은 개체가 생겼을 때만 연출을 시작한다 */
-    var grew = prev && ST.view && ST.view.dead.length > prev.dead.length;
-    render();
-    if (grew) startDeadAnimation(deathKey(ST.view.teamIndex, ST.view.round), render);
-  });
-  es.onerror = function () {
-    $("tabStatus").textContent = "연결이 끊겼습니다 — 다시 시도합니다";
+/* ── Firebase Realtime Database 구독 (설계지시안 v4) ──
+   ★ SDK 없이 EventSource 만 쓴다. RTDB 는 EventSource 요청을 event-stream 으로 처리한다.
+     이벤트 형식:  event: put|patch   data: {"path":"/","data":{…}} */
+var FB = {
+  /* ↓↓↓ 설치 시 이 한 줄만 바꾼다 — 교사 화면(sim.js)과 «같은 값»이어야 한다 ↓↓↓ */
+  databaseURL: "<DATABASE_URL>"
+};
+function fbReady() {
+  return typeof FB.databaseURL === "string" &&
+    FB.databaseURL.indexOf("<") < 0 && FB.databaseURL.indexOf("http") === 0;
+}
+function fbUrl(path) { return FB.databaseURL.replace(/\/+$/, "") + path + ".json"; }
+
+var SUB = { meta: null, team: null, room: null, teamIndex: 0, raw: { meta: null, team: null } };
+
+/* RTDB SSE 한 경로를 구독한다. put 은 통째 교체, patch 는 부분 갱신이다. */
+function subscribe(path, onData) {
+  var es = new EventSource(fbUrl(path));
+  var store = { value: null };
+  var apply = function (ev, isPatch) {
+    var msg;
+    try { msg = JSON.parse(ev.data); } catch (e) { return; }
+    if (!msg) return;
+    if (msg.path === "/" || !msg.path) {
+      if (isPatch && store.value && typeof store.value === "object" && msg.data) {
+        Object.keys(msg.data).forEach(function (k) { store.value[k] = msg.data[k]; });
+      } else store.value = msg.data;
+    } else {
+      var keys = msg.path.replace(/^\//, "").split("/");
+      if (store.value === null || typeof store.value !== "object") store.value = {};
+      var cur = store.value;
+      for (var i = 0; i < keys.length - 1; i++) {
+        if (typeof cur[keys[i]] !== "object" || cur[keys[i]] === null) cur[keys[i]] = {};
+        cur = cur[keys[i]];
+      }
+      cur[keys[keys.length - 1]] = msg.data;
+    }
+    onData(store.value);
   };
+  es.addEventListener("put", function (ev) { apply(ev, false); });
+  es.addEventListener("patch", function (ev) { apply(ev, true); });
+  es.onerror = function () { $("tabStatus").textContent = "연결이 끊겼습니다 — 다시 시도합니다"; };
+  return es;
+}
+
+function closeSubs() {
+  if (SUB.meta) { SUB.meta.close(); SUB.meta = null; }
+  if (SUB.team) { SUB.team.close(); SUB.team = null; }
+}
+
+/* PIN → 어느 방의 몇 조인가. 그 다음 meta 와 «자기 조»만 구독한다.
+   다른 조 배분은 애초에 받지 않는다(§5 금지 21 정신 유지). */
+function connect(pin) {
+  if (!fbReady()) {
+    $("pinError").textContent = "교실 모드가 아직 설치되지 않았습니다 (선생님께 알려 주세요)";
+    return;
+  }
+  closeSubs();
+  $("tabStatus").textContent = "연결 중…";
+  fetch(fbUrl("/pins/" + encodeURIComponent(pin)))
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) {
+      if (!j || j.room === undefined || j.team === undefined) {
+        $("pinError").textContent = "PIN을 찾을 수 없습니다";
+        $("tabStatus").textContent = "PIN을 넣으세요";
+        return;
+      }
+      $("pinError").textContent = "";
+      SUB.room = String(j.room); SUB.teamIndex = j.team | 0;
+      var base = "/rooms/" + SUB.room;
+      SUB.meta = subscribe(base + "/meta", function (v) { SUB.raw.meta = v; merge(); });
+      SUB.team = subscribe(base + "/teams/" + SUB.teamIndex, function (v) { SUB.raw.team = v; merge(); });
+      $("tabStatus").textContent = "연결됨";
+      $("pinPane").style.display = "none";
+      $("gamePane").style.display = "";
+    })
+    .catch(function () {
+      $("pinError").textContent = "연결에 실패했습니다 — 인터넷을 확인하세요";
+      $("tabStatus").textContent = "PIN을 넣으세요";
+    });
+}
+
+/* meta 와 team 이 따로 오므로 합쳐서 화면 자료를 만든다 */
+function merge() {
+  var m = SUB.raw.meta, t = SUB.raw.team;
+  if (!m) return;
+  var prev = ST.view;
+  ST.view = computeView({
+    teamIndex: SUB.teamIndex,
+    teamName: t ? t.name : ((SUB.teamIndex + 1) + "조"),
+    alloc: t ? t.alloc : null,
+    pred: t ? t.pred : null,
+    phase: m.phase, round: m.round || 0,
+    cardsSoFar: m.cardsSoFar || []
+  });
+  var grew = prev && ST.view && ST.view.dead.length > prev.dead.length;
+  render();
+  if (grew) startDeadAnimation(deathKey(ST.view.teamIndex, ST.view.round), render);
 }
 
 function init() {

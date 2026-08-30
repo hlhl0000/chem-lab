@@ -1006,15 +1006,15 @@
   <details class="card classroom-sheet" id="classroomSheet">
     <summary class="limits-summary">학생 태블릿으로 조별 화면 보기 (교실 모드)</summary>
     <div class="limits-content">
-      <p class="cls-lead">각 모둠이 태블릿으로 <strong>자기 조 개체군만</strong> 실시간으로 보게 하려면, 교사 컴퓨터에서 작은 서버를 하나 켜야 합니다. 이 사이트만으로는 기기 사이에 자료를 보낼 방법이 없기 때문입니다.</p>
+      <p class="cls-lead">각 모둠이 태블릿으로 <strong>자기 조 개체군만</strong> 실시간으로 볼 수 있습니다. 조 수를 고르면 <strong>조별 PIN 네 자리</strong>가 위에 나타납니다.</p>
       <ol class="cls-steps">
-        <li>교사 컴퓨터에서 <code class="cls-code">popgame_server.js</code> 를 실행합니다 (Node 필요).</li>
-        <li>검은 창에 <strong>교사 화면 주소</strong>와 <strong>학생 태블릿 주소</strong>가 뜹니다. 태블릿 주소를 칠판에 적으세요.</li>
-        <li>교사 화면에서 조 수를 고르면 <strong>조별 PIN 네 자리</strong>가 이 페이지에 나타납니다.</li>
-        <li>학생은 태블릿에서 그 주소를 열고 자기 조 PIN을 넣습니다.</li>
+        <li>교사 화면에서 <strong>조 수</strong>를 고릅니다 → 조별 PIN이 발급됩니다.</li>
+        <li>학생은 태블릿에서 <strong>이 사이트의 「우리 조 화면」</strong>을 열고 자기 조 PIN을 넣습니다.</li>
+        <li>이후 교사가 환경 카드를 낼 때마다 태블릿이 <strong>실시간으로 따라옵니다</strong>.</li>
       </ol>
-      <p class="cls-warn">⚠ 학교 와이파이가 기기 사이 통신을 막으면 태블릿이 닿지 못합니다. <strong>수업 전에 태블릿 한 대로 확인하세요.</strong></p>
-      <p class="cls-note">서버 없이도 수업은 됩니다 — 이 화면 하나로 전체 조가 원으로 나타납니다. 태블릿은 추가 기능입니다.</p>
+      <p class="cls-warn" id="clsSetupWarn">⚠ 아직 설치되지 않았습니다 — 교실 모드를 쓰려면 설정이 한 번 필요합니다. PIN이 나타나지 않으면 이 상태입니다.</p>
+      <p class="cls-note">설치하지 않아도 수업은 됩니다 — 이 화면 하나로 전체 조가 원으로 나타납니다. 태블릿은 추가 기능입니다.</p>
+      <p class="cls-note">학교 인터넷이 외부 접속을 막으면 태블릿이 연결되지 않을 수 있습니다. <strong>수업 전에 태블릿 한 대로 확인하세요.</strong></p>
     </div>
   </details>
 
