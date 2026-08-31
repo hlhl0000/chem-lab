@@ -157,7 +157,10 @@ const MIN = {
       note: "길게 이어진 <b>사슬</b>이 불규칙하게 엉켜 있다 — 유리(흑요석)의 불규칙한 <b>그물</b>과는 다른 모습이다. " +
         "사슬 사이를 <b>황 다리</b>가 군데군데 이어 주어(가황), 잡아당기면 늘어났다가 <b>원래 모양으로 되돌아온다.</b> " +
         "타이어에 쓰는 고무가 이것이다. 되풀이되는 단위가 없어 <b>녹는점이 하나로 정해지지 않는다.</b>",
-      color: [0.16, 0.15, 0.15], metal: 0.0, rough: 0.62, opacity: 1.0, shape: "blob"
+      /* 타이어 고무 — 카본블랙 때문에 검지만 «완전한 검정»이 아니라 짙은 회갈색이고,
+         빛을 거의 되쏘지 않는 **무광**이다. 흑요석(유리질 광택의 검정)과 겹치지 않게
+         한 단계 밝게 잡았다 — 화면 평균색 실측 거리 90(흑요석 15,15,17 ↔ 고무 74,66,61). */
+      color: [0.24, 0.215, 0.195], metal: 0.0, rough: 0.78, opacity: 1.0, grain: 0.42, shape: "blob"
     },
     {
       id: "polystyrene", name: "플라스틱 (폴리스타이렌)", formula: "(C₈H₈)ₙ", kind: "비결정성",
@@ -170,7 +173,12 @@ const MIN = {
       note: "길게 이어진 <b>사슬</b>이 불규칙하게 엉켜 있다. 사슬마다 <b>벤젠 고리</b>(곁가지)가 달려 있어 " +
         "사슬이 잘 돌아가지 못하고 뻣뻣하다 — 그래서 일회용 컵은 구부리면 <b>휘지 않고 부러진다.</b> " +
         "고무와 달리 사슬 사이를 잇는 다리가 없다. 되풀이되는 단위가 없어 <b>녹는점이 하나로 정해지지 않는다.</b>",
-      color: [0.92, 0.93, 0.95], metal: 0.0, rough: 0.12, opacity: 0.55, shape: "rcube"
+      /* 일회용 컵·포장재의 폴리스타이렌 — 반투명 «유백색»이고 아주 옅은 크림빛이 돈다
+         (완전 무색이 아니며 시간이 지나면 더 누레진다). 화면의 다른 흰 표본(석영·암염·얼음·
+         다이아몬드·드라이아이스)은 전부 «푸른» 기미(B > R)라, 유일하게 «따뜻한» 기미(R > B)로
+         두면 색만으로 갈린다 — 바꾸기 전 드라이아이스와의 실측 거리는 4.1 이었다.
+         표면은 매끈하므로 얼룩(grain)도 비결정 기본값 0.55 대신 낮춰 잡는다. */
+      color: [0.95, 0.90, 0.76], metal: 0.0, rough: 0.20, opacity: 0.62, grain: 0.16, shape: "rcube"
     }
   ],
   ZOOM: { min: 0, max: 100, step: 1 }   // 0 = 손에 든 크기, 100 = 입자 크기
@@ -1467,7 +1475,9 @@ function drawOneGL(m, x, y, w, h) {
   gl.uniform1f(U.rough, m.rough);
   gl.uniform1f(U.opac, m.opacity);
   gl.uniform1f(U.shape, shapeNum(m.shape));
-  gl.uniform1f(U.grain, m.kind === "비결정성" ? 0.55 : 0.30);
+  /* 표면 얼룩 — 기본은 「비결정성이면 거칠게」이지만, 종이 스스로 값을 갖고 있으면 그것을 쓴다
+     (폴리스타이렌은 비결정성이면서도 표면이 매끈하다). 기존 9종은 grain 필드가 없어 그대로다. */
+  gl.uniform1f(U.grain, m.grain !== undefined ? m.grain : (m.kind === "비결정성" ? 0.55 : 0.30));
   gl.uniform1f(U.zoomScale, zoomScaleFor(zoomV));
   gl.uniform1f(U.maxSteps, raySteps);
   gl.uniform1f(U.bgMix, Math.min(1, blend(zoomV) * 1.18));
