@@ -137,6 +137,40 @@ const MIN = {
         "그 자료 그대로 계산한 값을 쓴다 — 흔히 보는 통용값(약 1.56 g/cm³)과는 " +
         "<b>다른 온도의 값을 섞지 않는다.</b>(자세한 계산은 「심화」 참고) 분자 <b>안</b>은 공유 결합, 분자 <b>사이</b>는 분산력이다.",
       color: [0.97, 0.98, 0.99], metal: 0.0, rough: 0.42, opacity: 0.97, shape: "chunk"
+    },
+    /* ── 사슬 고분자 2종 (2026-08-26 신설) — 학습지 1-2-03 「비결정성 고체」 정합 ──
+       학습지의 비결정성 3종(유리·고무·플라스틱)이 한 화면에 모인다. 다만 **구조가 같지 않다** —
+       유리(흑요석)는 불규칙한 «그물»이고, 고무·플라스틱은 길게 이어진 «사슬»이 엉킨 것이다.
+       그래서 배열도 따로 만든다(l3Chain ≠ l3Amorphous).
+
+       문헌값 (2026-08-26 확인 · 격자 상수가 없어 밀도 역산 대조는 할 수 없다 — 흑요석과 같다):
+         천연고무   밀도 0.91~0.93 g/cm³ · 늘리지 않은 상태에서 비결정성
+         폴리스타이렌 밀도 1.05 g/cm³ · 어택틱이라 결정화하지 않는다 · 유리 전이 74~105 ℃ */
+    {
+      id: "rubber", name: "고무", formula: "(C₅H₈)ₙ", kind: "비결정성",
+      type: "비결정성 고체 (사슬 고분자)",
+      bond: "사슬 안 = 공유 결합 / 사슬 사이 = 분자 간 힘 + 가황 다리",
+      look: "검은 회색 · 불투명 · 무광 · 잡아당기면 늘어났다 되돌아옴",
+      mp: null, mpText: "녹는점 없음 — 하나로 정해지지 않고 넓은 구간에 걸쳐 서서히 물러진다", mpLabel: "상태 변화",
+      cond: { solid: "통하지 않음", melt: "가열해도 녹지 않고 분해된다" },
+      density: 0.92, a: null, polymer: true, chainCross: true,
+      note: "길게 이어진 <b>사슬</b>이 불규칙하게 엉켜 있다 — 유리(흑요석)의 불규칙한 <b>그물</b>과는 다른 모습이다. " +
+        "사슬 사이를 <b>황 다리</b>가 군데군데 이어 주어(가황), 잡아당기면 늘어났다가 <b>원래 모양으로 되돌아온다.</b> " +
+        "타이어에 쓰는 고무가 이것이다. 되풀이되는 단위가 없어 <b>녹는점이 하나로 정해지지 않는다.</b>",
+      color: [0.16, 0.15, 0.15], metal: 0.0, rough: 0.62, opacity: 1.0, shape: "blob"
+    },
+    {
+      id: "polystyrene", name: "플라스틱 (폴리스타이렌)", formula: "(C₈H₈)ₙ", kind: "비결정성",
+      type: "비결정성 고체 (사슬 고분자)",
+      bond: "사슬 안 = 공유 결합 / 사슬 사이 = 분자 간 힘",
+      look: "무색투명~반투명 · 단단하고 잘 부러짐",
+      mp: null, mpText: "녹는점 없음 — 약 100 ℃ 부근부터 넓은 구간에 걸쳐 서서히 물러진다", mpLabel: "상태 변화",
+      cond: { solid: "통하지 않음", melt: "물러져도 통하지 않음" },
+      density: 1.05, a: null, polymer: true,
+      note: "길게 이어진 <b>사슬</b>이 불규칙하게 엉켜 있다. 사슬마다 <b>벤젠 고리</b>(곁가지)가 달려 있어 " +
+        "사슬이 잘 돌아가지 못하고 뻣뻣하다 — 그래서 일회용 컵은 구부리면 <b>휘지 않고 부러진다.</b> " +
+        "고무와 달리 사슬 사이를 잇는 다리가 없다. 되풀이되는 단위가 없어 <b>녹는점이 하나로 정해지지 않는다.</b>",
+      color: [0.92, 0.93, 0.95], metal: 0.0, rough: 0.12, opacity: 0.55, shape: "rcube"
     }
   ],
   ZOOM: { min: 0, max: 100, step: 1 }   // 0 = 손에 든 크기, 100 = 입자 크기
@@ -193,6 +227,54 @@ function inLatBounds(p) {
 }
 
 function makeLattice(m, rnd) {
+  if (m.polymer) {
+    /* 사슬 고분자(2D 폴백) — 사슬 몇 가닥이 엉킨 모습. 골격만 그리고 곁가지는 생략한다.
+       WebGL 을 쓸 수 없는 기기의 대체 화면이라 단순한 쪽이 읽힌다.
+       3D 와 같은 사실을 말한다 — 사슬 «안»의 결합 길이는 일정하고 «배치»에는 규칙이 없다. */
+    const step = 0.075, nChain = 6, nBack = 22;
+    const jitter = m.id === "rubber" ? 0.75 : 0.42;   // 고무가 더 잘 구부러진다
+    const lo = -LAT_PAD, hi = 1 + LAT_PAD, minD = step * 0.82;
+    const pts = [], bonds = [];
+    const okAt = (x, y) => {
+      if (x < lo || x > hi || y < lo || y > hi) return false;
+      for (let t = 0; t < pts.length; t++)
+        if (Math.hypot(pts[t].x - x, pts[t].y - y) < minD) return false;
+      return true;
+    };
+    for (let ch = 0; ch < nChain; ch++) {
+      let x = 0, y = 0, ok = false;
+      for (let t = 0; t < 120 && !ok; t++) {
+        x = lo + rnd() * (hi - lo); y = lo + rnd() * (hi - lo);
+        ok = okAt(x, y);
+      }
+      if (!ok) continue;
+      let prev = pts.length;
+      pts.push({ x, y, s: 0, mol: ch });
+      let ang = rnd() * Math.PI * 2;
+      for (let n = 1; n < nBack; n++) {
+        let placed = false;
+        for (let t = 0; t < 22 && !placed; t++) {
+          const na = ang + (rnd() * 2 - 1) * jitter;
+          const nx = pts[prev].x + Math.cos(na) * step, ny = pts[prev].y + Math.sin(na) * step;
+          if (!okAt(nx, ny)) continue;
+          const idx = pts.length;
+          pts.push({ x: nx, y: ny, s: 0, mol: ch });
+          bonds.push([prev, idx, "in"]);
+          prev = idx; ang = na; placed = true;
+        }
+        if (!placed) break;
+      }
+    }
+    /* 이어지지 못한 외톨이 점은 버린다 — 「떨어진 입자」로 읽혀 사슬이라는 뜻이 흐려진다 */
+    const used = new Uint8Array(pts.length);
+    for (let b = 0; b < bonds.length; b++) { used[bonds[b][0]] = 1; used[bonds[b][1]] = 1; }
+    const remap = new Int32Array(pts.length).fill(-1);
+    const keep = [];
+    for (let i = 0; i < pts.length; i++) if (used[i]) { remap[i] = keep.length; keep.push(pts[i]); }
+    const nb = [];
+    for (let b = 0; b < bonds.length; b++) nb.push([remap[bonds[b][0]], remap[bonds[b][1]], bonds[b][2]]);
+    return { pts: keep, regular: false, centers: keep, bonds: nb };
+  }
   if (m.kind === "비결정성") {
     /* 비결정성 — 규칙 없는 그물. 최소 간격만 지켜 겹치지 않게 놓는다.
        생성 범위를 0~1보다 넓혀 확대해도 가장자리가 비지 않게 한다. */
@@ -637,6 +719,181 @@ function l3Amorphous(rnd) {
   return { atoms, bonds, nn: minD, rref: minD / 2, style: "stick" };
 }
 
+/* ── 사슬 고분자(고무·플라스틱)의 3차원 배열 ─────────────────────────────
+   결정도 아니고 유리의 «그물»도 아니다. **긴 사슬**이 제각기 구부러지며 엉켜 있다.
+     · 사슬 «안»은 공유 결합으로 이어진다("in" — 굵은 실선)
+     · 사슬 «사이»에는 방향이 정해진 결합이 없다 → 선을 그리지 않는다(드라이아이스와 같은 규칙)
+     · 고무만 사슬 사이를 잇는 **가황 다리**(황)가 군데군데 있다 — 되돌아오는 성질의 원인이다
+   사슬은 방향을 조금씩 틀며 나아가되(지속성) 이미 놓인 원자를 피한다(자기회피). 그래서
+   사슬 «안»의 결합 길이는 일정한데 사슬의 «배치»에는 규칙이 없다 — 결정과 갈리는 지점이다.
+
+   ⚠ 실제 사슬은 되풀이 단위가 수천~수만 개 이어져 있다. 화면에는 훨씬 짧게 그린다.
+     곁가지도 실제 원자단(고무 메틸기 CH₃ · 폴리스타이렌 페닐기 C₆H₅)을 **공 하나**로 줄여
+     그린다. 이 두 가지는 화면 「이 모형의 가정과 한계」 ⑨에 적는다. */
+function l3Chain(rnd, opt) {
+  const step = opt.step, jitter = opt.jitter, sideEvery = opt.sideEvery;
+  /* 최소 간격은 **화면 반지름 합보다 크게** 잡는다 — 공이 겹쳐 보이면 안 된다
+     (매뉴얼 1부 P1 겹침 검사 · 4부 ⑱). 곁가지는 벤젠 고리처럼 큰 것이 있어 더 넉넉히 둔다. */
+  const minD = step * 0.72, minSide = step * 0.95, minCross = step * 0.60;
+  const atoms = [], bonds = [];
+  /* 격자 칸에 나눠 담아 이웃 칸만 대조한다 — 원자가 수백 개라 전수 대조는 느리다 */
+  const cs = minD, half = Math.ceil(L3_R / cs) + 2, side = half * 2 + 1;
+  const cellOf = new Map();
+  const ci = v => Math.min(side - 1, Math.max(0, Math.floor(v / cs) + half));
+  const put = (x, y, z, i) => {
+    const k = (ci(x) * side + ci(y)) * side + ci(z);
+    if (!cellOf.has(k)) cellOf.set(k, []);
+    cellOf.get(k).push(i);
+  };
+  const clearAt = (x, y, z, dMin) => {
+    const gx = ci(x), gy = ci(y), gz = ci(z), d2 = dMin * dMin;
+    for (let a = gx - 1; a <= gx + 1; a++)
+      for (let b = gy - 1; b <= gy + 1; b++)
+        for (let c = gz - 1; c <= gz + 1; c++) {
+          const list = cellOf.get((a * side + b) * side + c);
+          if (!list) continue;
+          for (let t = 0; t < list.length; t++) {
+            const q = atoms[list[t]], dx = q.x - x, dy = q.y - y, dz = q.z - z;
+            if (dx * dx + dy * dy + dz * dz < d2) return false;
+          }
+        }
+    return true;
+  };
+  /* 방향 하나. flat < 1 이면 «위아래» 성분을 줄여 사슬이 대체로 옆으로 뻗는다.
+     성형된 고분자에서 실제로 나타나는 정렬이고, 화면에서는 타격 때 위층·아래층이
+     갈릴 수 있게 해 준다 — 완전 등방으로 두면 사슬이 세로로도 얽혀 절반만 움직일 때
+     서로를 뚫고 지나간다(실측 — 21표본 중 19표본에서 공이 겹쳤다). */
+  const flat = opt.flat === undefined ? 1 : opt.flat;
+  const unit = () => {
+    const u = rnd() * 2 - 1, t = rnd() * 2 * Math.PI, r = Math.sqrt(1 - u * u);
+    const x = r * Math.cos(t), y = r * Math.sin(t) * flat, z = u;
+    const L = Math.hypot(x, y, z) || 1;
+    return [x / L, y / L, z / L];
+  };
+
+  const chainHeads = [];                  // 사슬마다 [시작 원자 번호, 골격 원자 수]
+  for (let ch = 0; ch < opt.nChain; ch++) {
+    /* 시작점은 공 «안쪽»에서 고른다 — 가장자리에서 시작하면 사슬이 곧 밖으로 나가 짧아진다 */
+    let sx = 0, sy = 0, sz = 0, ok = false;
+    for (let t = 0; t < 240 && !ok; t++) {
+      sx = (rnd() * 2 - 1) * L3_R * 0.72;
+      sy = (rnd() * 2 - 1) * L3_R * 0.72;
+      sz = (rnd() * 2 - 1) * L3_R * 0.72;
+      ok = l3InBall(sx, sy, sz) && clearAt(sx, sy, sz, minD);
+    }
+    if (!ok) continue;
+    const first = atoms.length;
+    let prev = first;
+    atoms.push({ x: sx, y: sy, z: sz, s: 0, mol: ch, role: "C" });
+    put(sx, sy, sz, prev);
+    let d = unit();
+    for (let n = 1; n < opt.nBack; n++) {
+      const a = atoms[prev];
+      let placed = false;
+      for (let t = 0; t < 44 && !placed; t++) {
+        /* 방향을 조금씩 튼다 — jitter 가 작을수록 뻣뻣한 사슬이 된다(폴리스타이렌).
+           앞이 막히면 «점점 크게» 틀어 본다. 고정 각도로만 시도하면 사슬이 몇 칸 만에 끊겨
+           짧은 토막들만 남는다(실측 — 56칸 중 4~8칸에서 멈추는 사슬이 절반이었다). */
+        const jj = t < 24 ? jitter : jitter * (1 + (t - 24) * 0.35);
+        const w = unit();
+        let nx = d[0] + jj * w[0], ny = d[1] + jj * w[1], nz = d[2] + jj * w[2];
+        const L = Math.hypot(nx, ny, nz) || 1;
+        nx /= L; ny /= L; nz /= L;
+        const x = a.x + nx * step, y = a.y + ny * step, z = a.z + nz * step;
+        if (!l3InBall(x, y, z) || !clearAt(x, y, z, minD)) continue;
+        const idx = atoms.length;
+        atoms.push({ x, y, z, s: 0, mol: ch, role: "C" });
+        put(x, y, z, idx);
+        bonds.push([prev, idx, "in"]);
+        prev = idx; d = [nx, ny, nz]; placed = true;
+      }
+      if (!placed) break;                 // 갈 곳이 막히면 이 사슬은 여기서 끝난다
+    }
+    chainHeads.push([first, atoms.length - first]);
+  }
+
+  /* 곁가지 — 골격에서 옆으로 뻗은 공 하나. 골격이 뻗은 방향과 수직인 쪽에 붙인다 */
+  for (let c = 0; c < chainHeads.length; c++) {
+    const first = chainHeads[c][0], len = chainHeads[c][1];
+    for (let k = 1; k < len - 1; k += sideEvery) {
+      const i = first + k, a = atoms[i], p = atoms[i - 1], q = atoms[i + 1];
+      let tx = q.x - p.x, ty = q.y - p.y, tz = q.z - p.z;
+      const tl = Math.hypot(tx, ty, tz) || 1; tx /= tl; ty /= tl; tz /= tl;
+      const w = unit();
+      const dot = w[0] * tx + w[1] * ty + w[2] * tz;   // 골격 방향 성분을 빼면 수직 방향이 남는다
+      let px = w[0] - dot * tx, py = w[1] - dot * ty, pz = w[2] - dot * tz;
+      const pl = Math.hypot(px, py, pz) || 1; px /= pl; py /= pl; pz /= pl;
+      const x = a.x + px * step * 0.92, y = a.y + py * step * 0.92, z = a.z + pz * step * 0.92;
+      if (!l3InBall(x, y, z) || !clearAt(x, y, z, minSide)) continue;
+      const idx = atoms.length;
+      atoms.push({ x, y, z, s: 1, mol: a.mol, role: "R" });
+      put(x, y, z, idx);
+      bonds.push([i, idx, "in"]);
+    }
+  }
+
+  /* 가황 다리(고무만) — 서로 «다른» 사슬의 골격 원자 두 개를 황 하나로 잇는다.
+     이 다리가 있어 사슬들이 통째로 하나의 그물이 되고, 당겨도 갈라지지 않고 되돌아온다. */
+  let crossCount = 0;
+  if (opt.cross > 0) {
+    const backbone = [];
+    for (let c = 0; c < chainHeads.length; c++)
+      for (let k = 0; k < chainHeads[c][1]; k++) backbone.push(chainHeads[c][0] + k);
+    const lo = step * 1.4, hi = step * 3.2;
+    for (let t = 0; t < 30000 && crossCount < opt.cross && backbone.length > 1; t++) {
+      const i = backbone[Math.floor(rnd() * backbone.length)];
+      const j = backbone[Math.floor(rnd() * backbone.length)];
+      if (i === j) continue;
+      const A = atoms[i], B = atoms[j];
+      if (A.mol === B.mol) continue;                   // 같은 사슬끼리는 잇지 않는다
+      const dd = Math.hypot(A.x - B.x, A.y - B.y, A.z - B.z);
+      if (dd < lo || dd > hi) continue;
+      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2, mz = (A.z + B.z) / 2;
+      if (!clearAt(mx, my, mz, minCross)) continue;
+      const idx = atoms.length;
+      atoms.push({ x: mx, y: my, z: mz, s: 2, mol: A.mol, role: "S" });
+      put(mx, my, mz, idx);
+      bonds.push([i, idx, "in"], [idx, j, "in"]);
+      crossCount++;
+    }
+  }
+
+  /* 갈 곳이 막혀 몇 칸 만에 끊긴 사슬은 통째로 버린다 — 화면에서 «토막»으로 읽혀
+     「길게 이어진 사슬」이라는 뜻이 흐려진다. 그 사슬에 걸린 가황 다리도 함께 사라진다. */
+  const MIN_BACK = 6;
+  const dropMol = new Set();
+  let liveChains = 0;
+  for (let c = 0; c < chainHeads.length; c++) {
+    if (chainHeads[c][1] < MIN_BACK) dropMol.add(atoms[chainHeads[c][0]].mol);
+    else liveChains++;
+  }
+  const dead = new Uint8Array(atoms.length);
+  for (let i = 0; i < atoms.length; i++) if (dropMol.has(atoms[i].mol)) dead[i] = 1;
+
+  /* 남은 것 중 결합이 하나도 없는 원자도 버린다 — 「떨어져 나온 입자」로 읽힌다 */
+  const used = new Uint8Array(atoms.length);
+  const liveB = [];
+  for (let b = 0; b < bonds.length; b++) {
+    const i = bonds[b][0], j = bonds[b][1];
+    if (dead[i] || dead[j]) continue;
+    liveB.push(bonds[b]); used[i] = 1; used[j] = 1;
+  }
+  const remap = new Int32Array(atoms.length).fill(-1);
+  const keep = [];
+  for (let i = 0; i < atoms.length; i++) if (used[i]) { remap[i] = keep.length; keep.push(atoms[i]); }
+  const outB = [];
+  let liveCross = 0;
+  for (let b = 0; b < liveB.length; b++) {
+    outB.push([remap[liveB[b][0]], remap[liveB[b][1]], liveB[b][2]]);
+    if (keep[remap[liveB[b][1]]].role === "S") liveCross++;   // 황으로 «들어가는» 결합이 다리마다 하나
+  }
+
+  return {
+    atoms: keep, bonds: outB, nn: step, rref: step, style: "stick",
+    chains: liveChains, crossLinks: liveCross, polymer: true
+  };
+}
+
 /* 되풀이 단위를 광물마다 같은 크기(L3_CELL)로 맞춘다 — 어느 광물을 골라도
    화면에 같은 횟수만큼 되풀이되어 보이고, 비교 모드에서 좌우 척도가 어긋나지 않는다. */
 function makeLattice3D(m, rnd) {
@@ -648,6 +905,15 @@ function makeLattice3D(m, rnd) {
   if (m.id === "quartz") return l3Fit(l3Bridged, L3_CELL);
   if (m.id === "ice") return l3Fit(l3Ice, L3_CELL);
   if (m.id === "dryice") return l3Fit(l3DryIce, L3_CELL);
+  /* 사슬 고분자 — 결합 길이(step)는 같게 두고 **사슬의 뻣뻣함**과 곁가지 간격만 다르다.
+     고무는 사슬이 잘 구부러지고(jitter 큼) 가황 다리가 있으며, 폴리스타이렌은 벤젠 고리가
+     사슬의 회전을 막아 뻣뻣하고(jitter 작음) 다리가 없다. 이 차이가 곧 탄성과 취성의 차이다. */
+  /* 사슬은 «여러 가닥»이어야 한다 — 가닥이 적으면 타격에서 「위쪽 절반」을 사슬 단위로 가를 때
+     비율이 크게 튄다(실측: 10가닥에서 87 %가 한쪽으로 몰렸다). */
+  if (m.id === "rubber")
+    return l3Chain(rnd, { nChain: 30, nBack: 40, step: 0.13, jitter: 0.95, sideEvery: 4, cross: 44, flat: 0.45 });
+  if (m.id === "polystyrene")
+    return l3Chain(rnd, { nChain: 30, nBack: 40, step: 0.13, jitter: 0.80, sideEvery: 2, cross: 0, flat: 0.45 });
   return l3Amorphous(rnd);
 }
 
@@ -671,7 +937,19 @@ const SITES = {
   obsidian: [{ sym: "Si", label: "규소 Si", cpk: CPK.Si, r: 1.0 }, { sym: "O", label: "산소 O", cpk: CPK.O, r: 0.72 }],
   diamond: [{ sym: "C", label: "탄소 C", cpk: CPK.C, r: 1.0 }],
   iron: [{ sym: "Fe", label: "철 Fe (양이온 + 자유 전자)", cpk: CPK.Fe, r: 1.0 }],
-  dryice: [{ sym: "C", label: "탄소 C (분자 중심)", cpk: CPK.C, r: 0.66 }, { sym: "O", label: "산소 O", cpk: CPK.O, r: 0.74 }]
+  dryice: [{ sym: "C", label: "탄소 C (분자 중심)", cpk: CPK.C, r: 0.66 }, { sym: "O", label: "산소 O", cpk: CPK.O, r: 0.74 }],
+  /* 사슬 고분자 — 골격도 곁가지도 **탄소**라 CPK 색이 같다(임의 색을 새로 만들지 않는다).
+     곁가지는 크기로 구분한다: 고무의 메틸기는 작고, 폴리스타이렌의 벤젠 고리는 크다.
+     가황 다리만 황(CPK 노랑)이라 색으로 구분된다. */
+  rubber: [
+    { sym: "C", label: "탄소 C — 사슬의 뼈대", cpk: CPK.C, r: 1.0 },
+    { sym: "CH₃", label: "곁가지 — 메틸기 CH₃ (공 하나로 줄여 그림)", cpk: CPK.C, r: 0.62 },
+    { sym: "S", label: "황 S — 사슬 사이를 잇는 가황 다리", cpk: CPK.S, r: 0.78 }
+  ],
+  polystyrene: [
+    { sym: "C", label: "탄소 C — 사슬의 뼈대", cpk: CPK.C, r: 1.0 },
+    { sym: "C₆H₅", label: "곁가지 — 벤젠 고리 C₆H₅ (공 하나로 줄여 그림)", cpk: CPK.C, r: 1.30 }
+  ]
 };
 
 /* ── 망치 타격(외부 힘) — 계산부 ────────────────────────────────────
@@ -686,7 +964,14 @@ const SITES = {
      구리 (u/2,0,u/2)·철 (u,0,0) : 자리가 한 종류뿐이라 교환이 없다 — 배열이 그대로 유지된다.
      분자 결정      : 층이 미끄러지는 것이 아니라 **분자 덩어리째** 떨어져 나간다(슬립 벡터 없음). */
 const STRIKE_MODE = Object.freeze({
-  halite: "ion", copper: "metal", iron: "metal", ice: "molecular", dryice: "molecular"
+  halite: "ion", copper: "metal", iron: "metal", ice: "molecular", dryice: "molecular",
+  /* 사슬 고분자 2종은 «다리가 있는가»로 갈린다.
+     고무(elastic)   — 가황 다리가 사슬들을 하나의 그물로 묶어 두어, 갈라지지 않고 되돌아온다.
+     폴리스타이렌(brittle) — 다리가 없어 금이 벌어지고, 갈라지는 자리에서 사슬이 뽑혀 길게
+       늘어난다. 실제 폴리스타이렌이 깨질 때 나타나는 «크레이즈»가 그 모습이다.
+     분자 결정(molecular)의 «조각내기»를 쓰지 않는 이유: 사슬은 서로 얽혀 있어 조각으로 갈라
+       놓으면 사슬끼리 뚫고 지나간다(실측 — 21표본 중 18표본에서 공이 겹쳤다). */
+  rubber: "elastic", polystyrene: "brittle"
 });
 
 /* 격자를 자기 자신으로 옮기는 최소 병진. 분자 결정은 없다(null). */
@@ -725,9 +1010,10 @@ function strikePlan(l3, mnrId) {
   const repelPairs = [], brokenBonds = [];
   let planeY = 0, clusterOf = null, clusterOffsets = null;
 
-  if (mode === "molecular") {
+  if (mode === "molecular" || mode === "elastic" || mode === "brittle") {
     /* 분자 중심(그 분자에 속한 원자들의 평균 자리)이 슬립면 위면 그 분자의 원자 전부가 움직인다 —
-       분자를 원자 단위로 자르지 않기 위해서다. 분자 안의 공유 결합은 어떤 경우에도 끊기지 않는다. */
+       분자를 원자 단위로 자르지 않기 위해서다. 분자 안의 공유 결합은 어떤 경우에도 끊기지 않는다.
+       고분자에서는 «사슬 하나»가 곧 분자 하나이므로(mol = 사슬 번호) 사슬이 통째로 움직인다. */
     planeY = 0;
     const sx = new Map(), sy = new Map(), cn = new Map();
     for (let i = 0; i < N; i++) {
@@ -740,6 +1026,14 @@ function strikePlan(l3, mnrId) {
     for (const [m, c] of cn) mols.push({ mol: m, x: sx.get(m) / c, y: sy.get(m) / c });
     mols.sort((a, b) => a.mol - b.mol);
     const movedMols = mols.filter(o => o.y > planeY);
+    if (mode === "elastic" || mode === "brittle") {
+      /* 사슬 고분자 — 조각으로 나누지 않는다(얽힌 사슬은 조각내면 서로를 뚫고 지나간다).
+         움직이는 범위만 사슬 단위로 표시해 두고, 실제 좌표 규칙은 strikeOffsetsAt 이 정한다. */
+      const pick = new Set();
+      for (let t = 0; t < movedMols.length; t++) pick.add(movedMols[t].mol);
+      for (let i = 0; i < N; i++) if (pick.has(atoms[i].mol)) moved[i] = 1;
+      return { mode, planeY, moved, slipVec, repelPairs, brokenBonds, clusterOf, clusterOffsets };
+    }
     /* 조각 나누기 — 중심 x 로 정렬한 뒤 **개수**를 삼등분한다.
        x 범위를 삼등분하면 가운데 조각의 크기가 격자 위상에 따라 크게 흔들린다(판정 불안정). */
     movedMols.sort((a, b) => (a.x - b.x) || (a.mol - b.mol));
@@ -820,12 +1114,34 @@ function strikePlan(l3, mnrId) {
      (S-검토 B A-1 실측 · 매뉴얼 4부 ⑱). 물리적으로도 층은 서로를 뚫고 가지 않는다. */
 const STRIKE_SPLIT_GAP = 0.8;   // 쪼개진 두 조각이 벌어지는 간격(최근접 이웃 거리의 배수)
 const STRIKE_ARCH = 0.25;       // 슬립 중 들림 높이(최근접 이웃 거리의 배수)
+const STRIKE_STRETCH = 0.35;    // 고무가 당겨질 때 세로로 늘어나는 «비율»(높이에 비례)
+const STRIKE_CRACK = 0.80;      // 폴리스타이렌에서 금 위쪽이 벌어지는 «비율»(높이에 비례)
 function strikeOffsetsAt(l3, plan, slipP, splitP, crumbleP, out) {
   const N = l3.atoms.length, nn = l3.nn;
   const offs = (out && out.length >= N * 3) ? out : new Float64Array(N * 3);
   offs.fill(0, 0, N * 3);
   if (!plan) return offs;
   const mv = plan.moved;
+  if (plan.mode === "elastic") {
+    /* 고무 — 덩어리 «전체»가 세로로 고르게 늘어난다(affine 변형). 실제 고무도 당기면
+       전 구간이 비례해 늘어나므로 물리적으로 옳고, 화면에서도 안전하다: 세로 간격이
+       «벌어지기만» 하므로 두 원자가 가까워지는 일이 원리적으로 없다(겹침 0 보장).
+       위쪽 절반만 통째로 들어올리는 방식은 얽힌 사슬이 서로를 뚫고 지나가 쓸 수 없었다.
+       slipP 0 에서 오프셋이 정확히 0 이라 「되돌아옴」이 좌표로 보장된다. */
+    const k = STRIKE_STRETCH * slipP, A = l3.atoms;
+    for (let i = 0; i < N; i++) offs[i * 3 + 1] = A[i].y * k;
+    return offs;
+  }
+  if (plan.mode === "brittle") {
+    /* 폴리스타이렌 — 금(y = 0)이 벌어진다. 금 «위쪽»만 높이에 비례해 올라가므로 위로 갈수록
+       크게 벌어지는 쐐기 모양 틈이 생기고, 갈라지는 자리에서는 사슬이 뽑혀 길게 늘어난다
+       (실제 폴리스타이렌이 깨질 때의 «크레이즈»가 그 모습이다).
+       위쪽 원자는 높은 것이 더 많이 움직이고 아래쪽은 가만히 있으므로, 두 원자의 세로 간격은
+       벌어지기만 한다 — 조각으로 갈라 놓을 때 생기던 «사슬끼리 관통»이 원리적으로 없다. */
+    const k = STRIKE_CRACK * (crumbleP > 0 ? crumbleP : slipP), A = l3.atoms;
+    for (let i = 0; i < N; i++) if (A[i].y > 0) offs[i * 3 + 1] = A[i].y * k;
+    return offs;
+  }
   if (crumbleP > 0) {
     const co = plan.clusterOffsets, cf = plan.clusterOf;
     for (let i = 0; i < N; i++) {
@@ -895,7 +1211,9 @@ const PRESETS = [
   { label: "얼음 ↔ 드라이아이스", l: "ice", r: "dryice", note: "분자 결정 2종 — 수소 결합 ↔ 분산력" },
   { label: "구리 ↔ 철", l: "copper", r: "iron", note: "금속 결정 2종 — 쌓인 방식" },
   { label: "석영 ↔ 다이아몬드", l: "quartz", r: "diamond", note: "공유 결정 2종" },
-  { label: "암염 ↔ 드라이아이스", l: "halite", r: "dryice", note: "이온 ↔ 분자 — 결합 유형 교차 대비" }
+  { label: "암염 ↔ 드라이아이스", l: "halite", r: "dryice", note: "이온 ↔ 분자 — 결합 유형 교차 대비" },
+  { label: "흑요석 ↔ 고무", l: "obsidian", r: "rubber", note: "비결정 2종 — 불규칙한 그물 ↔ 엉킨 사슬" },
+  { label: "고무 ↔ 플라스틱", l: "rubber", r: "polystyrene", note: "사슬 고분자 2종 — 다리가 있다 ↔ 없다" }
 ];
 
 /* ============================================================
@@ -1287,7 +1605,7 @@ function sstep(a, b, x) {
    단계열  이온   swing → slip → repel → split → done
            금속   swing → slip → done
            분자   swing → crumble → done                                       */
-const STRIKE_T = { swing: 0.45, slip: 0.6, repel: 0.9, split: 0.8, crumble: 0.8 };
+const STRIKE_T = { swing: 0.45, slip: 0.6, repel: 0.9, split: 0.8, crumble: 0.8, stretch: 0.7, recoil: 0.9, crack: 0.8 };
 /* 간격·아치 높이는 계산부(STRIKE_SPLIT_GAP·STRIKE_ARCH)에 하나만 둔다 — 여기 사본을 두지 않는다(F-1) */
 const HAMMER_PRIMS = 4;            // 자루 1 + 머리 1 + 끝 구 2
 const REDUCE_MOTION = matchMedia("(prefers-reduced-motion:reduce)").matches;
@@ -1328,6 +1646,15 @@ function strikeComputeOffsets() {
   if (p.mode === "molecular") {
     if (ph === "crumble") crumbleP = easeOutCubic(strike.t / STRIKE_T.crumble);
     else if (ph === "done") crumbleP = 1;
+  } else if (p.mode === "elastic") {
+    /* 고무 — 당겨졌다가(stretch) 되돌아온다(recoil). done 에서 0 이라 원래 배열로 돌아간다. */
+    if (ph === "stretch") slipP = easeOutCubic(strike.t / STRIKE_T.stretch);
+    else if (ph === "recoil") slipP = 1 - easeOutCubic(strike.t / STRIKE_T.recoil);
+    else if (ph === "done") slipP = 0;
+  } else if (p.mode === "brittle") {
+    /* 폴리스타이렌 — 금이 벌어지고 그대로 남는다(되돌아오지 않는다). */
+    if (ph === "crack") slipP = easeOutCubic(strike.t / STRIKE_T.crack);
+    else if (ph === "done") slipP = 1;
   } else {
     if (ph === "slip") slipP = easeOutCubic(strike.t / STRIKE_T.slip);
     else if (ph === "repel") slipP = 1;
@@ -1894,7 +2221,8 @@ function updateBondLegend() {
   const list = cmpOn ? [mineralL, mineralR] : [mineral];
   const mols = list.filter(m => m.molecular);
   const nbs = list.filter(hasNbSticks);
-  if (!mols.length && !nbs.length) { el.style.display = "none"; el.innerHTML = ""; return; }
+  const polys = list.filter(m => m.polymer);
+  if (!mols.length && !nbs.length && !polys.length) { el.style.display = "none"; el.innerHTML = ""; return; }
   el.style.display = "block";
   const hasHb = mols.some(m => m.id === "ice");
   const hasNone = mols.some(m => m.id === "dryice");
@@ -1911,6 +2239,15 @@ function updateBondLegend() {
     html += `<span style="color:var(--t3)">${nbs.map(m => m.name).join("·")}는 이온이 <b>맞닿은 채 쌓인 모습</b>으로 그렸습니다 —
       이온 사이에는 <b>방향이 정해진 결합봉이 없습니다.</b> 「최근접 이웃 표시」를 켜면 어느 이온이
       서로 이웃인지 막대로 볼 수 있지만, 그 막대는 <b>결합봉이 아니라 이웃 표시</b>입니다.</span>`;
+  }
+  if (polys.length) {
+    if (html) html += "<br>";
+    html += `<span style="color:var(--t3)">${polys.map(m => m.name).join("·")}는 <b>긴 사슬</b>이 엉킨 모습입니다 —
+      굵은 막대는 사슬 <b>안</b>의 공유 결합이고, 사슬 <b>사이</b>에는 방향이 정해진 결합이 없어
+      막대를 그리지 않았습니다(드라이아이스와 같은 이유). 곁가지는 <b>크기</b>로 구분합니다.` +
+      (polys.some(m => m.chainCross)
+        ? ` <b>노란 공</b>은 사슬 사이를 잇는 <b>가황 다리</b>(황)입니다 — 고무가 되돌아오는 힘의 원천입니다.`
+        : "") + `</span>`;
   }
   el.innerHTML = html;
 }
@@ -2057,7 +2394,9 @@ $("spinBtn").onclick = () => { spinning = !spinning; $("spinBtn").textContent = 
 const STRIKE_SEQ = {
   ion: ["swing", "slip", "repel", "split", "done"],
   metal: ["swing", "slip", "done"],
-  molecular: ["swing", "crumble", "done"]
+  molecular: ["swing", "crumble", "done"],
+  elastic: ["swing", "stretch", "recoil", "done"],  // 고무 — 늘어났다가 되돌아온다
+  brittle: ["swing", "crack", "done"]               // 폴리스타이렌 — 금이 벌어진 채 남는다
 };
 /* 구리·철은 같은 문장을 쓴다 — 두 곳에 따로 적으면 한쪽만 고쳐지는 날이 온다(F-1 · METAL_MP_NOTE 와 같은 취지) */
 const STRIKE_METAL_TEXT = "외부 힘으로 층이 밀려도 자유 전자가 양이온 사이를 계속 돌아다니며 결합을 유지합니다. 층이 밀린 뒤에도 배열과 결합이 그대로 유지되어 결정은 쪼개지지 않습니다 — 금속을 두드려 펼 수 있는 이유입니다.";
@@ -2067,7 +2406,11 @@ const STRIKE_TEXT = {
   iron: STRIKE_METAL_TEXT,
   ice: "외부 힘에 분자 사이의 수소 결합이 먼저 끊어져 부스러집니다. 분자 안의 공유 결합은 끊어지지 않아 물 분자는 통째로 떨어져 나갑니다.",
   dryice: "외부 힘에 분자 사이를 붙잡는 약한 힘(분산력)을 이겨내며 분자째 떨어져 나가 부스러집니다. 분자 안의 공유 결합은 끊어지지 않습니다.",
-  haliteRepel: "같은 전하가 마주 보게 되었습니다 — 붉은 점선은 이온 사이의 반발력입니다(결합봉이 아닙니다). 반발을 보이기 위해 타격 중에는 이온을 작게 그립니다."
+  haliteRepel: "같은 전하가 마주 보게 되었습니다 — 붉은 점선은 이온 사이의 반발력입니다(결합봉이 아닙니다). 반발을 보이기 위해 타격 중에는 이온을 작게 그립니다.",
+  rubber: "고무는 사슬 사이를 잇는 다리(노란 황)가 잡아당겨, 늘어났다가 원래 모양으로 되돌아옵니다. 사슬도 다리도 끊어지지 않습니다 — 결정처럼 쪼개지지 않는 까닭입니다.",
+  rubberStretch: "사슬이 당겨져 늘어나고 있습니다. 사슬 사이를 잇는 노란 다리(가황)가 함께 늘어나며 되돌리는 힘을 냅니다 — 끊어지지 않습니다.",
+  polystyrene: "금이 벌어지며 갈라집니다. 사슬 사이를 붙잡는 약한 힘이 먼저 풀리고, 갈라지는 자리에서는 사슬이 뽑혀 길게 늘어납니다. 사슬 안의 공유 결합은 끊어지지 않지만, 고무와 달리 사슬을 이어 주는 다리가 없어 되돌아오지 못합니다.",
+  polystyreneCrack: "금이 벌어지고 있습니다 — 사슬 사이가 먼저 풀리고, 갈라지는 자리에서 사슬이 뽑혀 늘어납니다."
 };
 const STRIKE_ZOOM_HINT = " 이제 「망치로 내려치기」를 쓸 수 있습니다 — 왼쪽 그림 아래 버튼을 보세요.";
 
@@ -2112,6 +2455,10 @@ function strikeShowNote() {
     /* repel 문구는 **split 이 끝날 때까지** 그대로 둔다 — split 0.8 s 동안 캡션이 사라졌다가
        done 문구로 다시 뜨면 화면이 깜빡이고, 정작 조각이 갈라지는 순간에 설명이 없다(S-검토 B B-1) */
     if (strike.mnrId === "halite" && (strike.phase === "repel" || strike.phase === "split")) t = STRIKE_TEXT.haliteRepel;
+    /* 고무는 늘어나는 동안에도 설명이 있어야 한다 — 되돌아오는 힘이 어디서 나오는지가
+       그 구간에 보이기 때문이다(늘어난 노란 다리). */
+    else if (strike.mnrId === "rubber" && (strike.phase === "stretch" || strike.phase === "recoil")) t = STRIKE_TEXT.rubberStretch;
+    else if (strike.mnrId === "polystyrene" && strike.phase === "crack") t = STRIKE_TEXT.polystyreneCrack;
     else if (strike.phase === "done") t = STRIKE_TEXT[strike.mnrId] || "";
   }
   el.textContent = t;
