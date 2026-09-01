@@ -43,6 +43,16 @@ const SIMS = [
     tags: ["끓는점","증기 압력","Antoine 식","가열 곡선","기화 엔탈피","분자 간 힘","외부 압력"]
   },
   {
+    id: "raoult",
+    title: "증기 압력 내림",
+    cat: "용액",
+    path: "raoult/",
+    icon: "raoult",
+    ready: true,
+    desc: "밀폐한 그릇 속 물이 동적 평형에 이르면 기체가 증기 압력을 나타냅니다. 여기에 비휘발성 용질을 녹이면 압력이 내려가는데, 흔히 말하는 「용질이 표면을 덮어 막아서」가 정말 맞는지 세 가지 가정을 각각 돌려 확인합니다. 덮개를 씌우면 나가는 것도 들어오는 것도 함께 막혀 평형은 그대로입니다 — 달라지는 것은 도달까지 걸리는 시간뿐입니다.",
+    tags: ["증기 압력","증기 압력 내림","라울 법칙","몰분율","동적 평형","비휘발성 용질","묽은 용액","총괄성"]
+  },
+  {
     id: "press",
     title: "유압 프레스 도전 게임",
     cat: "물질의 상태",
@@ -253,6 +263,15 @@ const ICONS = {
   crystal:`<path d="M32 6l22 14v24L32 58 10 44V20z" fill="none" stroke="currentColor"
            stroke-width="4" stroke-linejoin="round"/><path d="M32 6v52M10 20l44 24M54 20L10 44"
            stroke="currentColor" stroke-width="2.5" opacity=".45"/>`,
+  raoult:`<path d="M16 8v13L8 44a5 5 0 0 0 4.6 7h30.8A5 5 0 0 0 48 44L40 21V8" fill="none"
+           stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+           <path d="M12 8h32" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+           <path d="M11 34h34" stroke="currentColor" stroke-width="3" opacity=".55"/>
+           <circle cx="20" cy="41" r="2.6"/><circle cx="30" cy="45" r="2.2"/>
+           <circle cx="38" cy="40" r="2.6"/><circle cx="26" cy="38" r="3.6" opacity=".55"/>
+           <circle cx="22" cy="16" r="2.2"/><circle cx="34" cy="13" r="1.9"/>
+           <path d="M54 14v18M49 27l5 5 5-5" fill="none" stroke="currentColor" stroke-width="3"
+           stroke-linecap="round" stroke-linejoin="round"/>`,
   redox:`<rect x="5" y="16" width="35" height="14" rx="7" fill="none" stroke="currentColor" stroke-width="4"/>
          <circle cx="14" cy="23" r="2.4"/><circle cx="21" cy="23" r="2.4"/><circle cx="28" cy="23" r="2.4"/>
          <path d="M22 36c-3.5 4.5-5.5 7.2-5.5 9.8a5.5 5.5 0 0 0 11 0c0-2.6-2-5.3-5.5-9.8z"
