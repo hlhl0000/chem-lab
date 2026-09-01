@@ -182,8 +182,8 @@
     <div class="card">
       <div class="ctl">
         <div class="row"><label for="tSl">온도</label><span class="val" id="tVal">45 ℃</span></div>
-        <input type="range" id="tSl" min="30" max="60" step="1" value="45">
-        <div class="rangeends"><span>30 ℃</span><span>60 ℃</span></div>
+        <input type="range" id="tSl" min="25" max="60" step="1" value="45">
+        <div class="rangeends"><span>25 ℃</span><span>60 ℃</span></div>
       </div>
 
       <div class="ctl is-off" id="xsCtl">
@@ -194,27 +194,27 @@
 
       <div class="ctl is-off" id="coverCtl">
         <div class="row"><label for="coverSl">표면을 덮은 넓이</label><span class="val" id="coverVal">50 %</span></div>
-        <input type="range" id="coverSl" min="0" max="0.75" step="0.01" value="0.5">
-        <div class="rangeends"><span>0 %</span><span>75 %</span></div>
+        <input type="range" id="coverSl" min="0.10" max="0.75" step="0.01" value="0.5">
+        <div class="rangeends"><span>10 %</span><span>75 %</span></div>
       </div>
 
       <div class="ros">
         <div class="readout wide" id="roAtm"><div class="label">대기압 (늘 같습니다)</div>
-          <div><span class="value" id="vAtm">1.00</span><span class="unit">atm (760 mmHg)</span></div></div>
+          <div><span class="value" id="vAtm">1.000</span><span class="unit">atm (760 mmHg)</span></div></div>
 
         <div class="readout" id="roP"><div class="label">지금 증기 압력</div>
-          <div><span class="value" id="vP">0.0</span><span class="unit">mmHg</span></div></div>
+          <div><span class="value" id="vP">—</span></div></div>
         <div class="readout" id="roPpure"><div class="label">순물질의 증기 압력</div>
-          <div><span class="value" id="vPpure">0.0</span><span class="unit">mmHg</span></div></div>
+          <div><span class="value" id="vPpure">—</span></div></div>
 
         <div class="readout is-off" id="roDp"><div class="label">내려간 값 ΔP</div>
           <div><span class="value" id="vDp">0.00</span><span class="unit">mmHg</span></div></div>
         <div class="readout is-off" id="roX"><div class="label">용매의 몰분율</div>
           <div><span class="value" id="vX">1.000</span><span class="unit"></span></div></div>
 
-        <div class="readout" id="roEvap"><div class="label">떠나는 분자 (초당)</div>
+        <div class="readout" id="roEvap"><div class="label">증발하는 분자 (초당)</div>
           <div><span class="value" id="vEvap">0</span><span class="unit">개</span></div></div>
-        <div class="readout" id="roCond"><div class="label">돌아오는 분자 (초당)</div>
+        <div class="readout" id="roCond"><div class="label">응축하는 분자 (초당)</div>
           <div><span class="value" id="vCond">0</span><span class="unit">개</span></div></div>
 
         <div class="readout wide" id="roState"><div class="label">상태</div>
@@ -229,13 +229,14 @@
       <div class="limits">
         <h3>이 모형이 다루지 않는 것</h3>
         <ul style="margin:0;padding-left:18px">
-          <li>분자 사이의 끌림이 <b>아예 들어 있지 않습니다.</b> 그래서 이 화면은
-              &ldquo;수소 결합이 원인이 아니다&rdquo;의 <b>증거가 아니라 가정</b>입니다.</li>
+          <li>분자 사이의 끌림을 <b>직접 계산하지 않습니다.</b> 실제로 잰 증기 압력 곡선을 그대로 넣어
+              대신했습니다. 그래서 이 화면은 &ldquo;수소 결합이 원인이 아니다&rdquo;의
+              <b>증거가 아니라 가정</b>입니다.</li>
           <li>이상 용액입니다. 실제 용액에서 나타나는 어긋남은 다루지 않습니다.</li>
           <li>비휘발성·비전해질 용질만 다룹니다.</li>
           <li>화면의 기체 분자 1개는 약 <b>0.41 mmHg</b>를 나타내는 <b>임의 배율</b>입니다.
               분자 그림의 크기도 실제 비가 아니라 도식입니다.</li>
-          <li>조작 범위(온도 30~60 ℃, 용질 몰분율 0.05까지, 덮은 넓이 75 %까지)는
+          <li>조작 범위(온도 25~60 ℃, 용질 몰분율 0.05까지, 덮은 넓이 10~75 %)는
               화면에서 읽히는 크기와 교실에서 기다릴 수 있는 시간에서 정했습니다.</li>
         </ul>
       </div>

@@ -14,25 +14,33 @@ const RAOULT = {
   MMHG_PER_ATM: 760,
 
   /* 물의 Antoine 상수 (mmHg·℃). liquid/sim.js LIQ.LIST water 와 같은 값이다.
-     ⚠ 유효 구간 1~100 ℃. 이 시뮬의 조작 범위(30~60 ℃)는 그 안에 있다. */
+     ⚠ 유효 구간 1~100 ℃. 이 시뮬의 조작 범위(25~60 ℃)는 그 안에 있다. */
   A: 8.07131, B: 1730.63, C: 233.426,
   M_WATER: 18.015,          // g/mol
   M_SUCROSE: 342.30,        // g/mol (자당)
   M_UREA: 60.06,            // g/mol (요소)
 
   /* ── 조작 범위와 그 물리적 근거 (매뉴얼 §13⑤ · P5 M8) ──────────────
-     T   30~60 ℃ : 아래 SCALE 로 ΔP 가 «3개 이상»으로 보이는 최저 온도가 30 ℃다.
-                   20 ℃ 에서는 ΔP 가 0.9개라 화면에서 읽히지 않는다.
+     T   25~60 ℃ : 하한을 «교과서 57쪽 확인 문제의 25 ℃»에 맞춘다. 그 온도에서 ΔP 는
+                   2.86개(막대로는 13.5 px)로 읽힌다. 20 ℃ 는 0.9개라 읽히지 않는다.
      X용질 ≤ 0.05 : 로드맵이 실제 수업에서 쓰는 최대 농도. 그 위는 자당 용해도와
                    묽은 용액 가정을 함께 벗어난다.
-     cover ≤ 0.75 : f = 1 − cover 이고 평형 도달 t99 = ln100/(KC·f) 이므로,
-                   cover 0.75 (f 0.25) 에서 t99 = 14.7 s — 교실에서 기다릴 수 있는 상한.
+     cover 0.10~0.75 : f = 1 − cover 이고 t99 = ln100/(KC·f) 이므로 cover 0.75(f 0.25)에서
+                   t99 = 14.7 s — 교실에서 기다릴 수 있는 상한.
+                   ★ 하한 0.10 은 물리가 아니라 «판별» 때문이다. 막·증발만 모형은 P°·f 를,
+                     조성 모형은 P°·X 를 주므로 cover 가 X용질 과 같아지면 두 모형이 «같은 수»를
+                     낸다. 탭 3 의 X용질 을 0.05 로 고정하고 cover 를 0.10 이상으로 두어
+                     두 값이 절대 겹치지 않게 한다.
      ------------------------------------------------------------------ */
-  T: { min: 30, max: 60, step: 1, init: 45 },
+  T: { min: 25, max: 60, step: 1, init: 45 },
   XS: { min: 0, max: 0.05, step: 0.001, init: 0.02 },
-  COVER: { min: 0, max: 0.75, step: 0.01, init: 0.5 },
+  COVER: { min: 0.10, max: 0.75, step: 0.01, init: 0.5 },
+
+  /* 탭 3 에서 쓰는 «고정» 용질 몰분율. 슬라이더로 열지 않는다 (위 ★ 참조) */
+  XS_TAB3: 0.05,
 
   /* 화면 기체 분자 1개가 대표하는 압력. 최고 온도(60 ℃)에서 360개가 되도록 잡았다.
+     하한 25 ℃·X용질 0.05 에서 ΔP 는 2.86개다 — 「개수」로는 아슬아슬하나 막대로는 13.5 px 다.
      상한 400개는 매뉴얼 §10 의 교실 기기 성능 예산이다. 여유 40개는 요동 표현용. */
   SCALE: 360 / Math.pow(10, 8.07131 - 1730.63 / (233.426 + 60)),   // ≈ 2.4155 개/mmHg
 
@@ -85,7 +93,10 @@ function soluteCount(xSolute, liquidDots) {
    ★ 막이 양방향을 같은 비율로 막는 근거는 «세부 균형»이다 — 탈출을 f 배로 막는
      장벽은 포획도 f 배로 막는다. 평형은 경로가 아니라 상태의 성질이기 때문이다.
      그렇지 않다면 덮은 용기와 안 덮은 용기를 연결해 영구히 증류할 수 있다.
-     ⚠ 「응축은 압력에만 비례한다」는 조성 모형에만 해당하는 말이다.
+     ⚠ 흔한 오해 — 「덮개가 있으면 응축이 압력에 비례하지 않는다」가 아니다. 세 모형 «전부»
+       응축 속도는 기체 분자 수(=압력)에 비례한다. 달라지는 것은 비례 «상수»뿐이다 —
+       막·양방향은 증발 쪽과 «같은 f 배»로 함께 줄고, 막·증발만은 응축 쪽이 줄지 않는다.
+       (차시 7 liquid/ 가 세운 「응축 속도는 증기 압력에 비례」 틀이 그대로 유지된다.)
    ------------------------------------------------------------------ */
 function evapRate(t, xSolute, model, cover) {
   const f = 1 - cover;
@@ -152,7 +163,7 @@ const REDUCED = matchMedia("(prefers-reduced-motion:reduce)").matches;
 const SHOW = {
   1: { xsCtl:0, coverCtl:0, roDp:0, roX:0, roSurf:0, predictBox:0, modelBox:0, splitBtn:0, skipBtn:0, zoomBtn:1 },
   2: { xsCtl:1, coverCtl:0, roDp:1, roX:1, roSurf:0, predictBox:0, modelBox:0, splitBtn:1, skipBtn:0, zoomBtn:0 },
-  3: { xsCtl:1, coverCtl:1, roDp:1, roX:1, roSurf:0, predictBox:1, modelBox:1, splitBtn:0, skipBtn:1, zoomBtn:0 }
+  3: { xsCtl:0, coverCtl:1, roDp:1, roX:1, roSurf:0, predictBox:1, modelBox:1, splitBtn:0, skipBtn:1, zoomBtn:0 }
 };
 /* ⚠ 보일 때 쓸 display 값을 «명시»한다. style.display = "" 는 .is-off 같은 클래스 규칙을
    못 이겨서 요소가 숨은 채로 남는다 (매뉴얼 §13④ — 이 시뮬 제작 중 실제로 걸렸다). */
@@ -169,7 +180,7 @@ const TITLE = {
 const DESC = {
   1: "밀폐한 그릇 속 물입니다. 온도를 바꿔 가며, 떠나는 분자 수와 돌아오는 분자 수가 같아지는 순간을 찾아보세요. 「분자 수준으로 확대해 보기」를 누르면 표면에서 무슨 일이 일어나는지 보입니다.",
   2: "왼쪽은 순수한 물, 오른쪽은 비휘발성 용질을 녹인 용액입니다. 용질은 액체 «전체»에 고르게 퍼집니다. 「표면을 확대해 보기」로 액체 속 한 구획과 표면 한 구획의 조성을 각각 세어 비교해 보세요.",
-  3: "이 탭은 세 가지 «가정»을 각각 돌려 봅니다. 먼저 예측을 고르고, 그다음 자기 예측에 해당하는 가정을 눌러 결과를 확인하세요."
+  3: "이 탭은 세 가지 «가정»을 각각 돌려 봅니다. 먼저 예측을 고르면 「덮개가 양쪽을 함께 막는다」부터 돌아갑니다. 그다음 다른 가정도 눌러 보고, 아래 「프로그램 밖의 근거」와 견주어 보세요."
 };
 const NOTE = {
   1: "<b>증기 압력</b>은 동적 평형에 이르렀을 때 기체가 나타내는 압력입니다. 액체의 양이나 그릇의 부피와는 관계가 없습니다.",
@@ -197,20 +208,30 @@ const st = {
   nSol: 0,                // 용액(또는 탭 3의 현재 가정) 쪽 기체 분자 수
   eqSince: null,          // 평형 밴드에 들어온 시각 (s)
   clock: 0,
-  diffuse: 0              // 탭 2 용질 확산 진행도 0~1
+  diffuse: 0,             // 탭 2 용질 확산 진행도 0~1
+  sampA: 0, sampB: 0, sampPer: 40,  // 탭 2 분할에서 «따로» 센 두 구획의 용질 개수(이번 뽑기)
+  cumA: 0, cumB: 0, cumN: 0, cumSeed: -1  // 누적 — 한 번만 뽑으면 요동이 신호보다 크다
 };
 
 /* 탭 3에서 「지금 무엇을 재고 있는가」 — 모형에 따라 계산부의 어느 세트를 쓰는지 */
 function activeModel() { return st.stage === 3 ? st.model : "comp"; }
 function activeCover() { return st.stage === 3 ? st.cover : 0; }
-function activeXs()    { return st.stage === 1 ? 0 : st.xs; }
+/* 탭 3 은 X용질 을 «고정»한다. 슬라이더로 열어 두면 덮인 넓이와 같아지는 순간
+   막·증발만(P°·f)과 조성(P°·X)이 «비트 단위로 같은 수»를 내어 두 모형을 가릴 수 없다. */
+function activeXs()    { return st.stage === 1 ? 0 : st.stage === 3 ? RAOULT.XS_TAB3 : st.xs; }
 
 /* 탭 3의 결과를 감추는 게이트 (매뉴얼 §13③ — 그리는 코드 자체를 건너뛴다) */
 function gated() { return st.stage === 3 && st.predicted === null; }
 
 /* ── 압력 표기 단일 원천 (매뉴얼 §14④) ───────────────────────── */
-function fmtP(mmHg) { return mmHg.toFixed(1); }
-function fmtDp(mmHg) { return mmHg.toFixed(2); }
+/* ★ 자릿수가 아니라 «유효숫자»로 고정한다. Antoine 이 문헌 대비 0.24~0.31 % 어긋나므로
+   60 ℃ 에서 「149.0」으로 쓰면 0.03 % 정밀도를 주장하게 되어 모형보다 7배 정밀하다
+   (매뉴얼 P5 M7 정밀도 과장). 3자리면 상대 정밀도가 모형 오차와 같은 자릿수가 된다. */
+function sig3(v) { return v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2); }
+function fmtP(mmHg) { return sig3(mmHg); }
+function fmtDp(mmHg) { return sig3(mmHg); }
+/* atm 우선 병기 — 차시 7 liquid/ 와 교과서 57쪽이 모두 atm 을 앞에 쓴다 (매뉴얼 §14④) */
+function setPress(mmHg) { return (mmHg / RAOULT.MMHG_PER_ATM).toFixed(3) + " atm (" + sig3(mmHg) + " mmHg)"; }
 
 /* ── WebGL 비커 — liquid/sim.js 의 FRAG 를 이식하고 uniform 두 개를 더했다 ── */
 const VERT = `attribute vec2 p; varying vec2 uv;
@@ -469,7 +490,29 @@ function drawSplit(g, w, h) {
   const pad = 10, boxW = (w - pad * 3) / 2, boxH = h - 56;
   const xsNow = st.xs;
   const per = 40;                                   // 구획마다 세는 분자 수
-  const nS = Math.round(per * xsNow / (1 - xsNow));
+  /* ★ 두 구획을 «따로» 표집한다. 같은 수를 두 상자에 그대로 찍으면 「달랐을 수도 있었는가」의
+     답이 아니오가 되어, 결론이 증거가 아니라 동어반복이 된다(매뉴얼 4부 ㉕).
+     시각(seed)은 clock 을 느리게 끊어 쓰되 화면이 깜빡이지 않게 2 s 단위로 고정한다. */
+  const pTrue = xsNow / (1 - xsNow) * per / (per + xsNow / (1 - xsNow) * per);
+  const seedBase = Math.floor(st.clock / 2);
+  const sample = k => {
+    let n = 0;
+    for (let i = 0; i < per; i++) {
+      const r = Math.abs(Math.sin((seedBase * 97 + k * 131 + i * 17) * 12.9898) * 43758.5453) % 1;
+      if (r < pTrue) n++;
+    }
+    return n;
+  };
+  const nSa = sample(0), nSb = sample(1);
+  const nS = nSa;
+  st.sampA = nSa; st.sampB = nSb; st.sampPer = per;
+  /* ★ 한 번 뽑은 값만 보이면 요동이 신호보다 크다 — X용질 0.02 에서 40개 표본의 기댓값은
+     0.8개라 「표면 0 %」가 예사로 나온다. 그래서 뽑을 때마다 «누적»해 평균이 조성으로
+     수렴하는 것을 보인다. 두 구획이 «같은 조성의 같은 모집단»임을 이 수렴이 보인다. */
+  if (seedBase !== st.cumSeed) {
+    st.cumSeed = seedBase;
+    st.cumA += nSa; st.cumB += nSb; st.cumN += per;
+  }
   const boxes = [
     { x: pad, label: "액체 속 한 구획", sub: "속에서 아무 데나" },
     { x: pad * 2 + boxW, label: "표면 한 구획", sub: "액체와 기체가 맞닿은 곳" }
@@ -484,7 +527,8 @@ function drawSplit(g, w, h) {
     g.fillText(b.sub, b.x, 35);
     const cols = 8, rows = 5, cw = boxW / cols, ch = boxH / rows, r = Math.min(cw, ch) * 0.26;
     const mark = new Set();
-    for (let i = 0; i < nS; i++) mark.add((i * 7 + 3 + bi * 0) % (cols * rows));
+    const nThis = bi === 0 ? nSa : nSb;
+    for (let i = 0; i < nThis; i++) mark.add((i * 7 + 3 + bi * 11) % (cols * rows));
     for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
       const idx = j * cols + i;
       const x = b.x + (i + 0.5) * cw, y = 40 + (j + 0.5) * ch;
@@ -492,10 +536,13 @@ function drawSplit(g, w, h) {
       else { g.fillStyle = C["d-blue"]; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
     }
   });
-  g.fillStyle = C.t2; g.font = "600 12.5px system-ui,sans-serif";
-  const pct = (nS / (per + nS) * 100).toFixed(1);
-  g.fillText("두 구획 모두 용질 " + nS + " / " + (per + nS) + " = " + pct + " %  —  표면의 조성은 전체의 조성과 같다",
-    pad, h - 8);
+  g.fillStyle = C.t2; g.font = "600 12px system-ui,sans-serif";
+  const ca = st.cumN ? (st.cumA / st.cumN * 100).toFixed(1) : "0.0";
+  const cb = st.cumN ? (st.cumB / st.cumN * 100).toFixed(1) : "0.0";
+  g.fillText("이번 뽑기 " + nSa + " : " + nSb + "   ·   " + Math.round(st.cumN / per) +
+    "번 누적 — 액체 속 " + ca + " %, 표면 " + cb + " %", pad, h - 22);
+  g.fillStyle = C.t3; g.font = "11px system-ui,sans-serif";
+  g.fillText("뽑을 때마다 다르지만 어느 쪽으로도 치우치지 않는다", pad, h - 7);
 }
 
 /* ── 압력 막대 (메인이 직접 그린다) ─────────────────────────────
@@ -574,8 +621,8 @@ function drawGauge() {
 /* ── 측정값 갱신 ─────────────────────────────────────────────── */
 function updateReadouts() {
   const P0 = pPure(st.t);
-  $("vAtm").textContent = "1.00";
-  $("vPpure").textContent = fmtP(P0);
+  $("vAtm").textContent = "1.000";
+  $("vPpure").textContent = setPress(P0);
   $("vX").textContent = xSolvent(activeXs()).toFixed(3);
 
   if (gated()) {
@@ -586,7 +633,7 @@ function updateReadouts() {
 
   const m = activeModel(), cv = activeCover(), xs = activeXs();
   const pNow = st.nSol / RAOULT.SCALE;
-  $("vP").textContent = fmtP(pNow);
+  $("vP").textContent = setPress(pNow);
   $("vDp").textContent = fmtDp(st.stage === 2 ? (st.nPure - st.nSol) / RAOULT.SCALE : Math.max(0, P0 - pNow));
 
   const ev = evapRate(st.t, xs, m, cv);
@@ -623,8 +670,11 @@ function updateReadouts() {
   }
 
   if (st.stage === 2 && st.split) {
-    const per = 40, nS = Math.round(per * st.xs / (1 - st.xs));
-    $("vSurf").textContent = "액체 속 " + (nS / (per + nS) * 100).toFixed(1) + " % · 표면 " + (nS / (per + nS) * 100).toFixed(1) + " % — 같다";
+    /* 캔버스가 «따로» 표집한 그 값을 그대로 읽는다 — 두 곳이 다른 계산을 하면 어긋난다(F-1) */
+    const a = st.cumN ? (st.cumA / st.cumN * 100).toFixed(1) : "0.0";
+    const b = st.cumN ? (st.cumB / st.cumN * 100).toFixed(1) : "0.0";
+    $("vSurf").textContent = "액체 속 " + a + " % · 표면 " + b + " %  (" +
+      Math.round(st.cumN / st.sampPer) + "번 누적)";
   }
 }
 
@@ -691,7 +741,7 @@ function bind() {
     st.zoom = false; st.split = false; st.eqSince = null;
     $("zoomBtn").setAttribute("aria-pressed", "false");
     $("splitBtn").setAttribute("aria-pressed", "false");
-    if (st.stage === 2) st.diffuse = 0;
+    if (st.stage === 2) { st.diffuse = 0; st.cumA = st.cumB = st.cumN = 0; st.cumSeed = -1; }
     applyStage();
   });
 
@@ -700,6 +750,7 @@ function bind() {
   });
   $("xsSl").addEventListener("input", e => {
     st.xs = +e.target.value; $("xsVal").textContent = st.xs.toFixed(3); st.eqSince = null;
+    st.cumA = st.cumB = st.cumN = 0; st.cumSeed = -1;      // 조성이 바뀌면 누적을 비운다
   });
   $("coverSl").addEventListener("input", e => {
     st.cover = +e.target.value; $("coverVal").textContent = Math.round(st.cover * 100) + " %"; st.eqSince = null;
@@ -732,8 +783,11 @@ function bind() {
     st.predicted = b.dataset.pred;
     for (const o of document.querySelectorAll(".pop"))
       o.setAttribute("aria-pressed", String(o === b));
-    /* 예측에 대응하는 가정을 기본으로 켜 준다 — 자기 생각이 어떤 결과를 내는지 먼저 본다 */
-    st.model = b.dataset.pred === "down" ? "film1" : b.dataset.pred === "same" ? "film2" : "comp";
+    /* ★ 예측이 무엇이든 «첫 실행은 항상 막·양방향»이다.
+       예측에 대응하는 모형을 곧바로 돌리면, ⓐ(★★★ 오개념)를 고른 학생만 자기 예측이
+       화면에 그대로 재현되는 것을 먼저 보게 된다 — 상충 단계에서 상충이 사라진다.
+       먼저 「덮어도 그대로」를 겪게 하고, 다른 가정은 그 뒤에 스스로 눌러 보게 한다. */
+    st.model = "film2";
     for (const o of document.querySelectorAll(".mdl"))
       o.setAttribute("aria-pressed", String(o.dataset.model === st.model));
     st.eqSince = null;
