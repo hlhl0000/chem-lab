@@ -336,56 +336,14 @@ function anolisAssetStormUnit(index, salt) {
   return value - Math.floor(value);
 }
 
-/* 폭풍 중 이동하는 개체는 넓은 흡착판을 남긴 간략 실루엣으로 그려, 색만으로도 누가 흔들리거나 떨어지는지 읽게 한다. */
-function anolisAssetStormCreature(ctx, x, y, color, padArea, angle, alpha) {
-  var root, padLong, padShort, ink;
-
-  if (!ctx) return;
-  padArea = Number(padArea);
-  if (!isFinite(padArea)) padArea = 1;
-  padArea = anolisAssetClamp(padArea, 0.55, 1.80);
-  root = Math.sqrt(padArea);
-  padLong = 4.7 * root;
-  padShort = 1.9 * root;
-  ink = anolisAssetToken("--t1");
-
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle || 0);
-  ctx.globalAlpha = anolisAssetClamp(alpha, 0, 1);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  anolisAssetFill(ctx, color);
-  anolisAssetStroke(ctx, ink);
-  ctx.lineWidth = 1.05;
-  ctx.beginPath();
-  ctx.ellipse(-2, 0, 12.6, 5.9, 0, 0, Math.PI * 2);
-  ctx.moveTo(8, -4.1);
-  ctx.lineTo(17, 0);
-  ctx.lineTo(8, 4.1);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.ellipse(-10, -8, padLong, padShort, -0.55, 0, Math.PI * 2);
-  ctx.ellipse(9, -8, padLong, padShort, 0.55, 0, Math.PI * 2);
-  ctx.ellipse(-10, 8, padLong, padShort, 0.55, 0, Math.PI * 2);
-  ctx.ellipse(9, 8, padLong, padShort, -0.55, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.restore();
-}
-
 /*
-   도식형 아놀도마뱀: 작은 몸통·머리·꼬리보다 네 개의 타원형 흡착판이
-   먼저 읽히게 했다. padArea는 면적 지수이므로 두 반지름 모두
-   Math.sqrt(padArea)에 비례시킨다. 등에 직접 쓴 번호는 계보 색을
-   읽기 어려운 상황에서도 남는 두 번째 구분 채널이다. 소유 표식과
-   별명도 여기에서 끝내어 무대와 에셋의 시각 규격이 갈라지지 않게 한다.
+   무대 도마뱀은 큰 둥근 머리, 짧고 통통한 몸, 안쪽으로 감기는 꼬리의
+   유아 비율로 아담한 귀여움을 만든다. 다만 눈은 진행 방향을 알리는 점 하나만
+   남기고 입·눈썹·볼·혀 같은 표정 요소는 그리지 않아 사망 장면의 감정화를 참는다.
 */
 function drawLizard(ctx, x, y, opt) {
   var padArea, scale, facing, color, ink, paper, padRoot, padLong, padShort;
+  var padCos, padSin, bodyX, bodyLong, bodyShort, headX, headY, headLong, headShort;
   var dead, owned, label, alpha, labelSize, ownerName, hasOwnerName, isTurn;
   var ownerSize, ownerY, ownerWidth, subLabel, hasSubLabel, subSize, subY;
 
@@ -408,14 +366,24 @@ function drawLizard(ctx, x, y, opt) {
   isTurn = opt.isTurn === true;
   hasSubLabel = opt.subLabel !== null && opt.subLabel !== undefined && opt.subLabel !== "";
   subLabel = hasSubLabel ? String(opt.subLabel) : "";
-  /* 이전 초안의 owned 호출도 받아, 통합 전후 어느 쪽에서도 소유 원이 사라지지 않게 한다. */
   owned = hasOwnerName || !!opt.owned || isTurn;
   alpha = dead ? 0.28 : 1;
 
-  /* 면적 지수의 화면 면적도 같은 비율로 바뀌도록, 길이에는 제곱근을 쓴다. */
+  /* 형질은 발바닥에만 나타낸다. 두 반지름에 같은 제곱근을 곱해 면적 지수의 뜻을 보존한다. */
   padRoot = Math.sqrt(padArea);
-  padLong = 6.6 * padRoot;
-  padShort = 2.65 * padRoot;
+  padLong = 3.75 * padRoot;
+  padShort = 3.00 * padRoot;
+  padCos = Math.cos(0.42);
+  padSin = Math.sin(0.42);
+
+  /* 몸통 1.6:1과 머리 치수는 발바닥 형질과 무관한 고정값이다. */
+  bodyX = -1.5;
+  bodyLong = 13.6;
+  bodyShort = 8.5;
+  headX = 11.8;
+  headY = -0.3;
+  headLong = 7.9;
+  headShort = 7.1;
 
   ctx.save();
   ctx.translate(x, y);
@@ -424,69 +392,91 @@ function drawLizard(ctx, x, y, opt) {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  /* 1: 가는 꼬리. 몸통보다 가늘게 두어 형질 표식을 방해하지 않는다. */
-  anolisAssetStroke(ctx, color);
-  ctx.lineWidth = 3.1;
-  ctx.beginPath();
-  ctx.moveTo(-13, 1);
-  ctx.quadraticCurveTo(-25, 5, -32, 0);
-  ctx.quadraticCurveTo(-37, -4, -39, 1);
-  ctx.stroke();
-
-  /* 2: 네 다리는 한 경로에 묶어 경로 수와 재그리기 비용을 낮춘다. */
+  /* 1: 짧은 꼬리를 몸 뒤에서 안쪽으로 되감아 전체 폭을 줄이고 동그란 인상을 만든다. */
   anolisAssetStroke(ctx, ink);
-  ctx.lineWidth = 1.65;
+  ctx.lineWidth = 5.2;
   ctx.beginPath();
-  ctx.moveTo(-7, -4); ctx.lineTo(-13, -12);
-  ctx.moveTo(8, -4); ctx.lineTo(13, -12);
-  ctx.moveTo(-7, 4); ctx.lineTo(-13, 12);
-  ctx.moveTo(8, 4); ctx.lineTo(13, 12);
+  ctx.moveTo(-13.8, 1.5);
+  ctx.bezierCurveTo(-18.5, 1.9, -23.5, 4.2, -23.8, 8.4);
+  ctx.bezierCurveTo(-24.2, 12.4, -20.7, 15.2, -17.2, 13.3);
+  ctx.bezierCurveTo(-14.8, 12.0, -14.8, 9.2, -17.2, 8.6);
+  ctx.stroke();
+  anolisAssetStroke(ctx, color);
+  ctx.lineWidth = 3.6;
   ctx.stroke();
 
-  /* 3: 모든 흡착판을 한 경로에 넣는다. 넓이 차이가 네 곳에서 반복되어 보인다. */
+  /* 2: 네 다리는 몸에 바짝 붙은 짧은 곡선으로 묶는다. 굵은 둥근 선이 절지동물 같은 가는 다리를 피한다. */
+  anolisAssetStroke(ctx, ink);
+  ctx.lineWidth = 5.0;
+  ctx.beginPath();
+  ctx.moveTo(-8.6, -5.1); ctx.quadraticCurveTo(-10.5, -8.0, -13.7, -13.2);
+  ctx.moveTo(6.5, -5.2); ctx.quadraticCurveTo(9.2, -7.8, 11.4, -13.2);
+  ctx.moveTo(-8.6, 5.1); ctx.quadraticCurveTo(-10.5, 8.0, -13.7, 13.2);
+  ctx.moveTo(6.5, 5.2); ctx.quadraticCurveTo(9.2, 7.8, 11.4, 13.2);
+  ctx.stroke();
+  anolisAssetStroke(ctx, color);
+  ctx.lineWidth = 3.2;
+  ctx.stroke();
+
+  /* 3: 흡착판은 몸 위 장식이 아니라 네 다리 끝의 둥근 발바닥으로 분리해 배치한다. */
   anolisAssetFill(ctx, color);
   anolisAssetStroke(ctx, ink);
   ctx.lineWidth = 1.15;
   ctx.beginPath();
-  ctx.ellipse(-13, -12, padLong, padShort, -0.55, 0, Math.PI * 2);
-  ctx.ellipse(13, -12, padLong, padShort, 0.55, 0, Math.PI * 2);
-  ctx.ellipse(-13, 12, padLong, padShort, 0.55, 0, Math.PI * 2);
-  ctx.ellipse(13, 12, padLong, padShort, -0.55, 0, Math.PI * 2);
+  ctx.moveTo(-13.7 + padLong * padCos, -13.2 - padLong * padSin);
+  ctx.ellipse(-13.7, -13.2, padLong, padShort, -0.42, 0, Math.PI * 2);
+  ctx.moveTo(11.4 + padLong * padCos, -13.2 + padLong * padSin);
+  ctx.ellipse(11.4, -13.2, padLong, padShort, 0.42, 0, Math.PI * 2);
+  ctx.moveTo(-13.7 + padLong * padCos, 13.2 + padLong * padSin);
+  ctx.ellipse(-13.7, 13.2, padLong, padShort, 0.42, 0, Math.PI * 2);
+  ctx.moveTo(11.4 + padLong * padCos, 13.2 - padLong * padSin);
+  ctx.ellipse(11.4, 13.2, padLong, padShort, -0.42, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
-  /* 4: 몸통과 삼각형 머리를 한 도식으로 묶는다. 질감·그림자는 넣지 않는다. */
+  /* 4: 겹친 두 타원으로 통통한 몸과 큰 둥근 머리의 바탕을 만든다. 질감·그림자·광택은 쓰지 않는다. */
   anolisAssetFill(ctx, color);
+  ctx.beginPath();
+  ctx.moveTo(bodyX + bodyLong, 0);
+  ctx.ellipse(bodyX, 0, bodyLong, bodyShort, 0, 0, Math.PI * 2);
+  ctx.moveTo(headX + headLong, headY);
+  ctx.ellipse(headX, headY, headLong, headShort, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  /* 5: 하나의 둥근 외곽선으로 머리와 몸 사이의 각진 이음새를 없애 부드러운 실루엣을 만든다. */
   anolisAssetStroke(ctx, ink);
   ctx.lineWidth = 1.35;
   ctx.beginPath();
-  ctx.ellipse(-1, 0, 15.5, 7.6, 0, 0, Math.PI * 2);
-  ctx.moveTo(11, -5.2);
-  ctx.lineTo(21, 0);
-  ctx.lineTo(11, 5.2);
+  ctx.moveTo(-15.1, 0.7);
+  ctx.bezierCurveTo(-15.1, -4.8, -8.4, -8.5, -1.5, -8.5);
+  ctx.bezierCurveTo(3.3, -8.5, 6.2, -7.2, 8.2, -6.4);
+  ctx.bezierCurveTo(12.1, -8.6, 18.1, -7.0, 19.7, -2.3);
+  ctx.bezierCurveTo(21.0, 2.3, 18.0, 6.4, 13.8, 6.8);
+  ctx.bezierCurveTo(10.3, 7.8, 7.4, 7.1, 5.6, 6.9);
+  ctx.bezierCurveTo(1.5, 8.3, -7.7, 9.0, -12.5, 5.8);
+  ctx.bezierCurveTo(-14.3, 4.6, -15.1, 2.6, -15.1, 0.7);
   ctx.closePath();
-  ctx.fill();
   ctx.stroke();
 
-  /* 5: 진행 방향을 빠르게 읽게 하는 눈 하나다. */
+  /* 6: 눈은 진행 방향만 알리는 점 하나다. 입이나 표정선은 의도적으로 여기서 더하지 않는다. */
   anolisAssetFill(ctx, ink);
   ctx.beginPath();
-  ctx.arc(16, -1.4, 1.35, 0, Math.PI * 2);
+  ctx.arc(15.7, -2.1, 1.15, 0, Math.PI * 2);
   ctx.fill();
 
-  /* 6: 소유 계보만 둘러싼다. 현재 차례는 굵은 실선, 다른 조원 것은 가는 파선으로 구별한다. */
+  /* 7: 소유 테두리는 꼬리와 네 발을 감싸되 인접 라벨 영역을 넘지 않는다. */
   if (owned) {
     anolisAssetStroke(ctx, color);
     ctx.lineWidth = isTurn ? 3.1 : 1.35;
     if (!isTurn && typeof ctx.setLineDash === "function") ctx.setLineDash([3.2, 2.8]);
     ctx.beginPath();
-    ctx.ellipse(-1, 0, 24, 17, 0, 0, Math.PI * 2);
+    ctx.ellipse(-0.5, 0, 27.7, 17.25, 0, 0, Math.PI * 2);
     ctx.stroke();
     if (typeof ctx.setLineDash === "function") ctx.setLineDash([]);
   }
   ctx.restore();
 
-  /* 글자는 좌향일 때도 뒤집히지 않도록 변환을 복원한 뒤 몸통 위에 쓴다. */
+  /* 글자는 좌향에서도 뒤집히지 않도록 도마뱀 변환을 복원한 뒤 그린다. */
   if (label !== null && label !== undefined && label !== "") {
     labelSize = Math.max(10, Math.round(11 * scale));
     ctx.save();
@@ -502,9 +492,7 @@ function drawLizard(ctx, x, y, opt) {
     ctx.restore();
   }
 
-  /* 발바닥 면적 지수를 몸 아래에 작게 적는다 — 스탯을 보고 훈련·예측 대상을
-     고를 수 있어야 하므로(사용자 지시 2026-08-23 ①) 도마뱀을 그리는 모든 자리에 함께 나간다.
-     소유 테두리 타원(세로 17)과 다리(12)를 피해 y+26 에 둔다. */
+  /* 수치 라벨은 테두리 아래 y+26을 유지해 drawStage의 예측 표식과 배치 계약을 지킨다. */
   if (hasSubLabel) {
     subSize = Math.max(10, Math.round(10 * scale));
     subY = y + Math.max(26, 26 * scale);
@@ -521,7 +509,7 @@ function drawLizard(ctx, x, y, opt) {
     ctx.restore();
   }
 
-  /* 최대 8자는 폭 86px 안에 축소한다. 최소 96px 격자에서 양옆 5px 이상의 여백을 남긴다. */
+  /* 별명은 기존 최대 8자·86px 계약과 y-27 위치를 유지한다. */
   if (hasOwnerName) {
     ownerSize = Math.max(10, Math.min(11, Math.round(11 * scale)));
     ownerY = y - Math.max(26, 27 * scale);
@@ -538,6 +526,117 @@ function drawLizard(ctx, x, y, opt) {
     ctx.fillText(ownerName, x, ownerY, ownerWidth);
     ctx.restore();
   }
+}
+
+/*
+   폭풍 실루엣은 무대 개체보다 약 0.8배인 통통한 몸, 큰 둥근 머리와 말린 꼬리를
+   간략하게 되풀이해 회전 중에도 같은 생물로 읽히게 한다. 낙하·사망 장면에 감정을
+   덧씌우지 않도록 간략형에는 눈과 입을 모두 생략해 표정을 참는다.
+*/
+function anolisAssetStormCreature(ctx, x, y, color, padArea, angle, alpha) {
+  var root, padLong, padShort, padCos, padSin, ink, neutral, turn, opacity;
+  var bodyX, bodyLong, bodyShort, headX, headY, headLong, headShort;
+
+  if (!ctx) return;
+  padArea = Number(padArea);
+  if (!isFinite(padArea)) padArea = 1;
+  padArea = anolisAssetClamp(padArea, 0.55, 1.80);
+  root = Math.sqrt(padArea);
+  padLong = 2.85 * root;
+  padShort = 2.25 * root;
+  padCos = Math.cos(0.40);
+  padSin = Math.sin(0.40);
+  turn = Number(angle);
+  if (!isFinite(turn)) turn = 0;
+  opacity = Number(alpha);
+  if (!isFinite(opacity)) opacity = 1;
+  opacity = anolisAssetClamp(opacity, 0, 1);
+  ink = anolisAssetToken("--t1");
+  neutral = anolisAssetToken("--d-gray");
+  color = color || neutral;
+
+  /* 무대 몸통의 약 0.8배인 고정 치수이며 padArea와는 무관하다. */
+  bodyX = -1.2;
+  bodyLong = 10.8;
+  bodyShort = 6.8;
+  headX = 9.1;
+  headY = -0.2;
+  headLong = 6.2;
+  headShort = 5.6;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(turn);
+  ctx.globalAlpha = opacity;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  /* 1: 짧게 말린 꼬리가 회전 중에도 몸의 뒤쪽을 알려 준다. */
+  anolisAssetStroke(ctx, ink);
+  ctx.lineWidth = 4.2;
+  ctx.beginPath();
+  ctx.moveTo(-11.5, 1.2);
+  ctx.bezierCurveTo(-15.1, 1.6, -18.7, 3.6, -18.9, 6.8);
+  ctx.bezierCurveTo(-19.1, 9.8, -16.4, 11.8, -13.8, 10.3);
+  ctx.bezierCurveTo(-12.1, 9.3, -12.1, 7.2, -14.0, 6.8);
+  ctx.stroke();
+  anolisAssetStroke(ctx, color);
+  ctx.lineWidth = 2.8;
+  ctx.stroke();
+
+  /* 2: 짧고 굵은 네 다리는 몸 가까이에 붙여 작은 크기에서도 절지동물처럼 갈라지지 않게 한다. */
+  anolisAssetStroke(ctx, ink);
+  ctx.lineWidth = 4.0;
+  ctx.beginPath();
+  ctx.moveTo(-6.8, -4.0); ctx.quadraticCurveTo(-8.3, -6.4, -10.7, -10.6);
+  ctx.moveTo(5.2, -4.1); ctx.quadraticCurveTo(7.3, -6.3, 8.9, -10.5);
+  ctx.moveTo(-6.8, 4.0); ctx.quadraticCurveTo(-8.3, 6.4, -10.7, 10.6);
+  ctx.moveTo(5.2, 4.1); ctx.quadraticCurveTo(7.3, 6.3, 8.9, 10.5);
+  ctx.stroke();
+  anolisAssetStroke(ctx, color);
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  /* 3: 폭풍형도 네 발끝만 제곱근 비례로 바꾸어 형질 규칙을 그대로 승계한다. */
+  anolisAssetFill(ctx, color);
+  anolisAssetStroke(ctx, ink);
+  ctx.lineWidth = 1.0;
+  ctx.beginPath();
+  ctx.moveTo(-10.7 + padLong * padCos, -10.6 - padLong * padSin);
+  ctx.ellipse(-10.7, -10.6, padLong, padShort, -0.40, 0, Math.PI * 2);
+  ctx.moveTo(8.9 + padLong * padCos, -10.5 + padLong * padSin);
+  ctx.ellipse(8.9, -10.5, padLong, padShort, 0.40, 0, Math.PI * 2);
+  ctx.moveTo(-10.7 + padLong * padCos, 10.6 + padLong * padSin);
+  ctx.ellipse(-10.7, 10.6, padLong, padShort, 0.40, 0, Math.PI * 2);
+  ctx.moveTo(8.9 + padLong * padCos, 10.5 - padLong * padSin);
+  ctx.ellipse(8.9, 10.5, padLong, padShort, -0.40, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  /* 4: 큰 둥근 머리와 통통한 몸의 겹친 바탕은 무대 개체의 유아 비율을 축약한다. */
+  anolisAssetFill(ctx, color);
+  ctx.beginPath();
+  ctx.moveTo(bodyX + bodyLong, 0);
+  ctx.ellipse(bodyX, 0, bodyLong, bodyShort, 0, 0, Math.PI * 2);
+  ctx.moveTo(headX + headLong, headY);
+  ctx.ellipse(headX, headY, headLong, headShort, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  /* 5: 둥근 한 외곽선만 남기고 얼굴 선은 추가하지 않아 폭풍 속 실루엣을 중립적으로 유지한다. */
+  anolisAssetStroke(ctx, ink);
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.moveTo(-12.0, 0.5);
+  ctx.bezierCurveTo(-12.0, -3.8, -6.6, -6.8, -1.2, -6.8);
+  ctx.bezierCurveTo(2.7, -6.8, 4.9, -5.8, 6.6, -5.1);
+  ctx.bezierCurveTo(9.7, -6.9, 14.4, -5.6, 15.6, -1.8);
+  ctx.bezierCurveTo(16.6, 1.9, 14.3, 5.1, 10.9, 5.4);
+  ctx.bezierCurveTo(8.2, 6.2, 5.9, 5.7, 4.5, 5.5);
+  ctx.bezierCurveTo(1.2, 6.6, -6.2, 7.2, -10.0, 4.6);
+  ctx.bezierCurveTo(-11.4, 3.7, -12.0, 2.0, -12.0, 0.5);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
 }
 
 /*
