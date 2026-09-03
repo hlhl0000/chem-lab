@@ -53,6 +53,16 @@ const SIMS = [
     tags: ["증기 압력","증기 압력 내림","라울 법칙","몰분율","동적 평형","비휘발성 용질","묽은 용액","총괄성"]
   },
   {
+    id: "waterdensity",
+    title: "물의 밀도와 분자 배열",
+    cat: "용액",
+    path: "waterdensity/",
+    icon: "waterdensity",
+    ready: true,
+    desc: "비커에 담긴 −4 ℃ 얼음을 10 ℃까지 가열하면서 물 1 g의 부피와 밀도를 구간마다 읽습니다. 같은 실험을 분자 배열로 바꾸면 육각 고리 안쪽의 빈 공간이 다른 물 분자로 채워지는 것이 보입니다. 수소 결합의 「개수」는 온도가 오를수록 계속 줄어드는데 부피는 줄었다가 늘어납니다 — 개수는 원인이 아닙니다.",
+    tags: ["물의 밀도","얼음","육각형 배열","개방 구조","수소 결합","4 ℃","열팽창","부피 변화","비열"]
+  },
+  {
     id: "press",
     title: "유압 프레스 도전 게임",
     cat: "물질의 상태",
@@ -271,6 +281,16 @@ const ICONS = {
            <circle cx="38" cy="40" r="2.6"/><circle cx="26" cy="38" r="3.6" opacity=".55"/>
            <circle cx="22" cy="16" r="2.2"/><circle cx="34" cy="13" r="1.9"/>
            <path d="M54 14v18M49 27l5 5 5-5" fill="none" stroke="currentColor" stroke-width="3"
+           stroke-linecap="round" stroke-linejoin="round"/>`,
+  waterdensity:`<path d="M12 9v12L6 42a5 5 0 0 0 4.6 7h23.8A5 5 0 0 0 39 42L33 21V9" fill="none"
+           stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+           <path d="M8 9h29" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+           <path d="M8 33h29" stroke="currentColor" stroke-width="3" opacity=".55"/>
+           <rect x="12" y="22" width="11" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="3"/>
+           <rect x="24" y="24" width="8" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="3"/>
+           <path d="M46 14v34h14" fill="none" stroke="currentColor" stroke-width="2.6" opacity=".5"
+           stroke-linecap="round" stroke-linejoin="round"/>
+           <path d="M46 20c5 0 6 16 9 16s5-8 5-8" fill="none" stroke="currentColor" stroke-width="3.4"
            stroke-linecap="round" stroke-linejoin="round"/>`,
   redox:`<rect x="5" y="16" width="35" height="14" rx="7" fill="none" stroke="currentColor" stroke-width="4"/>
          <circle cx="14" cy="23" r="2.4"/><circle cx="21" cy="23" r="2.4"/><circle cx="28" cy="23" r="2.4"/>

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>물의 밀도와 분자 배열 | 케미랩</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색은 shared/style.css 토큰만. 요소 선택자(button{}, input{})는 쓰지 않는다 (매뉴얼 §12①) */
+  .page{padding:18px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0; line-height:1.6}
+
+  .seatrow{display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; color:var(--t2)}
+  .seatrow .seat{font-family:inherit; font-size:16px; min-height:44px; padding:6px 10px;
+    width:120px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--t1)}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1.5fr) minmax(290px,1fr); gap:14px; margin-top:14px}
+  @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+  .stage canvas{display:block; width:100%}
+  .stagecap{font-size:12px; color:var(--t2); margin:9px 0 0; line-height:1.6; min-height:34px}
+
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0}
+  .btn{font-family:inherit; font-size:14px; font-weight:600; padding:10px 13px; min-height:44px;
+    border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; box-shadow:var(--shadow)}
+  .btn[aria-pressed="true"]{border-color:var(--accent); box-shadow:inset 0 0 0 2px var(--accent);
+    color:var(--accent-dark)}
+  .btn--primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+
+  .segrow{display:flex; gap:7px; flex-wrap:wrap; margin-top:2px}
+  .seg{font-family:inherit; font-size:12.5px; font-weight:600; padding:9px 10px; min-height:44px;
+    border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; flex:1 1 auto}
+  .seg[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+
+  .ctl{margin-bottom:12px}
+  .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
+    font-size:13px; margin-bottom:4px; color:var(--t2); gap:8px}
+  .ctl .row .val{font-variant-numeric:tabular-nums; font-weight:600; color:var(--t1); white-space:nowrap}
+  .rangeends{display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    font-size:11.5px; color:var(--t3); margin-top:4px}
+
+  .ros{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px}
+  .ros .readout{padding:9px 10px}
+  .ros .wide{grid-column:1 / -1}
+
+  .chkrow{display:flex; align-items:center; gap:9px; min-height:44px; font-size:13px; color:var(--t2);
+    cursor:pointer; margin-top:4px}
+
+  /* 두 경쟁 효과 */
+  .split{margin-top:12px; border:1px solid var(--line); border-radius:10px; padding:10px 11px;
+    background:var(--panel)}
+  .split h3{margin:0 0 8px; font-size:12.5px; color:var(--t2); font-weight:700}
+  .split .lane{display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:11.5px; color:var(--t2)}
+  .split .lane .nm{width:74px; flex:none}
+  .split .track{flex:1; height:12px; background:#eef1f5; border-radius:6px; overflow:hidden}
+  .split .bar{height:100%; border-radius:6px}
+  .split .bar.s{background:var(--d-violet)}
+  .split .bar.t{background:var(--d-red)}
+  .splitnet{font-size:12.5px; font-weight:700; margin-top:7px}
+  .splitnet.is-down{color:var(--d-violet)}
+  .splitnet.is-up{color:var(--d-red)}
+  .split .val{font-size:11px; color:var(--t3); font-variant-numeric:tabular-nums}
+
+  .segtab{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px}
+  .segtab th,.segtab td{padding:6px 8px; border-bottom:1px solid var(--line); text-align:left}
+  .segtab th{color:var(--t3); font-weight:600; background:#f8fafc; width:44%}
+  .segtab td{color:var(--t1); font-weight:600}
+
+  .graphcard{margin-top:14px}
+  .databar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px}
+  .datab{font-family:inherit; font-size:13.5px; font-weight:600; padding:10px 12px; min-height:44px;
+    border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--t2); cursor:pointer}
+  .datab[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .note{font-size:12.5px; color:var(--t2); line-height:1.65; margin:10px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .note b{color:var(--t1)}
+  .note--warn{border-color:var(--d-amber)}
+
+  .sheet{margin-top:16px}
+  .sheet ol{margin:0; padding-left:20px; font-size:13.5px; color:var(--t2); line-height:1.9}
+  .sheet .tag{display:inline-block; font-size:10.5px; font-weight:700; color:#fff; background:var(--d-gray);
+    border-radius:5px; padding:1px 6px; margin-right:6px; vertical-align:1px}
+  .sheet .tag.obs{background:var(--d-cyan)} .sheet .tag.rel{background:var(--d-blue)}
+  .sheet .tag.exp{background:var(--d-green)} .sheet .tag.mdl{background:var(--d-violet)}
+  .sheet .tag.lim{background:var(--d-amber)}
+  .limits{margin-top:14px; font-size:12px; color:var(--t3); line-height:1.75}
+  .limits h3{margin:0 0 5px; font-size:13px; color:var(--t2)}
+  .limits ol{margin:0; padding-left:19px}
+  .legend2{margin-top:9px}
+</style>
+</head>
+<body>
+<div class="wrap page">
+
+<div class="head">
+  <h1>물의 밀도와 분자 배열</h1>
+  <p class="sub">비커에 담긴 <b>−4 ℃ 얼음</b>을 <b>10 ℃</b>까지 가열하면서, 온도 구간마다
+     물 1 g의 부피와 밀도가 어떻게 달라지는지 봅니다. 같은 실험을 <b>분자 배열</b>로 바꿔 보면,
+     달라지는 것이 분자의 크기도 개수도 아니라 <b>배열</b>이라는 것이 보입니다.</p>
+</div>
+
+<div class="seatrow">
+  <label for="seat">좌석번호</label>
+  <input class="seat" id="seat" type="text" inputmode="numeric" placeholder="예) 2-07">
+  <span style="font-size:12px;color:var(--t3)">기록용입니다. 저장되지 않습니다.</span>
+</div>
+
+<div class="cols">
+  <!-- 왼쪽: 무대 -->
+  <div>
+    <div class="card">
+      <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">−4 ℃ 얼음을 10 ℃까지 가열하기</h2>
+      <div class="stage stage--light">
+        <canvas id="stageCv" aria-label="비커에 담긴 얼음과 물을 옆에서 본 그림. 왼쪽에 온도계, 오른쪽에 액면을 확대한 자가 있습니다. 버튼을 누르면 같은 상태를 물 분자의 배열로 바꿔 봅니다."></canvas>
+      </div>
+      <p class="stagecap" id="stageCap"></p>
+
+      <div class="btnrow">
+        <button class="btn btn--primary" id="viewBtn" aria-pressed="false">분자 배열로 보기</button>
+        <button class="btn" id="playBtn" aria-pressed="false">▶ 가열</button>
+        <button class="btn" id="resetBtn">처음으로</button>
+      </div>
+
+      <label class="chkrow" id="motionRow" style="display:none">
+        <input type="checkbox" id="motionChk">
+        <span>분자의 흔들림 보이기 &mdash; 꺼 두면 <b>배열</b>만 보입니다.
+              실제 분자는 어느 상태에서도 끊임없이 움직입니다.</span>
+      </label>
+      <p class="note" id="openRow" style="display:none">
+        <b>성긴 국소 배열</b>은 &ldquo;물속에 떠 있는 작은 얼음 조각&rdquo;이 아닙니다.
+        얼음과 비슷하게 <b>성기게 놓인 한때의 배치</b>이고, 끊임없이 무너졌다 다시 생깁니다.
+        온도가 오르면 그 수가 줄어듭니다.
+      </p>
+    </div>
+  </div>
+
+  <!-- 오른쪽: 조작과 측정값 -->
+  <div>
+    <div class="card">
+      <div class="ctl">
+        <div class="row"><label for="prog">가열 진행</label><span class="val" id="sVal">&mdash;</span></div>
+        <input type="range" id="prog" class="rng-temp" min="0" max="1000" step="1" value="0">
+        <div class="rangeends"><span>−4 ℃ 얼음</span><span>10 ℃ 물</span></div>
+      </div>
+
+      <div class="segrow" role="group" aria-label="온도 구간 이동">
+        <button class="seg" data-seg="0" aria-pressed="true">−4→0 ℃<br>고체</button>
+        <button class="seg" data-seg="1" aria-pressed="false">0 ℃<br>융해</button>
+        <button class="seg" data-seg="2" aria-pressed="false">0→4 ℃<br>액체</button>
+        <button class="seg" data-seg="3" aria-pressed="false">4→10 ℃<br>액체</button>
+      </div>
+
+      <div class="ros">
+        <div class="readout"><div class="label">온도</div>
+          <div><span class="value" id="vT">&minus;4.0</span><span class="unit">℃</span></div></div>
+        <div class="readout"><div class="label">상태</div>
+          <div><span class="value" id="vPhase" style="font-size:15px">고체</span></div></div>
+
+        <div class="readout"><div class="label">물 1 g의 부피</div>
+          <div><span class="value" id="vVol">&mdash;</span><span class="unit">cm³</span></div></div>
+        <div class="readout"><div class="label">밀도</div>
+          <div><span class="value" id="vRho">&mdash;</span><span class="unit">g/cm³</span></div></div>
+
+        <div class="readout"><div class="label">수소 결합 수 (모형)</div>
+          <div><span class="value" id="vHb">&mdash;</span><span class="unit">개/분자</span></div></div>
+        <div class="readout"><div class="label">가한 열 (물 1 g)</div>
+          <div><span class="value" id="vQ">0</span><span class="unit">J</span></div></div>
+      </div>
+
+      <table class="segtab">
+        <tr><th>지금 구간</th><td id="segName">&mdash;</td></tr>
+        <tr><th>물 1 g의 부피 변화</th><td id="segVol">&mdash;</td></tr>
+        <tr><th>밀도 변화</th><td id="segRho">&mdash;</td></tr>
+        <tr><th>성긴 국소 배열</th><td><span id="vOpen">&mdash;</span> 곳</td></tr>
+      </table>
+
+      <div class="split" id="splitBox" style="display:none">
+        <h3>액체 구간에서 겨루는 두 가지</h3>
+        <div class="lane"><span class="nm">구조 붕괴</span>
+          <span class="track"><span class="bar s" id="barStruct" style="width:0%"></span></span>
+          <span>↓ 줄인다</span></div>
+        <div class="lane"><span class="nm">열팽창</span>
+          <span class="track"><span class="bar t" id="barTherm" style="width:0%"></span></span>
+          <span>↑ 늘린다</span></div>
+        <div class="splitnet" id="splitNet">&mdash;</div>
+        <div class="val">합(실측 기울기) <span id="splitVal">&mdash;</span></div>
+        <p style="font-size:11px;color:var(--t3);line-height:1.6;margin:7px 0 0">
+          두 막대의 <b>길이</b>는 「보통 액체 수준의 열팽창(4×10⁻⁴ /K)」을 가정해 나눈 도식입니다.
+          <b>합만 실측값</b>입니다. 다만 두 몫이 뒤집히는 온도(3.98 ℃)는 그 가정과 <b>무관</b>합니다 &mdash;
+          합이 0이 되는 온도이기 때문입니다.
+        </p>
+      </div>
+
+      <label class="chkrow">
+        <input type="checkbox" id="bookChk">
+        <span>교과서 그림 Ⅱ-5의 눈금값 함께 보기</span>
+      </label>
+      <p class="note note--warn" style="font-size:11.5px">
+        <b>교과서 50쪽 그림 Ⅱ-5와 다른 값이 하나 있습니다.</b>
+        0 ℃ 얼음 1.0905 cm³와 밀도 눈금 0.9170·1.0000은 이 화면과 같습니다. 그런데
+        <b>0 ℃ 물의 부피</b>는 교과서와 학습지가 <b>1.0020 cm³</b>로 적었고, 실제 측정값은
+        <b><span id="bookGap">1.0002</span> cm³</b>입니다(0 ℃ 물의 밀도 0.99984 g/cm³).
+        이 화면은 <b>실측값</b>을 씁니다.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- 그래프 (전체 폭) -->
+<div class="card graphcard">
+  <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">온도에 따라 무엇을 볼지 하나 고르세요</h2>
+  <div class="databar" role="group" aria-label="표시할 데이터 선택">
+    <button class="datab" data-data="vol" aria-pressed="true">물 1 g의 부피</button>
+    <button class="datab" data-data="rho" aria-pressed="false">밀도</button>
+    <button class="datab" data-data="hb" aria-pressed="false">수소 결합 수</button>
+  </div>
+  <div class="stage stage--light">
+    <canvas id="graphCv" aria-label="가로축이 온도, 세로축이 고른 데이터인 그래프. 세로축이 물결 모양으로 끊겨 있어 위 띠와 아래 띠의 배율이 다릅니다."></canvas>
+  </div>
+  <p class="note" id="dataNote"></p>
+  <div class="legend legend2">
+    <span class="item"><span class="swatch" style="background:var(--d-cyan)"></span>얼음 가지</span>
+    <span class="item"><span class="swatch" style="background:var(--d-blue)"></span>물 가지</span>
+    <span class="item"><span class="swatch sq" style="background:var(--d-red)"></span>0 ℃ 융해(세로 이동)</span>
+    <span class="item" style="color:var(--d-violet)"><span class="swatch tri"></span>밀도가 가장 큰 온도 (마름모)</span>
+  </div>
+</div>
+
+<!-- 활동지 -->
+<div class="card sheet">
+  <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">확인해 볼 것</h2>
+  <ol>
+    <li><span class="tag obs">관찰</span> 네 구간 버튼을 차례로 눌러, 각 구간에서 <b>물 1 g의 부피</b>와
+        <b>밀도</b>가 늘어나는지 줄어드는지 표에 적어 보자. (학습지 2-(2) 표)</li>
+    <li><span class="tag obs">관찰</span> 「분자 배열로 보기」를 누르고 <b>0 ℃ 융해</b> 구간을 지나가 보자.
+        육각 고리 <b>안쪽의 노란 면</b>은 무엇이 되었는가?</li>
+    <li><span class="tag rel">관계</span> 얼음과 물 중 <b>분자 사이의 빈 공간이 많은</b> 쪽은 어디인가?
+        무엇을 근거로 그렇게 말할 수 있는가? (학습지 2-(1))</li>
+    <li><span class="tag exp">설명</span> 데이터를 <b>수소 결합 수</b>로 바꿔 보자.
+        온도가 오를 때 결합 수는 <b>계속 줄어든다</b>. 그런데 부피는 <b>줄었다가 늘어난다</b>.
+        &ldquo;얼음의 밀도가 작은 것은 수소 결합이 <b>많아서</b>&rdquo;라는 설명이 왜 부족한지 써 보자.</li>
+    <li><span class="tag exp">설명</span> 0~4 ℃에서 <b>겨루는 두 가지</b> 막대를 보자.
+        4 ℃보다 낮을 때와 높을 때, 이기는 쪽이 어떻게 바뀌는가?</li>
+    <li><span class="tag mdl">모형</span> 분자 화면 왼쪽 아래의 <b>분자 지름 참조 눈금</b>은
+        어느 온도에서도 크기가 같다. 이것으로 어떤 생각을 반박할 수 있는가?</li>
+    <li><span class="tag lim">한계</span> 「교과서 그림 Ⅱ-5의 눈금값 함께 보기」를 켜 보자.
+        <b>0 ℃ 물의 부피</b>가 이 화면과 교과서에서 다르다. 왜 이런 차이가 생겼을지,
+        그리고 그래프의 <b>세로 축이 끊겨 있는</b> 것과 어떤 관계가 있을지 이야기해 보자.</li>
+  </ol>
+
+  <div class="limits">
+    <h3>이 모형의 가정과 한계</h3>
+    <ol>
+      <li><b>분자 화면은 2차원 모형입니다.</b> 실제 얼음은 3차원 <b>정사면체 개방 구조</b>이고
+          화면의 육각 고리는 그 한 단면입니다. 네 번째 수소 결합은 화면의 <b>앞뒤 방향</b>이라
+          짧은 H로 그렸습니다.</li>
+      <li>분자 화면의 <b>상자 넓이</b>가 「물 1 g의 부피」에 비례하도록 잡았습니다.
+          같은 개수의 분자가 차지하는 넓이를 부피로 읽으라는 뜻이며, 실제 3차원 부피의 비와는
+          정의가 다릅니다.</li>
+      <li>0~10 ℃ 액체 구간의 부피 변화는 <b>0.03 %</b>뿐입니다. 비커 그림에서는 보이지 않아
+          오른쪽에 <b>액면을 수백 배 확대한 자</b>를 따로 두었습니다. 배율은 화면에 표시됩니다.</li>
+      <li>비커 그림은 얼음과 물을 <b>위아래로 나누어</b> 그린 도식입니다. 전체 높이(= 전체 부피)는
+          정확하지만, 실제로 물에 뜬 얼음은 부피의 약 92 %가 물에 잠깁니다.</li>
+      <li><b>수소 결합 수는 모형 값</b>입니다. 「무엇을 수소 결합으로 셀 것인가」의 기준에 따라
+          3.2~3.9로 달라집니다. 읽을 것은 두 가지뿐입니다 &mdash;
+          얼음과 물의 차이가 크지 않다는 것, 그리고 온도가 오르면 계속 줄어든다는 것.</li>
+      <li><b>두 경쟁 효과 막대의 길이는 가정</b>입니다(보통 액체 수준의 열팽창 4×10⁻⁴ /K).
+          두 몫의 <b>합</b>만 실측값이고, 뒤집히는 온도 3.98 ℃는 그 가정과 무관합니다.</li>
+      <li>가열 진행 슬라이더는 <b>열량에 비례하지 않습니다.</b> 네 구간에 같은 길이를 주었습니다.
+          실제로는 융해에만 전체 열의 <b>87 %</b>가 듭니다 &mdash; 「가한 열」 값으로 확인하세요.</li>
+      <li>얼음의 팽창 계수는 0 ℃ 부근의 값(1.65×10⁻⁴ /K)을 상수로 썼습니다.
+          −10 ℃보다 훨씬 낮은 온도에서는 맞지 않습니다. 과냉각·압력 변화·용해된 기체는 다루지 않습니다.</li>
+      <li>기본 화면에서는 분자의 <b>진동과 이동을 멈춰</b> 두었습니다. 배열 변화에 집중하기 위한
+          것이며, 실제 분자는 고체에서도 끊임없이 진동합니다.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="site-foot">케미랩</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="waterdensity"></script>
+<script src="../shared/qr.js" data-base=".." data-current="waterdensity"></script>
+<script src="sim.js"></script>
+</body>
+</html>
