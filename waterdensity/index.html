@@ -33,6 +33,14 @@
     border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
     cursor:pointer; flex:1 1 auto}
   .seg[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  /* 재생 중인 구간 — 칩 «아래»에 흰 막대가 차오른다.
+     칩 배경 자체를 밝게 칠하면 흰 글자의 대비가 2.3:1로 떨어진다(§4 C6). 배경은 그대로 둔다 */
+  .seg.is-playing[aria-pressed="true"]{position:relative; overflow:hidden}
+  .seg.is-playing[aria-pressed="true"]::after{
+    content:""; position:absolute; left:0; bottom:0; height:4px;
+    width:var(--fill,0%); background:rgba(255,255,255,.92)}
+  .seghelp{font-size:11.5px; color:var(--t3); line-height:1.6; margin:7px 0 0}
+  .seghelp b{color:var(--t2)}
 
   .ctl{margin-bottom:12px}
   .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
@@ -119,7 +127,8 @@
 
       <div class="btnrow">
         <button class="btn btn--primary" id="viewBtn" aria-pressed="false">분자 배열로 보기</button>
-        <button class="btn" id="playBtn" aria-pressed="false">▶ 가열</button>
+        <button class="btn" id="playBtn" aria-pressed="false">▶ 이어서 가열</button>
+        <button class="btn" id="againBtn">⟲ 이 구간 다시</button>
         <button class="btn" id="resetBtn">처음으로</button>
       </div>
 
@@ -145,12 +154,14 @@
         <div class="rangeends"><span>−4 ℃ 얼음</span><span>10 ℃ 물</span></div>
       </div>
 
-      <div class="segrow" role="group" aria-label="온도 구간 이동">
-        <button class="seg" data-seg="0" aria-pressed="true">−4→0 ℃<br>고체</button>
-        <button class="seg" data-seg="1" aria-pressed="false">0 ℃<br>융해</button>
-        <button class="seg" data-seg="2" aria-pressed="false">0→4 ℃<br>액체</button>
-        <button class="seg" data-seg="3" aria-pressed="false">4→10 ℃<br>액체</button>
+      <div class="segrow" role="group" aria-label="구간별 가열 재생">
+        <button class="seg" data-seg="0" aria-pressed="true">▶ −4→0 ℃<br>고체</button>
+        <button class="seg" data-seg="1" aria-pressed="false">▶ 0 ℃<br>융해</button>
+        <button class="seg" data-seg="2" aria-pressed="false">▶ 0→4 ℃<br>액체</button>
+        <button class="seg" data-seg="3" aria-pressed="false">▶ 4→10 ℃<br>액체</button>
       </div>
+      <p class="seghelp">구간을 누르면 그 구간만 <b>7.5초</b>에 걸쳐 가열합니다.
+        재생 중에 <b>「분자 배열로 보기」</b>를 눌러도 실험은 그대로 이어집니다.</p>
 
       <div class="ros">
         <div class="readout"><div class="label">온도</div>

@@ -78,7 +78,12 @@ const WATERD = {
   RING_JITTER: 0.09,     // 고리 중심을 칸 안에서 흔드는 폭 (칸 크기 대비)
   RING_WOBBLE: 0.05,     // 고리를 일그러뜨리는 폭 (±5 % — 정육각형으로 보이지 않게)
   RING_SPILL: 1.25,      // 고리가 풀릴 때 여섯 분자가 흩어지는 반지름
-  SEED: 20260904         // 배열 생성 씨앗 — 고정이라 언제나 같은 그림이 나온다
+  SEED: 20260904,        // 배열 생성 씨앗 — 고정이라 언제나 같은 그림이 나온다
+
+  /* 구간 하나를 «재생»하는 데 걸리는 시간 (초).
+     사용자 지시: 「각 구간마다 7~8 초 동안 거시적·미시적 변화를 모두 관찰할 수 있도록」.
+     전체 재생은 네 구간을 이어 붙여 SEG_SEC × 4 = 30 초다. */
+  SEG_SEC: 7.5
 };
 
 /* ───────────────────────── 물성 ───────────────────────── */
@@ -699,12 +704,29 @@ const S = {
   view: "macro",        // "macro" | "micro"
   data: "vol",          // "vol" | "rho" | "hb"
   running: false,
+  playSeg: null,        // null = 네 구간 연속 재생 · 0~3 = 그 구간만 재생
+  done: false,          // 방금 재생이 끝났는가 (「다시 보기」 안내를 띄운다)
   motion: false,        // 분자 진동·이동 보이기 (기본 꺼짐 — 배열에 집중)
   showBook: false,      // 교과서 그림 Ⅱ-5 값 함께 보기
   t0: 0
 };
 const RM = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const RUN_SEC = 26;     // 처음부터 끝까지 자동으로 가열하는 데 걸리는 시간
+/* 진행 s 는 네 구간을 «같은 길이»로 나눈 값이라 구간 하나가 s 로 0.25 다.
+   초당 진행을 0.25/SEG_SEC 로 두면 구간 하나가 정확히 SEG_SEC 초에 지나간다. */
+const S_PER_SEC = 0.25 / WATERD.SEG_SEC;
+
+/* 재생 시작. seg 가 null 이면 지금 자리에서 끝까지, 숫자면 그 구간을 «처음부터». */
+function playFrom(seg) {
+  S.playSeg = seg;
+  S.done = false;
+  if (seg === null) { if (S.s >= 1 - 1e-9) S.s = 0; }
+  else S.s = WATERD.SEG[seg];
+  S.running = true;
+}
+/* 지금 재생이 멈춰야 하는 지점 */
+function playEnd() {
+  return S.playSeg === null ? 1 : WATERD.SEG[S.playSeg + 1];
+}
 
 /* ───────────────────────── 캔버스 준비 ───────────────────────── */
 function fitCanvas(cv, hCss) {
@@ -957,7 +979,12 @@ function drawMicro(st, time) {
   const boxLblW = g.measureText(boxLbl).width;
 
   /* 흔들림 — 기본은 꺼져 있다(사용자 지시: 배열 변화에 집중) */
-  const amp = (S.motion && !RM) ? (st.phase === "ice" ? 0.035 : 0.075) : 0;
+  /* 흔들림 진폭은 온도에 따라 커진다 — 교과서 50쪽 「분자 운동이 활발해지면서
+     분자 사이의 거리가 멀어져 부피가 증가한다」가 고체 구간에서 실제로 일어나는 일이다.
+     기본은 꺼져 있다(사용자 지시: 배열 변화에 집중). */
+  const amp = (S.motion && !RM)
+    ? (st.phase === "ice" ? 0.018 + 0.030 * (st.t - WATERD.T_START) / 4 : 0.075)
+    : 0;
   const jit = function (i, k) {
     if (!amp) return 0;
     return Math.sin(time * (1.1 + (i % 7) * 0.13) + i * 2.4 + k * 1.7) * amp;
@@ -1365,10 +1392,15 @@ function update() {
   $("segRho").textContent = SEGRHO[st.seg];
   $("sVal").textContent = SEGNAME[st.seg];
 
-  /* 구간 칩 */
+  /* 구간 칩 — 지금 구간을 눌린 상태로 두고, 재생 중이면 그 구간 안의 진행을 칩에 채운다 */
   const chips = document.querySelectorAll(".seg");
-  for (let i = 0; i < chips.length; i++)
-    chips[i].setAttribute("aria-pressed", (+chips[i].dataset.seg === st.seg) ? "true" : "false");
+  for (let i = 0; i < chips.length; i++) {
+    const on = (+chips[i].dataset.seg === st.seg);
+    chips[i].setAttribute("aria-pressed", on ? "true" : "false");
+    const playing = on && S.running;
+    chips[i].classList.toggle("is-playing", playing);
+    chips[i].style.setProperty("--fill", playing ? (st.u * 100).toFixed(1) + "%" : "0%");
+  }
 
   /* 두 경쟁 효과 */
   const box = $("splitBox");
@@ -1391,13 +1423,18 @@ function update() {
   /* 슬라이더·버튼 */
   const sl = $("prog");
   if (Math.abs(+sl.value / 1000 - S.s) > 1e-6) sl.value = Math.round(S.s * 1000);
-  $("playBtn").textContent = S.running ? "❚❚ 멈춤" : "▶ 가열";
+  $("playBtn").textContent = S.running ? "❚❚ 멈춤" : (S.s >= 1 - 1e-9 ? "▶ 처음부터 가열" : "▶ 이어서 가열");
   $("playBtn").setAttribute("aria-pressed", S.running ? "true" : "false");
+  $("againBtn").textContent = "⟲ 이 구간 다시 (" + WATERD.SEG_SEC + "초)";
   $("viewBtn").textContent = S.view === "macro" ? "분자 배열로 보기" : "비커로 돌아가기";
   $("viewBtn").setAttribute("aria-pressed", S.view === "micro" ? "true" : "false");
-  $("stageCap").textContent = S.view === "macro"
-    ? "비커 속 −4 ℃ 얼음을 10 ℃까지 가열합니다. 담긴 것의 «전체 높이»가 곧 부피입니다."
-    : "같은 실험을 분자 크기로 본 것입니다. 분자 수와 분자 지름은 그대로이고, 달라지는 것은 배열입니다.";
+
+  /* 무대 아래 안내 — 구간마다 「지금 어디를 보아야 하는가」가 다르다.
+     0.03 % 밖에 안 변하는 구간에서 「분자를 보라」고 하면 학생이 헛본다. */
+  const hint = (S.view === "macro" ? MACRO_HINT : MICRO_HINT)[st.seg];
+  $("stageCap").textContent =
+    (S.running ? "▶ 재생 중 (" + (st.u * WATERD.SEG_SEC).toFixed(1) + " / " + WATERD.SEG_SEC + "초) — " : "") +
+    hint + (S.done && !S.running ? "  ✓ 이 구간이 끝났습니다 — 배율을 바꿔 한 번 더 보세요." : "");
 
   const mo = $("motionRow");
   mo.style.display = S.view === "micro" ? "flex" : "none";
@@ -1418,8 +1455,9 @@ function loop(ts) {
   const dt = lastT ? Math.min(0.05, (ts - lastT) / 1000) : 0;
   lastT = ts;
   if (S.running) {
-    S.s += dt / RUN_SEC;
-    if (S.s >= 1) { S.s = 1; S.running = false; }
+    S.s += dt * S_PER_SEC;
+    const end = playEnd();
+    if (S.s >= end - 1e-9) { S.s = end; S.running = false; S.done = true; }
     update();
   } else if (S.motion && !RM && S.view === "micro") {
     draw();
@@ -1429,23 +1467,29 @@ function loop(ts) {
 /* ───────────────────────── 이벤트 ───────────────────────── */
 function bind() {
   $("prog").addEventListener("input", function () {
-    S.s = +this.value / 1000; S.running = false; update();
+    S.s = +this.value / 1000; S.running = false; S.playSeg = null; S.done = false; update();
   });
   $("playBtn").addEventListener("click", function () {
-    if (S.s >= 1) S.s = 0;
-    S.running = !S.running; update();
+    if (S.running) { S.running = false; }
+    else playFrom(null);
+    update();
+  });
+  /* ⟲ 이 구간 다시 — 지금 있는 구간을 «처음부터» 7.5 초에 걸쳐 재생한다.
+     같은 구간을 거시로 한 번, 분자로 한 번 보게 하려는 버튼이다. */
+  $("againBtn").addEventListener("click", function () {
+    playFrom(stateAt(S.s).seg); update();
   });
   $("resetBtn").addEventListener("click", function () {
-    S.s = 0; S.running = false; update();
+    S.s = 0; S.running = false; S.playSeg = null; S.done = false; update();
   });
   $("viewBtn").addEventListener("click", function () {
-    S.view = S.view === "macro" ? "micro" : "macro"; update();
+    S.view = S.view === "macro" ? "micro" : "macro"; update();   // 재생 중이면 그대로 이어진다
   });
+  /* 구간 칩 = 그 구간의 «재생» 버튼이다 (예전처럼 건너뛰기만 하지 않는다) */
   const chips = document.querySelectorAll(".seg");
   for (let i = 0; i < chips.length; i++) {
     chips[i].addEventListener("click", function () {
-      S.s = progressAt(+this.dataset.seg, 0.001);
-      S.running = false; update();
+      playFrom(+this.dataset.seg); update();
     });
   }
   const dbtn = document.querySelectorAll(".datab");
@@ -1472,6 +1516,22 @@ function bind() {
     else if (!rafId) { lastT = 0; rafId = requestAnimationFrame(loop); }
   });
 }
+
+/* 구간별 관찰 안내 — 학습지 표의 네 행 순서 그대로.
+   ★ 「보이지 않는 것」을 보라고 하지 않는다. 0~4·4~10 ℃ 의 부피 변화는 0.03 % 라
+     비커에서는 보이지 않으므로 액면 확대 자·그래프·막대로 안내한다. */
+const MACRO_HINT = [
+  "얼음이 아주 조금 팽창합니다(0.07 %). 비커에서는 보이지 않으니 온도계와 오른쪽 «액면 확대 자»를 보세요.",
+  "얼음이 녹으면서 물이 차오르고 «전체 높이»가 내려갑니다 — 이 구간만 눈으로 바로 보입니다(−8.3 %).",
+  "물이 더 «촘촘»해집니다. 변화가 0.01 %라 액면 확대 자에서만 내려가는 것이 보입니다.",
+  "이제 열팽창이 이겨 다시 늘어납니다. 액면 확대 자가 방향을 바꿔 올라갑니다."
+];
+const MICRO_HINT = [
+  "육각 고리와 노란 «빈 공간»을 봐 두세요. 이 구간에서 실제로 달라지는 것은 분자의 흔들림입니다 — 아래 체크박스를 켜 보세요.",
+  "육각 고리가 아래부터 «무너지고», 고리 안쪽 빈 공간이 다른 물 분자로 채워집니다.",
+  "남아 있던 «성긴 국소 배열»이 하나씩 풀립니다. 표의 「성긴 국소 배열」 수를 세어 보세요.",
+  "배열은 더 흐트러지지 않습니다. 이 구간에서 이기는 것은 열팽창이라 오른쪽 «겨루는 두 가지» 막대를 보세요."
+];
 
 const DATANOTE = {
   vol: "학습지 표의 「물 1 g의 부피 변화」 열입니다. 세로 축이 끊겨 있습니다 — 위 띠와 아래 띠의 배율이 다릅니다.",
