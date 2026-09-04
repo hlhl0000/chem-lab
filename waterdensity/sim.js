@@ -740,6 +740,70 @@ function segMaxDisp(seg) {
   return SEG_MAXDISP[seg];
 }
 
+/* ── 분자 돋보기가 확대해 보일 「이웃 한 쌍」 ───────────────────────────
+   −4→0 ℃ 와 4→10 ℃ 에서 달라지는 것은 «분자 사이 거리»뿐이다(0.033 % · 0.014 %).
+   거시 화면이 액면을 원형 돋보기로 확대해 보이듯, 분자 화면도 «이웃 한 쌍»을 확대해
+   그 사이가 벌어지는 것을 보인다(사용자 지시 2026-09-04).
+   ★ 쌍은 상자 «가운데»에 가장 가까운 것을 고른다 — 가장자리 쌍은 상자 선에 겹친다.
+   ★ 얼음 구간은 실제 수소 결합 쌍, 액체 구간은 가장 가까운 이웃 쌍이다.
+   ★ 판정기·라벨이 쓰는 거리는 렌더가 쓰는 «그 좌표»에서 잰다(원칙 11). */
+/* ⚠ 돋보기를 쓰는 구간은 «배열이 안 바뀌는» 0 과 3 뿐이다.
+   0→4 ℃(구간 2)에서는 한 쌍의 거리가 성긴 고리가 풀리며 +9.6 % 나 벌어지는데
+   «부피는 오히려 줄어든다». 그 구간에 한 쌍만 확대해 보이면 정반대로 읽힌다. */
+function loupeSeg(seg) { return seg === 0 || seg === 3; }
+const LOUPE_PAIR = [];
+function loupePair(seg) {
+  if (LOUPE_PAIR[seg] !== undefined) return LOUPE_PAIR[seg];
+  if (!loupeSeg(seg)) { LOUPE_PAIR[seg] = null; return null; }
+  const A = segStartArrangement(seg), cx = A.W / 2, cy = A.H / 2;
+  let best = null;
+  const consider = function (i, j) {
+    const mx = (A.pos[i].x + A.pos[j].x) / 2, my = (A.pos[i].y + A.pos[j].y) / 2;
+    const d2 = (mx - cx) * (mx - cx) + (my - cy) * (my - cy);
+    if (!best || d2 < best.d2) best = { i: i, j: j, d2: d2 };
+  };
+  if (seg === 0) {
+    LAT.bonds.forEach(function (b) { consider(b[0], b[1]); });
+  } else {
+    for (let i = 0; i < NMOL; i++)
+      for (let j = i + 1; j < NMOL; j++) {
+        const dx = A.pos[i].x - A.pos[j].x, dy = A.pos[i].y - A.pos[j].y;
+        if (dx * dx + dy * dy > 1.05 * 1.05) continue;      // 맞닿은 이웃만
+        consider(i, j);
+      }
+  }
+  LOUPE_PAIR[seg] = best;
+  return best;
+}
+/* 그 쌍의 중심 간 거리 (모형 단위) */
+function pairDist(pos, pr) {
+  const dx = pos[pr.i].x - pos[pr.j].x, dy = pos[pr.i].y - pos[pr.j].y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+/* 구간 «끝»에서 그 거리가 얼마나 달라지는가 (모형 단위). 돋보기 배율의 근거다. */
+const SEG_PAIR_SPAN = [];
+function segPairSpan(seg) {
+  if (SEG_PAIR_SPAN[seg] !== undefined) return SEG_PAIR_SPAN[seg];
+  const pr = loupePair(seg);
+  if (!pr) { SEG_PAIR_SPAN[seg] = 0; return 0; }
+  const a = pairDist(segStartArrangement(seg).pos, pr);
+  const b = pairDist(arrangementAt(stateAt(progressAt(seg, 0.9999))).pos, pr);
+  SEG_PAIR_SPAN[seg] = b - a;
+  return SEG_PAIR_SPAN[seg];
+}
+
+/* 분자 돋보기의 반지름 — 거시 화면의 액면 돋보기보다 «크게» 잡는다.
+   분자 화면에서는 이 돋보기가 관찰의 중심이기 때문이다(사용자 지시 2026-09-04).
+   거시 액면 돋보기는 rulerW/2−6 이라 최대 42 px 다. waterdensity_check.js 가 둘을 견준다. */
+function microLoupeR(w) {
+  const wide = w >= 560;
+  return Math.round(Math.max(40, Math.min(84, w * (wide ? 0.118 : 0.150))));
+}
+/* 거시 액면 돋보기의 반지름 — drawMacro 가 쓰는 그 식 그대로 */
+function macroLoupeR(w) {
+  return Math.min(96, Math.max(66, w * 0.15)) / 2 - 6;
+}
+
 /* Node 에서 검증 스크립트가 쓸 수 있게 (브라우저에서는 무시된다) */
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
@@ -749,7 +813,8 @@ if (typeof module !== "undefined" && module.exports) {
     dvdt, volumeSplit, mulberry32, iceLattice, iceRings, orientBonds,
     moleculeOrient, relax, waterArrangements, boxScale, detectRings,
     LAT, RINGS, ORIENT, MOL, NMOL, kW, WATER, MATCH, MELT_ORDER,
-    arrangementAt, arrangementCached, D_RENDER, segStartArrangement, segMaxDisp
+    arrangementAt, arrangementCached, D_RENDER, segStartArrangement, segMaxDisp,
+    loupePair, pairDist, segPairSpan, loupeSeg, microLoupeR, macroLoupeR
   };
 }
 
@@ -1079,10 +1144,137 @@ function drawLoupe(g, cx, colTop, colH, R, st, pxPerV, ax, ay, narrow, fillCol) 
 }
 
 /* ───────────────────────── 분자 화면 ───────────────────────── */
+/* ── 분자 돋보기 ────────────────────────────────────────────────────
+   −4→0 ℃ 와 4→10 ℃ 에서 바뀌는 것은 «분자 사이 거리»뿐이다(0.033 % · 0.014 %).
+   거시 화면이 액면을 원형 돋보기로 확대해 보이는 것과 «같은 방식»으로,
+   이웃 한 쌍을 확대해 그 사이가 벌어지는 것을 보인다.
+     · 회색 파선 원 = 이 구간이 시작될 때의 자리
+     · 채운 분자   = 지금
+     · 황갈 화살표 = 그 차이
+   ★ 확대하는 것은 «차이»다. 두 분자를 통째로 수천 배 그릴 수는 없다 —
+     그래서 왼쪽 분자를 고정하고 오른쪽 분자의 «어긋난 양»에만 배율을 건다.
+     배율은 구간 끝의 거리 변화에서 유도한다(원칙 13). 화면에 적는다. */
+function drawMicroLoupe(g, cx, cy, R, st, AR, U, ax, ay, bx2, by2, below) {
+  const rL = R * 0.185;
+  /* 알과 테두리 */
+  g.save();
+  g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.clip();
+  g.fillStyle = "#fff"; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+
+  const pr = loupePair(st.seg);
+  const span = segPairSpan(st.seg);
+  let mag = 0, pct = 0, ok = false;
+  if (pr && Math.abs(span) > 1e-12) {
+    ok = true;
+    const dRef = pairDist(segStartArrangement(st.seg).pos, pr);
+    const dNow = pairDist(AR.pos, pr);
+    const full = Math.abs(span) * 1.35;                 // 돋보기가 담는 거리 변화 폭
+    const arm = R * 0.50;                               // 그 폭에 주는 화면 길이
+    const shift = (dNow - dRef) / full * arm;
+    mag = (arm / full) / U;
+    pct = (dNow / dRef - 1) * 100;
+
+    const yC = cy + R * 0.05;
+    const axm = cx - R * 0.40, bxRef = cx + R * 0.40, bxNow = bxRef + shift;
+    /* 수소 결합 점선 */
+    g.strokeStyle = "rgba(80,120,160,0.75)"; g.lineWidth = 2; g.setLineDash([4, 3.5]);
+    g.beginPath(); g.moveTo(axm, yC); g.lineTo(bxNow, yC); g.stroke();
+    g.setLineDash([]);
+    /* 구간 시작 자리 (회색 파선 원) */
+    g.strokeStyle = "rgba(95,107,122,0.95)"; g.lineWidth = 1.8; g.setLineDash([4, 3]);
+    g.beginPath(); g.arc(bxRef, yC, rL, 0, Math.PI * 2); g.stroke();
+    g.setLineDash([]);
+    /* 두 분자 (공-막대 · 왼쪽은 고정) */
+    const mole = function (mx) {
+      const half = WATERD.HOH_DEG / 2 * Math.PI / 180, L = rL * 0.85, rHh = rL * 0.60;
+      for (let k = 0; k < 2; k++) {
+        const a = -Math.PI / 2 + (k ? half : -half);
+        const hx = mx + Math.cos(a) * L, hy = yC + Math.sin(a) * L;
+        g.strokeStyle = "rgba(90,100,112,0.85)"; g.lineWidth = Math.max(1.4, rL * 0.22);
+        g.beginPath(); g.moveTo(mx, yC); g.lineTo(hx, hy); g.stroke();
+        g.fillStyle = CPK_H; g.strokeStyle = H_STROKE; g.lineWidth = 1.1;
+        g.beginPath(); g.arc(hx, hy, rHh, 0, Math.PI * 2); g.fill(); g.stroke();
+      }
+      g.fillStyle = CPK_O; g.strokeStyle = O_STROKE; g.lineWidth = 1.4;
+      g.beginPath(); g.arc(mx, yC, rL, 0, Math.PI * 2); g.fill(); g.stroke();
+    };
+    mole(axm); mole(bxNow);
+    /* 벌어진 양 — 황갈 화살표 */
+    if (Math.abs(shift) > 6) {
+      const dir = shift > 0 ? 1 : -1, ya = yC + rL + 13;
+      g.strokeStyle = C.amber; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(bxRef, ya); g.lineTo(bxNow, ya); g.stroke();
+      g.beginPath();
+      g.moveTo(bxNow, ya); g.lineTo(bxNow - 6 * dir, ya - 4); g.lineTo(bxNow - 6 * dir, ya + 4);
+      g.closePath(); g.fillStyle = C.amber; g.fill();
+      g.strokeStyle = "rgba(95,107,122,0.6)"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(bxRef, yC + rL + 2); g.lineTo(bxRef, ya + 5); g.stroke();
+    }
+    /* 「분자 사이 거리」 치수선 */
+    const yd = yC - rL - 12;
+    g.strokeStyle = C.t3; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(axm, yd + 4); g.lineTo(axm, yd - 4); g.stroke();
+    g.beginPath(); g.moveTo(bxNow, yd + 4); g.lineTo(bxNow, yd - 4); g.stroke();
+    g.beginPath(); g.moveTo(axm, yd); g.lineTo(bxNow, yd); g.stroke();
+    /* 라벨은 알 «가운데»에 맞춘다 — 치수선 가운데에 맞추면 알 밖으로 나가 잘린다(360 px 실측) */
+    g.fillStyle = C.t3; g.font = "9.5px system-ui,sans-serif"; g.textAlign = "center";
+    g.fillText("분자 사이 거리", cx, yd - 7);
+  } else {
+    g.fillStyle = C.t2; g.font = "600 11.5px system-ui,sans-serif"; g.textAlign = "center";
+    const msg = st.seg === 1
+      ? ["융해 구간은", "육각 고리가 무너지는 것이", "화면에 그대로 보입니다"]
+      : ["성긴 배열이 풀리는 것이", "화면에 그대로 보입니다"];
+    msg.forEach(function (line, q) {
+      g.fillText(line, cx, cy - (msg.length - 1) * 8 + q * 16);
+    });
+  }
+  g.restore();
+  g.strokeStyle = C.gray; g.lineWidth = 2.6;
+  g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
+
+  /* 무대 → 돋보기 연결선. 아래에 놓인 배치에서는 «위쪽 호»로 받아야 알을 가로지르지 않는다 */
+  if (ok && ax !== null) {
+    g.strokeStyle = "rgba(120,132,148,0.75)"; g.lineWidth = 1; g.setLineDash([3, 3]);
+    const t1 = below ? [cx - R * 0.70, cy - R * 0.71] : [cx - R * 0.72, cy - R * 0.72];
+    const t2 = below ? [cx + R * 0.70, cy - R * 0.71] : [cx - R * 0.72, cy + R * 0.72];
+    g.beginPath(); g.moveTo(ax, ay); g.lineTo(t1[0], t1[1]); g.stroke();
+    g.beginPath(); g.moveTo(bx2, by2); g.lineTo(t2[0], t2[1]); g.stroke();
+    g.setLineDash([]);
+  }
+
+  /* 라벨 — 상자 «아래»에 놓인 배치(좁은 화면)에서는 연결선이 위에서 내려오므로
+     제목을 위가 아니라 알의 «왼쪽»에 둔다. 위에 두면 연결선이 글자를 가로지른다(실측). */
+  g.textAlign = below ? "right" : "center";
+  const tx = below ? cx - R - 9 : cx;
+  g.fillStyle = C.t2; g.font = "600 11px system-ui,sans-serif";
+  g.fillText("분자 돋보기", tx, below ? cy - 3 : cy - R - 16);
+  if (ok) {
+    g.fillStyle = C.amber; g.font = "600 11.5px system-ui,sans-serif";
+    g.fillText("×" + (Math.round(mag / 100) * 100).toLocaleString("en-US"),
+               tx, below ? cy + 13 : cy - R - 3);
+    g.textAlign = "center";
+    g.fillStyle = C.t1; g.font = "600 12px system-ui,sans-serif";
+    g.fillText((pct >= 0 ? "+" : "−") + Math.abs(pct).toFixed(3) + " %", cx, cy + R + 15);
+    g.fillStyle = C.t3; g.font = "10px system-ui,sans-serif";
+    g.fillText("회색 = " + SEG_REF_NAME[st.seg] + " · 지금 = 채운 분자", cx, cy + R + 29);
+    g.fillText("두 분자의 «어긋난 양»만 확대했습니다", cx, cy + R + 42);
+  } else {
+    g.textAlign = "center";
+    g.fillStyle = C.t3; g.font = "10px system-ui,sans-serif";
+    g.fillText("이 구간은 확대가 필요 없습니다", cx, cy + R + 15);
+  }
+}
+
+/* 좁은 화면에서는 돋보기를 상자 «아래»에 두므로 캔버스가 그만큼 높아야 한다 */
+function microHeight() {
+  const w = $("stageCv") ? $("stageCv").parentElement.clientWidth : 600;
+  return macroHeight() + (w >= 560 ? 0 : 2 * microLoupeR(w) + 66);
+}
+
 function drawMicro(st, time) {
   const cv = $("stageCv");
   if (!cv || cv.parentElement.clientWidth < 40) return;
-  const H = macroHeight();
+  const H = microHeight();
   const F = fitCanvas(cv, H), g = F.g, w = F.w, h = F.h;
   g.clearRect(0, 0, w, h);
 
@@ -1099,7 +1291,13 @@ function drawMicro(st, time) {
   const useGhost = (st.seg !== 1 && st.u > 1e-4);
   if (useGhost) LEG.push("");                       // 자리만 잡아 두고 배율을 안 뒤에 채운다
   const padL = 14, padR = 14, padT = 26, padB = 44 + LEG.length * 15;
-  const availW = w - padL - padR, availH = h - padT - padB;
+  /* ★ 돋보기 자리는 «구간과 무관하게» 늘 비워 둔다. 구간마다 자리를 뺐다 넣었다 하면
+     배율 U 가 달라져 「상자가 줄어드는 것」을 견줄 수 없게 된다. */
+  const wideLoupe = w >= 560;
+  const lpR = microLoupeR(w);
+  const lpW = wideLoupe ? 2 * lpR + 30 : 0;
+  const lpH = wideLoupe ? 0 : 2 * lpR + 66;
+  const availW = w - padL - padR - lpW, availH = h - padT - padB - lpH;
   /* 기준 배율 — 얼음(가장 큰 상자)이 꼭 들어가게. 상태마다 배율을 바꾸면
      상자가 줄어드는 것이 안 보인다. */
   const U = Math.min(availW / WATERD.BOX_W, availH / WATERD.BOX_H);
@@ -1319,11 +1517,31 @@ function drawMicro(st, time) {
     LEG[LEG.length - 1] = "회색 = " + SEG_REF_NAME[st.seg] + "의 자리" +
       (ghostMag > 1.05 ? " (차이를 ×" + Math.round(ghostMag) + "배로 그림)" : "") +
       " — 부피 " + (dv >= 0 ? "+" : "−") + Math.abs(dv).toFixed(3) + " %" +
-      (st.seg === 2 ? " · 성긴 배열이 풀리며 자리를 옮깁니다" : " · 배열은 그대로, 사이가 «고르게» 넓어집니다");
+      (narrow ? ""
+              : st.seg === 2 ? " · 성긴 배열이 풀리며 자리를 옮깁니다"
+                             : " · 배열은 그대로, 사이가 «고르게» 넓어집니다");
   }
   LEG.forEach(function (line, q) {
     g.fillText(line, padL, h - 9 - (LEG.length - 1 - q) * 14);
   });
+
+  /* ── 분자 돋보기 ── 확대해 보는 쌍을 무대에서 먼저 표시하고, 그 다음 알을 그린다 */
+  const pr = loupePair(st.seg);
+  let lax = null, lay = 0, lbx = 0, lby = 0;
+  if (pr && loupeSeg(st.seg) && Math.abs(segPairSpan(st.seg)) > 1e-12) {
+    const p1 = AR.pos[pr.i], p2 = AR.pos[pr.j];
+    const mx = X((p1.x + p2.x) / 2), my = Y((p1.y + p2.y) / 2);
+    const rr = Math.max(rO * 2.2, U * 0.85);
+    g.strokeStyle = C.amber; g.lineWidth = 2;
+    g.beginPath(); g.arc(mx, my, rr, 0, Math.PI * 2); g.stroke();
+    if (wideLoupe) { lax = mx + rr * 0.7; lay = my - rr * 0.7;
+                     lbx = mx + rr * 0.7; lby = my + rr * 0.7; }
+    else           { lax = mx - rr * 0.7; lay = my + rr * 0.7;
+                     lbx = mx + rr * 0.7; lby = my + rr * 0.7; }
+  }
+  const lpCx = wideLoupe ? (w - padR - lpW / 2) : (ox + boxW / 2);
+  const lpCy = wideLoupe ? (padT + availH / 2) : (h - padB - lpH + lpR + 20);
+  drawMicroLoupe(g, lpCx, lpCy, lpR, st, AR, U, lax, lay, lbx, lby, !wideLoupe);
 }
 
 /* ───────────────────────── 그래프 ─────────────────────────
@@ -1730,13 +1948,14 @@ const MACRO_HINT = [
 ];
 const MICRO_HINT = [
   "★ 이 구간에서는 «배열이 바뀌지 않습니다» — 같은 육각 격자가 0.03 %만 넓어집니다(화면에서 0.2 px). " +
-    "회색 고스트가 −4 ℃일 때의 자리이고, 그 차이를 수십 배로 벌려 그렸습니다. " +
-    "실제로 활발해지는 것은 분자의 «흔들림»이니 아래 체크박스를 켜 보세요.",
+    "그래서 <분자 돋보기>가 이웃 한 쌍을 골라 «사이가 벌어지는 것»을 확대해 보입니다 — " +
+    "거시 화면의 액면 돋보기와 같은 방식입니다. 실제로 활발해지는 것은 분자의 «흔들림»이니 " +
+    "아래 체크박스도 켜 보세요.",
   "육각 고리가 아래부터 «무너지고», 고리 안쪽 빈 공간이 다른 물 분자로 채워집니다. 네 구간 중 배열이 가장 크게 바뀝니다.",
   "남아 있던 «성긴 국소 배열»이 하나씩 풀립니다. 회색 고스트가 0 ℃일 때의 자리입니다 — 표의 「성긴 국소 배열」 수를 함께 세어 보세요.",
   "★ 이 구간에서도 «배열은 바뀌지 않습니다» — 무질서한 채로 0.01 %만 넓어집니다(화면에서 0.1 px). " +
-    "회색 고스트가 4 ℃일 때의 자리입니다. 여기서 이기는 것은 열팽창이니 " +
-    "오른쪽 «겨루는 두 가지» 막대와 흔들림 체크박스를 함께 보세요."
+    "<분자 돋보기>에서 이웃 한 쌍의 사이가 벌어지는 것을 보세요. 여기서 이기는 것은 열팽창이니 " +
+    "오른쪽 «겨루는 두 가지» 막대와 흔들림 체크박스도 함께 보세요."
 ];
 
 const DATANOTE = {
