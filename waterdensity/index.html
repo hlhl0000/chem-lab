@@ -53,10 +53,14 @@
   .ros .readout{padding:9px 10px}
   .ros .wide{grid-column:1 / -1}
 
-  .chkrow{display:flex; align-items:center; gap:9px; min-height:44px; font-size:13px; color:var(--t2);
-    cursor:pointer; margin-top:4px}
-  .chkrow.is-key{border:1px solid var(--d-amber); border-radius:9px; padding:4px 9px;
-    background:#fffbf5}
+  /* 안내 문단 (조작 요소가 아니다 — 흔들림은 상시라 스위치가 없다) */
+  .chkrow{font-size:12.5px; color:var(--t2); line-height:1.65; margin:8px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:8px 11px}
+  .chkrow b{color:var(--t1)}
+  /* 체크박스 줄 — 매뉴얼 §7: «감싼 label» 이 44 px 이상이어야 한다 (체크박스만 키우면 미달) */
+  .optrow{display:flex; align-items:center; gap:9px; min-height:44px; font-size:13px;
+    color:var(--t2); cursor:pointer; margin-top:4px}
+  .chkrow.is-key{border-color:var(--d-amber); background:#fffbf5}
   .chkrow .why{color:var(--d-amber)}
 
   /* 두 경쟁 효과 */
@@ -135,13 +139,14 @@
         <button class="btn" id="resetBtn">처음으로</button>
       </div>
 
-      <label class="chkrow" id="motionRow" style="display:none">
-        <input type="checkbox" id="motionChk">
-        <span>분자의 흔들림 보이기 &mdash; 꺼 두면 <b>배열</b>만 보입니다.
-              실제 분자는 어느 상태에서도 끊임없이 움직이고, <b>온도가 오를수록 더 크게</b> 흔들립니다.
-              <b class="why" id="motionWhy" style="display:none">이 구간에서는 배열이 바뀌지 않으니
-              이것을 켜야 달라지는 것이 보입니다.</b></span>
-      </label>
+      <p class="chkrow" id="motionRow" style="display:none">
+        <b>분자는 늘 흔들립니다.</b> 어느 상태에서도 끊임없이 움직이고,
+        <b>온도가 오를수록 더 크게</b> 흔들립니다 &mdash; 고체인 얼음에서도 그렇습니다.
+        <b class="why" id="motionWhy" style="display:none">이 구간에서는 배열이 바뀌지 않으므로,
+        달라지는 것은 이 흔들림과 분자 사이 거리뿐입니다.</b>
+        <b class="why" id="motionRM" style="display:none">(&ldquo;동작 줄이기&rdquo;가 켜져 있어
+        이 화면에서는 흔들림을 멈춰 두었습니다. 실제 분자는 멈추지 않습니다.)</b>
+      </p>
       <p class="note" id="openRow" style="display:none">
         <b>성긴 국소 배열</b>은 &ldquo;물속에 떠 있는 작은 얼음 조각&rdquo;이 아닙니다.
         얼음과 비슷하게 <b>성기게 놓인 한때의 배치</b>이고, 끊임없이 무너졌다 다시 생깁니다.
@@ -209,7 +214,7 @@
         </p>
       </div>
 
-      <label class="chkrow">
+      <label class="optrow">
         <input type="checkbox" id="bookChk">
         <span>교과서 그림 Ⅱ-5의 눈금값 함께 보기</span>
       </label>
@@ -289,10 +294,10 @@
           실제로는 융해에만 전체 열의 <b>87 %</b>가 듭니다 &mdash; 「가한 열」 값으로 확인하세요.</li>
       <li>얼음의 팽창 계수는 0 ℃ 부근의 값(1.65×10⁻⁴ /K)을 상수로 썼습니다.
           −10 ℃보다 훨씬 낮은 온도에서는 맞지 않습니다. 과냉각·압력 변화·용해된 기체는 다루지 않습니다.</li>
-      <li>기본 화면에서는 분자의 <b>진동과 이동을 멈춰</b> 두었습니다. 배열 변화에 집중하기 위한
-          것이며, 실제 분자는 고체에서도 끊임없이 진동합니다. 「분자의 흔들림 보이기」를 켜면
-          <b>온도가 오를수록 진폭이 커집니다</b> &mdash; 다만 진폭의 절대 크기는 도식이고,
-          실제 진동은 이보다 훨씬 빠릅니다.</li>
+      <li>분자의 <b>흔들림은 늘 켜져 있습니다</b>(&ldquo;동작 줄이기&rdquo; 설정을 켠 경우만 멈춥니다).
+          <b>온도가 오를수록 진폭이 커집니다.</b> 다만 진폭의 절대 크기와 빠르기는 <b>도식</b>이며,
+          실제 분자의 진동은 이보다 비교할 수 없이 빠릅니다. 이 화면이 보이려는 것은
+          &ldquo;멈춰 있지 않다, 그리고 온도가 오르면 더 활발해진다&rdquo; 두 가지뿐입니다.</li>
       <li>★ <b>−4→0 ℃ 와 4→10 ℃ 에서는 「배열」이 바뀌지 않습니다.</b> 같은 육각 격자, 같은 무질서
           배치가 각각 0.066 %, 0.027 %만 넓어질 뿐이라 화면에서 분자는 0.2 px, 0.09 px 움직입니다.
           그래서 <b>그 구간이 시작될 때의 자리를 회색 고스트로 겹쳐</b> 놓고 그 차이만 수십~수백 배로

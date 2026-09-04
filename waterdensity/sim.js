@@ -700,8 +700,28 @@ function arrangementAt(st) {
   const nopin = phase.map(function () { return false; });
   relax(pos, W, H, D_RENDER, nopin, 120, mulberry32(WATERD.SEED + 11), null, 0, 0);
 
-  return { pos: pos, phase: phase, W: W, H: H, scale: scale, rings: openF, k0: k0, k1: k1, fk: fk };
+  /* 액체 쪽 수소 결합(= 가까운 쌍) 목록을 «여기서 한 번» 만든다.
+     ★ 흔들림이 상시가 되면서 분자 화면이 매 프레임 다시 그려진다. 이 O(N²) 탐색을
+       그릴 때마다 하면 167 분자에서 프레임당 1.4 만 번이다(그 상태에서 33 fps 실측).
+       배열은 진행 열쇠마다 한 번만 계산되므로 목록도 그때 함께 만들어 재사용한다.
+       ⚠ 판정 기준(WB_LIM)은 바뀌지 않았다 — 같은 쌍이 나오는지 검사가 브루트포스와 대조한다. */
+  const wb = [], wbLim2 = WB_LIM * WB_LIM;
+  if (st.phase !== "ice") {
+    for (let i = 0; i < NMOL; i++) {
+      if (phase[i] < 0.75) continue;
+      for (let j = i + 1; j < NMOL; j++) {
+        if (phase[j] < 0.75) continue;
+        const dx = pos[i].x - pos[j].x, dy = pos[i].y - pos[j].y;
+        if (dx * dx + dy * dy <= wbLim2) wb.push(i, j);
+      }
+    }
+  }
+
+  return { pos: pos, phase: phase, W: W, H: H, scale: scale, rings: openF,
+           k0: k0, k1: k1, fk: fk, wbonds: wb };
 }
+/* 액체에서 「수소 결합」으로 그릴 최대 중심 거리 (결합 길이 단위) */
+const WB_LIM = 1.22;
 /* 같은 진행에서 배열을 두 번 계산하지 않는다. 진행을 1/800 로 잘라 열쇠로 쓴다
    (전 구간 800 칸 — 26 초 재생에서 초당 31 번). */
 let ARR_CACHE = null, ARR_KEY = -1;
@@ -813,7 +833,7 @@ if (typeof module !== "undefined" && module.exports) {
     dvdt, volumeSplit, mulberry32, iceLattice, iceRings, orientBonds,
     moleculeOrient, relax, waterArrangements, boxScale, detectRings,
     LAT, RINGS, ORIENT, MOL, NMOL, kW, WATER, MATCH, MELT_ORDER,
-    arrangementAt, arrangementCached, D_RENDER, segStartArrangement, segMaxDisp,
+    arrangementAt, arrangementCached, D_RENDER, WB_LIM, segStartArrangement, segMaxDisp,
     loupePair, pairDist, segPairSpan, loupeSeg, microLoupeR, macroLoupeR
   };
 }
@@ -851,7 +871,9 @@ const S = {
   running: false,
   playSeg: null,        // null = 네 구간 연속 재생 · 0~3 = 그 구간만 재생
   done: false,          // 방금 재생이 끝났는가 (「다시 보기」 안내를 띄운다)
-  motion: false,        // 분자 진동·이동 보이기 (기본 꺼짐 — 배열에 집중)
+  /* 분자의 흔들림은 «상시»다 (사용자 확인 2026-09-04 — 이 진폭이면 배열 관찰을 방해하지 않고,
+     오히려 「고체 분자는 정지해 있다」는 오개념을 막아 준다). 끄는 스위치를 두지 않는다.
+     ⚠ prefers-reduced-motion 만 예외다 — 그때는 진폭 0 이고 화면이 그 사실을 적는다. */
   showBook: false,      // 교과서 그림 Ⅱ-5 값 함께 보기
   t0: 0
 };
@@ -1340,7 +1362,7 @@ function drawMicro(st, time) {
   /* 흔들림 진폭은 온도에 따라 커진다 — 교과서 50쪽 「분자 운동이 활발해지면서
      분자 사이의 거리가 멀어져 부피가 증가한다」가 고체 구간에서 실제로 일어나는 일이다.
      기본은 꺼져 있다(사용자 지시: 배열 변화에 집중). */
-  const amp = (S.motion && !RM)
+  const amp = (!RM)
     ? (st.phase === "ice"
         ? 0.020 + 0.030 * (st.t - WATERD.T_START) / 4        // −4 ℃ 0.020 → 0 ℃ 0.050
         : 0.055 + 0.030 * (st.t / WATERD.T_END))             // 0 ℃ 0.055 → 10 ℃ 0.085
@@ -1367,20 +1389,15 @@ function drawMicro(st, time) {
     g.setLineDash([]);
   }
   if (st.phase !== "ice") {
-    const lim = 1.22, lim2 = lim * lim;
     g.setLineDash([3.2, 2.6]);
-    for (let i = 0; i < NMOL; i++) {
-      if (AR.phase[i] < 0.75) continue;
-      for (let j = i + 1; j < NMOL; j++) {
-        if (AR.phase[j] < 0.75) continue;
-        const dx = AR.pos[i].x - AR.pos[j].x, dy = AR.pos[i].y - AR.pos[j].y;
-        if (dx * dx + dy * dy > lim2) continue;
-        g.strokeStyle = "rgba(56,100,145,0.55)";
-        g.beginPath();
-        g.moveTo(X(AR.pos[i].x + jit(i, 0)), Y(AR.pos[i].y + jit(i, 1)));
-        g.lineTo(X(AR.pos[j].x + jit(j, 0)), Y(AR.pos[j].y + jit(j, 1)));
-        g.stroke();
-      }
+    g.strokeStyle = "rgba(56,100,145,0.55)";
+    const wb = AR.wbonds;                       // 배열을 만들 때 이미 뽑아 둔 목록
+    for (let q = 0; q < wb.length; q += 2) {
+      const i = wb[q], j = wb[q + 1];
+      g.beginPath();
+      g.moveTo(X(AR.pos[i].x + jit(i, 0)), Y(AR.pos[i].y + jit(i, 1)));
+      g.lineTo(X(AR.pos[j].x + jit(j, 0)), Y(AR.pos[j].y + jit(j, 1)));
+      g.stroke();
     }
     g.setLineDash([]);
   }
@@ -1854,10 +1871,11 @@ function update() {
     hint + (S.done && !S.running ? "  ✓ 이 구간이 끝났습니다 — 배율을 바꿔 한 번 더 보세요." : "");
 
   const mo = $("motionRow");
-  mo.style.display = S.view === "micro" ? "flex" : "none";
-  /* 배열이 바뀌지 않는 두 구간에서는 이 체크박스가 「유일하게 움직이는 것」이라 강조한다 */
+  mo.style.display = S.view === "micro" ? "block" : "none";
+  /* 배열이 바뀌지 않는 두 구간에서는 흔들림이 「배열 말고 달라지는 유일한 것」이라 강조한다 */
   mo.classList.toggle("is-key", S.view === "micro" && (st.seg === 0 || st.seg === 3));
   $("motionWhy").style.display = (S.view === "micro" && (st.seg === 0 || st.seg === 3)) ? "inline" : "none";
+  $("motionRM").style.display = RM ? "inline" : "none";
   $("openRow").style.display = (S.view === "micro" && st.phase === "water") ? "flex" : "none";
 
   draw();
@@ -1879,7 +1897,7 @@ function loop(ts) {
     const end = playEnd();
     if (S.s >= end - 1e-9) { S.s = end; S.running = false; S.done = true; }
     update();
-  } else if (S.motion && !RM && S.view === "micro") {
+  } else if (!RM && S.view === "micro") {
     draw();
   }
 }
@@ -1922,7 +1940,6 @@ function bind() {
       update();
     });
   }
-  $("motionChk").addEventListener("change", function () { S.motion = this.checked; update(); });
   $("bookChk").addEventListener("change", function () { S.showBook = this.checked; update(); });
 
   window.addEventListener("resize", update);
@@ -1949,13 +1966,13 @@ const MACRO_HINT = [
 const MICRO_HINT = [
   "★ 이 구간에서는 «배열이 바뀌지 않습니다» — 같은 육각 격자가 0.03 %만 넓어집니다(화면에서 0.2 px). " +
     "그래서 <분자 돋보기>가 이웃 한 쌍을 골라 «사이가 벌어지는 것»을 확대해 보입니다 — " +
-    "거시 화면의 액면 돋보기와 같은 방식입니다. 실제로 활발해지는 것은 분자의 «흔들림»이니 " +
-    "아래 체크박스도 켜 보세요.",
+    "거시 화면의 액면 돋보기와 같은 방식입니다. 실제로 활발해지는 것은 분자의 «흔들림»이고, " +
+    "온도가 오를수록 흔들림이 커지는 것이 화면에 그대로 나타납니다.",
   "육각 고리가 아래부터 «무너지고», 고리 안쪽 빈 공간이 다른 물 분자로 채워집니다. 네 구간 중 배열이 가장 크게 바뀝니다.",
   "남아 있던 «성긴 국소 배열»이 하나씩 풀립니다. 회색 고스트가 0 ℃일 때의 자리입니다 — 표의 「성긴 국소 배열」 수를 함께 세어 보세요.",
   "★ 이 구간에서도 «배열은 바뀌지 않습니다» — 무질서한 채로 0.01 %만 넓어집니다(화면에서 0.1 px). " +
-    "<분자 돋보기>에서 이웃 한 쌍의 사이가 벌어지는 것을 보세요. 여기서 이기는 것은 열팽창이니 " +
-    "오른쪽 «겨루는 두 가지» 막대와 흔들림 체크박스도 함께 보세요."
+    "<분자 돋보기>에서 이웃 한 쌍의 사이가 벌어지는 것을 보세요. 분자의 흔들림도 이 구간에서 " +
+    "가장 커집니다. 여기서 이기는 것은 열팽창이니 오른쪽 «겨루는 두 가지» 막대도 함께 보세요."
 ];
 
 const DATANOTE = {
