@@ -711,6 +711,35 @@ function arrangementCached(st, s) {
   return ARR_CACHE;
 }
 
+/* ── 「이 구간이 시작될 때의 자리」 ─────────────────────────────────────
+   −4→0 ℃ 와 4→10 ℃ 에서는 «배열이 바뀌지 않는다» — 같은 격자·같은 무질서 배치가
+   0.03 % · 0.01 % 만 넓어질 뿐이다. 화면에서는 각각 0.21 px · 0.09 px 라
+   그냥 그리면 「고장 났나」로 읽힌다(2026-09-04 사용자 지적).
+   그래서 네 구간 모두에 「구간이 시작될 때의 자리」를 회색 고스트로 겹쳐 그리고,
+   그 «차이만» 배율을 건다. 배율은 구간 «끝»의 최대 이동에서 유도하므로
+   구간 안에서 일정하고, 간격이 진행에 비례해 벌어진다. */
+const SEG_START = [], SEG_MAXDISP = [];
+function segStartArrangement(seg) {
+  if (!SEG_START[seg]) SEG_START[seg] = arrangementAt(stateAt(progressAt(seg, 0)));
+  return SEG_START[seg];
+}
+/* 구간 끝에서 분자가 가장 많이 옮겨 간 거리 (모형 단위). 화면 배율과 무관하다. */
+function segMaxDisp(seg) {
+  if (SEG_MAXDISP[seg] === undefined) {
+    const A = segStartArrangement(seg), B = arrangementAt(stateAt(progressAt(seg, 0.9999)));
+    /* ★ «상자 가운데를 맞춰» 잰다. 왼쪽 아래 원점 기준으로 재면 팽창이 「오른쪽으로 쏠린
+       평행 이동」처럼 보이고, 「고르게 넓어진다」는 설명과 그림이 어긋난다(2026-09-04 실측). */
+    let mx = 0;
+    for (let i = 0; i < A.pos.length; i++) {
+      const dx = (A.pos[i].x - A.W / 2) - (B.pos[i].x - B.W / 2);
+      const dy = (A.pos[i].y - A.H / 2) - (B.pos[i].y - B.H / 2);
+      mx = Math.max(mx, Math.sqrt(dx * dx + dy * dy));
+    }
+    SEG_MAXDISP[seg] = mx;
+  }
+  return SEG_MAXDISP[seg];
+}
+
 /* Node 에서 검증 스크립트가 쓸 수 있게 (브라우저에서는 무시된다) */
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
@@ -720,7 +749,7 @@ if (typeof module !== "undefined" && module.exports) {
     dvdt, volumeSplit, mulberry32, iceLattice, iceRings, orientBonds,
     moleculeOrient, relax, waterArrangements, boxScale, detectRings,
     LAT, RINGS, ORIENT, MOL, NMOL, kW, WATER, MATCH, MELT_ORDER,
-    arrangementAt, arrangementCached, D_RENDER
+    arrangementAt, arrangementCached, D_RENDER, segStartArrangement, segMaxDisp
   };
 }
 
@@ -1065,10 +1094,10 @@ function drawMicro(st, time) {
   const LEG = narrow
     ? ["점선 = 수소 결합 · 짧은 H = 화면 앞뒤 방향", "노란 면 = 고리 안쪽 빈 공간"]
     : ["점선 = 수소 결합 · 짧은 H = 화면 앞뒤 방향(네 번째 결합) · 노란 면 = 고리 안쪽 빈 공간"];
-  /* −4 ℃ 고스트를 그리는 구간이면 설명이 «한 줄 더» 필요하다 — 아래 여백을 그만큼 늘린다.
-     (한 줄에 몰아넣었더니 1194 px 에서 글자끼리 겹쳤다) */
-  const iceGhost = (st.phase === "ice" && st.t > WATERD.T_START + 1e-9);
-  if (iceGhost) LEG.push("");                       // 자리만 잡아 두고 배율을 안 뒤에 채운다
+  /* 고스트를 그리는 구간이면 설명이 «한 줄 더» 필요하다 — 아래 여백을 그만큼 늘린다.
+     융해 구간(seg 1)은 이동이 커서(최대 447 px) 고스트를 겹치면 지저분하기만 하다. */
+  const useGhost = (st.seg !== 1 && st.u > 1e-4);
+  if (useGhost) LEG.push("");                       // 자리만 잡아 두고 배율을 안 뒤에 채운다
   const padL = 14, padR = 14, padT = 26, padB = 44 + LEG.length * 15;
   const availW = w - padL - padR, availH = h - padT - padB;
   /* 기준 배율 — 얼음(가장 큰 상자)이 꼭 들어가게. 상태마다 배율을 바꾸면
@@ -1097,25 +1126,26 @@ function drawMicro(st, time) {
      그 «차이만» 배율을 걸어 벌린다. 배율은 상수로 박지 않고 화면 기하에서 유도한다(원칙 13) —
      0 ℃ 에서 가장 많이 밀려난 분자의 간격이 GHOST_PX 가 되도록 잡는다.
      ★ 고스트는 «주석»이고 분자 자체는 참값이다. 배율을 화면에 적는다. */
-  const GHOST_PX = 9;
-  let ghostMag = 0, ghostShrink = 0;
-  if (iceGhost) {
-    const s4 = boxScale(stateAt(0));            // −4 ℃ 는 s=0
-    const frac = 1 - s4 / AR.scale;             // 지금까지 늘어난 «길이» 비율
-    const frac0 = 1 - s4 / boxScale({ phase: "ice", t: 0, melt: 0 });   // 0 ℃ 에서의 값
-    const halfDiag = Math.sqrt(AR.W * AR.W + AR.H * AR.H) / 2 * U;
-    ghostMag = frac0 > 1e-12 ? GHOST_PX / (halfDiag * frac0) : 0;
-    ghostShrink = frac * ghostMag;              // 고스트를 가운데 쪽으로 이만큼 당긴다
+  /* 고스트 = 「이 구간이 시작될 때의 자리」. 배율은 구간 끝의 최대 이동에서 «유도»한다 —
+     이미 크게 움직이는 구간(0→4 ℃)에서는 1배가 되어 참값 그대로 그려진다. */
+  const GHOST_PX = 11;
+  let ghostMag = 1, ghostRef = null;
+  if (useGhost) {
+    const maxPx = segMaxDisp(st.seg) * U;
+    ghostMag = maxPx > 1e-9 ? Math.max(1, GHOST_PX / maxPx) : 1;
+    ghostRef = segStartArrangement(st.seg).pos;
+    /* ⚠ 시작 배열의 좌표는 이미 «그때의 상자 배율»이 들어간 절대 좌표다.
+       여기에 배율 비를 한 번 더 곱하면 지금 좌표와 정확히 같아져 고스트가 사라진다
+       (실제로 4→10 ℃ 에서 그렇게 터졌다 — 2026-09-04). 그대로 쓴다. */
   }
-  const gcx = ox + boxW / 2, gcy = oy + boxH / 2;
-  const GX = function (px) { return gcx + (px - gcx) * (1 - ghostShrink); };
-  const GY = function (py) { return gcy + (py - gcy) * (1 - ghostShrink); };
 
   /* 흔들림 진폭은 온도에 따라 커진다 — 교과서 50쪽 「분자 운동이 활발해지면서
      분자 사이의 거리가 멀어져 부피가 증가한다」가 고체 구간에서 실제로 일어나는 일이다.
      기본은 꺼져 있다(사용자 지시: 배열 변화에 집중). */
   const amp = (S.motion && !RM)
-    ? (st.phase === "ice" ? 0.018 + 0.030 * (st.t - WATERD.T_START) / 4 : 0.075)
+    ? (st.phase === "ice"
+        ? 0.020 + 0.030 * (st.t - WATERD.T_START) / 4        // −4 ℃ 0.020 → 0 ℃ 0.050
+        : 0.055 + 0.030 * (st.t / WATERD.T_END))             // 0 ℃ 0.055 → 10 ℃ 0.085
     : 0;
   const jit = function (i, k) {
     if (!amp) return 0;
@@ -1207,23 +1237,35 @@ function drawMicro(st, time) {
     }
   }
 
-  /* −4 ℃ 고스트 — 상자 외곽선과 분자 자리 */
+  /* 「구간 시작」 고스트 — 상자 외곽선과 분자 자리 */
   const rO = WATERD.R_O * U, rH = WATERD.R_H * U, lOH = WATERD.OH_LEN * U;
-  if (ghostShrink > 1e-6) {
-    g.strokeStyle = "rgba(120,132,148,0.55)"; g.lineWidth = 1.3; g.setLineDash([3, 3]);
-    const gw2 = boxW * (1 - ghostShrink), gh2 = boxH * (1 - ghostShrink);
-    g.strokeRect(gcx - gw2 / 2, gcy - gh2 / 2, gw2, gh2);
+  if (ghostRef) {
+    /* 상자 «가운데»를 맞춰 겹친다 — 원점 기준으로 겹치면 팽창이 한쪽으로 쏠려 보인다 */
+    const R0 = segStartArrangement(st.seg);
+    const bcx = ox + boxW / 2, bcy = oy + boxH / 2;
+    const gp = function (i) {                       // 고스트 화면 좌표 (차이에만 배율)
+      const px = X(AR.pos[i].x), py = Y(AR.pos[i].y);
+      const rx = bcx + (ghostRef[i].x - R0.W / 2) * U;
+      const ry = bcy - (ghostRef[i].y - R0.H / 2) * U;
+      return [px + (rx - px) * ghostMag, py + (ry - py) * ghostMag, px, py];
+    };
+    const bw0 = R0.W * U, bh0 = R0.H * U;
+    const gw2 = boxW + (bw0 - boxW) * ghostMag, gh2 = boxH + (bh0 - boxH) * ghostMag;
+    if (Math.abs(gw2 - boxW) > 1.5 || Math.abs(gh2 - boxH) > 1.5) {
+      g.strokeStyle = "rgba(120,132,148,0.6)"; g.lineWidth = 1.3; g.setLineDash([3, 3]);
+      g.strokeRect(ox + (boxW - gw2) / 2, oy + (boxH - gh2) / 2, gw2, gh2);
+      g.setLineDash([]);
+    }
     g.lineWidth = 1;
     for (let i = 0; i < NMOL; i++) {
-      const px = X(AR.pos[i].x), py = Y(AR.pos[i].y);
-      const gx = GX(px), gy = GY(py);
-      if ((gx - px) * (gx - px) + (gy - py) * (gy - py) < 1.2) continue;   // 거의 안 움직인 것은 생략
-      g.strokeStyle = "rgba(120,132,148,0.5)";
-      g.beginPath(); g.arc(gx, gy, rO, 0, Math.PI * 2); g.stroke();
-      g.strokeStyle = "rgba(120,132,148,0.42)";
-      g.beginPath(); g.moveTo(gx, gy); g.lineTo(px, py); g.stroke();
+      const q = gp(i);
+      if ((q[0] - q[2]) * (q[0] - q[2]) + (q[1] - q[3]) * (q[1] - q[3]) < 2.2) continue;
+      g.strokeStyle = "rgba(120,132,148,0.55)"; g.setLineDash([2.5, 2.5]);
+      g.beginPath(); g.arc(q[0], q[1], rO, 0, Math.PI * 2); g.stroke();
+      g.setLineDash([]);
+      g.strokeStyle = "rgba(120,132,148,0.45)";
+      g.beginPath(); g.moveTo(q[0], q[1]); g.lineTo(q[2], q[3]); g.stroke();
     }
-    g.setLineDash([]);
   }
 
   /* 분자 */
@@ -1272,8 +1314,13 @@ function drawMicro(st, time) {
   g.fillText(narrow ? "분자 지름 — 변하지 않습니다" : "분자 지름 — 어느 온도에서도 변하지 않습니다",
              refX + rO * 2 + 9, refY + 4);
   g.fillStyle = C.t3; g.font = "10px system-ui,sans-serif";
-  if (iceGhost) LEG[LEG.length - 1] =
-    "회색 = −4 ℃일 때의 자리 (차이를 ×" + Math.round(ghostMag) + "배로 그림) — 격자가 «고르게» 넓어집니다";
+  if (useGhost) {
+    const dv = (specVolume(st) / specVolume(stateAt(progressAt(st.seg, 0))) - 1) * 100;
+    LEG[LEG.length - 1] = "회색 = " + SEG_REF_NAME[st.seg] + "의 자리" +
+      (ghostMag > 1.05 ? " (차이를 ×" + Math.round(ghostMag) + "배로 그림)" : "") +
+      " — 부피 " + (dv >= 0 ? "+" : "−") + Math.abs(dv).toFixed(3) + " %" +
+      (st.seg === 2 ? " · 성긴 배열이 풀리며 자리를 옮깁니다" : " · 배열은 그대로, 사이가 «고르게» 넓어집니다");
+  }
   LEG.forEach(function (line, q) {
     g.fillText(line, padL, h - 9 - (LEG.length - 1 - q) * 14);
   });
@@ -1590,6 +1637,9 @@ function update() {
 
   const mo = $("motionRow");
   mo.style.display = S.view === "micro" ? "flex" : "none";
+  /* 배열이 바뀌지 않는 두 구간에서는 이 체크박스가 「유일하게 움직이는 것」이라 강조한다 */
+  mo.classList.toggle("is-key", S.view === "micro" && (st.seg === 0 || st.seg === 3));
+  $("motionWhy").style.display = (S.view === "micro" && (st.seg === 0 || st.seg === 3)) ? "inline" : "none";
   $("openRow").style.display = (S.view === "micro" && st.phase === "water") ? "flex" : "none";
 
   draw();
@@ -1679,10 +1729,14 @@ const MACRO_HINT = [
   "이제 열팽창이 이겨 다시 늘어납니다. «액면 돋보기»의 화살표가 방향을 바꿔 위를 가리킵니다."
 ];
 const MICRO_HINT = [
-  "육각 고리와 노란 «빈 공간»을 봐 두세요. 이 구간에서 실제로 달라지는 것은 분자의 흔들림입니다 — 아래 체크박스를 켜 보세요.",
-  "육각 고리가 아래부터 «무너지고», 고리 안쪽 빈 공간이 다른 물 분자로 채워집니다.",
-  "남아 있던 «성긴 국소 배열»이 하나씩 풀립니다. 표의 「성긴 국소 배열」 수를 세어 보세요.",
-  "배열은 더 흐트러지지 않습니다. 이 구간에서 이기는 것은 열팽창이라 오른쪽 «겨루는 두 가지» 막대를 보세요."
+  "★ 이 구간에서는 «배열이 바뀌지 않습니다» — 같은 육각 격자가 0.03 %만 넓어집니다(화면에서 0.2 px). " +
+    "회색 고스트가 −4 ℃일 때의 자리이고, 그 차이를 수십 배로 벌려 그렸습니다. " +
+    "실제로 활발해지는 것은 분자의 «흔들림»이니 아래 체크박스를 켜 보세요.",
+  "육각 고리가 아래부터 «무너지고», 고리 안쪽 빈 공간이 다른 물 분자로 채워집니다. 네 구간 중 배열이 가장 크게 바뀝니다.",
+  "남아 있던 «성긴 국소 배열»이 하나씩 풀립니다. 회색 고스트가 0 ℃일 때의 자리입니다 — 표의 「성긴 국소 배열」 수를 함께 세어 보세요.",
+  "★ 이 구간에서도 «배열은 바뀌지 않습니다» — 무질서한 채로 0.01 %만 넓어집니다(화면에서 0.1 px). " +
+    "회색 고스트가 4 ℃일 때의 자리입니다. 여기서 이기는 것은 열팽창이니 " +
+    "오른쪽 «겨루는 두 가지» 막대와 흔들림 체크박스를 함께 보세요."
 ];
 
 const DATANOTE = {
