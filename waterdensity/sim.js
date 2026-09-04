@@ -62,8 +62,14 @@ const WATERD = {
      길이 단위 = 얼음의 O···O 거리(결합 길이) 1.
      상자 넓이가 «1 g 의 부피»에 비례하도록 잡는다 — 같은 개수의 분자가
      차지하는 넓이가 곧 부피가 되게 하려는 것이다(M4 : 화면에 명시한다). */
-  BOX_W: 12.12,          // 얼음 상태의 상자 가로 (결합 길이 단위)
-  BOX_H: 8.36,           // 〃 세로
+  /* 상자 크기 (결합 길이 단위). 넓이 ÷ 1.299(벌집 한 자리의 넓이) ≈ 분자 수다.
+     ★ 두 가지를 함께 정했다 —
+       ① 가로:세로를 1.9 로 두어 «무대 비율»에 맞춘다. 1.45 였을 때는 넓은 화면에서
+          상자가 무대 가로의 71 % 만 쓰고 나머지를 letterbox 로 버렸다.
+       ② 넓이를 218 로 키워 분자를 78개 → 168개로 «촘촘»하게 했다. 배열이 성긴 상태에서는
+          「규칙적 ↔ 무질서」의 차이가 눈에 덜 들어온다(사용자 지시 2026-09-04). */
+  BOX_W: 20.4,           // 얼음 상태의 상자 가로
+  BOX_H: 10.7,           // 〃 세로 (가로/세로 = 1.907)
   /* 공-막대 모형의 크기. 길이 단위는 얼음의 O···O 거리(2.76 Å)다.
      ★ 공을 «크게» 그리면 육각 고리의 빈 공간이 안 보인다 — 이 화면의 주인공이 사라진다.
        실측으로 정한 값: R_O 0.26(지름 0.52) 이면 이웃 사이에 결합선이 보이고
@@ -74,7 +80,10 @@ const WATERD = {
   OH_LEN: 0.36,          // O–H 결합 길이 (실제 비 0.348 에 맞췄다)
   HOH_DEG: 104.5,        // 결합각
   D_MIN_WATER: 0.92,     // 액체 배열의 최소 중심 간 거리 (겹침 방지 · 원 지름 0.80)
-  OPEN_MAX: 6,           // 0 ℃ 물에 남겨 그리는 「성긴 국소 배열」 최대 개수
+  /* 0 ℃ 물에 남겨 그리는 「성긴 국소 배열」 최대 개수.
+     분자가 168개로 늘어 상자가 넓어졌으므로 6 → 9 로 올렸다. 0~4 ℃ 에서 «아홉 번»
+     풀리므로 재생 중에 하나씩 사라지는 것이 더 자주 보인다. */
+  OPEN_MAX: 9,
   RING_JITTER: 0.09,     // 고리 중심을 칸 안에서 흔드는 폭 (칸 크기 대비)
   RING_WOBBLE: 0.05,     // 고리를 일그러뜨리는 폭 (±5 % — 정육각형으로 보이지 않게)
   RING_SPILL: 1.25,      // 고리가 풀릴 때 여섯 분자가 흩어지는 반지름
@@ -267,15 +276,20 @@ function iceLattice(W, H) {
       const d = Math.sqrt(dx * dx + dy * dy);
       if (Math.abs(d - 1) < 0.02) bonds.push([i, j]);
     }
-  /* 결합이 1개 이하인 가장자리 꼭짓점은 버린다 —
-     고립점 0 건, 매달린 분자 0 건. 한 번만 쳐 내고 결합을 다시 센다. */
-  const deg = sites.map(function () { return 0; });
-  bonds.forEach(function (b) { deg[b[0]]++; deg[b[1]]++; });
-  const keep = [], remap = new Array(sites.length).fill(-1);
-  for (let i = 0; i < sites.length; i++) if (deg[i] >= 2) { remap[i] = keep.length; keep.push(sites[i]); }
-  bonds = bonds.filter(function (b) { return remap[b[0]] >= 0 && remap[b[1]] >= 0; })
-               .map(function (b) { return [remap[b[0]], remap[b[1]]]; });
-  return { sites: keep, bonds: bonds, W: W, H: H };
+  /* 결합이 1개 이하인 가장자리 꼭짓점을 버린다 — 고립점 0 건, 매달린 분자 0 건.
+     ★ 한 번만 쳐 내면 «그 때문에 새로 차수 1 이 된» 이웃이 남는다. 더 나올 것이 없을 때까지 반복한다. */
+  let cur = sites;
+  for (let pass = 0; pass < 20; pass++) {
+    const deg = cur.map(function () { return 0; });
+    bonds.forEach(function (b) { deg[b[0]]++; deg[b[1]]++; });
+    if (deg.every(function (d) { return d >= 2; })) break;
+    const keep = [], remap = new Array(cur.length).fill(-1);
+    for (let i = 0; i < cur.length; i++) if (deg[i] >= 2) { remap[i] = keep.length; keep.push(cur[i]); }
+    bonds = bonds.filter(function (b) { return remap[b[0]] >= 0 && remap[b[1]] >= 0; })
+                 .map(function (b) { return [remap[b[0]], remap[b[1]]]; });
+    cur = keep;
+  }
+  return { sites: cur, bonds: bonds, W: W, H: H };
 }
 
 /* 육각 고리(6-사이클) 목록. 고리 하나 = 한 육각형의 여섯 꼭짓점.
@@ -388,8 +402,21 @@ function moleculeOrient(lat, orient) {
      처음 배치에서 고리 안쪽을 피하는 것(farFromRings)과 이 밀어내기가 그것을 막는다.
      FAIL 주입으로 확인한 것: 둘 «중 하나»만 있어도 충분하고, 둘 다 없애면 최소 중심 거리가
      0.55 까지 무너지면서 검사 3항목이 걸린다. 둘 다 남겨 둔다. */
-function relax(pts, W, H, dMin, pinned, iters, rnd, voids, voidR) {
-  const n = pts.length, m = WATERD.R_O;
+function relax(pts, W, H, dMin, pinned, iters, rnd, voids, voidR, margin) {
+  const n = pts.length, m = (margin === undefined) ? WATERD.R_O : margin;
+  /* ★ 쌍을 전부 도는 O(N²) 는 분자 168개에서 매 프레임 126만 번이 되어 교실 기기에서 끊긴다.
+     칸 크기를 최소 거리와 같게 잡은 «격자 분할»을 쓴다 — 최소 거리보다 가까운 쌍은
+     반드시 3×3 이웃 칸 안에 있으므로 «놓치는 쌍이 없다»(근사가 아니다).
+     매뉴얼 §10 은 「실기기에서 확인되기 전에는 최적화하지 마라」인데, 여기서는
+     168개로 올린 «뒤에» 재어 보고 넣었다(브라우저 실측 프로브가 프레임을 확인한다). */
+  const cs = Math.max(dMin, 1e-6);
+  const nx = Math.max(1, Math.ceil(W / cs) + 1), ny = Math.max(1, Math.ceil(H / cs) + 1);
+  const head = new Int32Array(nx * ny), nextIdx = new Int32Array(n);
+  const cellOf = function (p) {
+    const cx = Math.max(0, Math.min(nx - 1, Math.floor(p.x / cs)));
+    const cy = Math.max(0, Math.min(ny - 1, Math.floor(p.y / cs)));
+    return cy * nx + cx;
+  };
   for (let it = 0; it < iters; it++) {
     let moved = 0;
     /* 고리 밀어내기는 앞쪽 절반에서만 한다 — 뒤쪽은 최소 거리 이완에 맡긴다.
@@ -408,19 +435,30 @@ function relax(pts, W, H, dMin, pinned, iters, rnd, voids, voidR) {
         }
       }
     }
+    head.fill(-1);
+    for (let i = 0; i < n; i++) { const c = cellOf(pts[i]); nextIdx[i] = head[c]; head[c] = i; }
     for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        let dx = pts[j].x - pts[i].x, dy = pts[j].y - pts[i].y;
-        let d = Math.sqrt(dx * dx + dy * dy);
-        if (d >= dMin) continue;
-        if (d < 1e-9) { dx = (rnd() - 0.5) * 1e-3; dy = (rnd() - 0.5) * 1e-3; d = 1e-3; }
-        const push = (dMin - d) / 2 * 1.02;
-        const ux = dx / d * push, uy = dy / d * push;
-        const pi = pinned[i], pj = pinned[j];
-        if (!pi && !pj) { pts[i].x -= ux; pts[i].y -= uy; pts[j].x += ux; pts[j].y += uy; }
-        else if (pi && !pj) { pts[j].x += ux * 2; pts[j].y += uy * 2; }
-        else if (!pi && pj) { pts[i].x -= ux * 2; pts[i].y -= uy * 2; }
-        moved++;
+      const cx = Math.max(0, Math.min(nx - 1, Math.floor(pts[i].x / cs)));
+      const cy = Math.max(0, Math.min(ny - 1, Math.floor(pts[i].y / cs)));
+      for (let gy = cy - 1; gy <= cy + 1; gy++) {
+        if (gy < 0 || gy >= ny) continue;
+        for (let gx = cx - 1; gx <= cx + 1; gx++) {
+          if (gx < 0 || gx >= nx) continue;
+          for (let j = head[gy * nx + gx]; j !== -1; j = nextIdx[j]) {
+            if (j <= i) continue;
+            let dx = pts[j].x - pts[i].x, dy = pts[j].y - pts[i].y;
+            let d = Math.sqrt(dx * dx + dy * dy);
+            if (d >= dMin) continue;
+            if (d < 1e-9) { dx = (rnd() - 0.5) * 1e-3; dy = (rnd() - 0.5) * 1e-3; d = 1e-3; }
+            const push = (dMin - d) / 2 * 1.02;
+            const ux = dx / d * push, uy = dy / d * push;
+            const pi = pinned[i], pj = pinned[j];
+            if (!pi && !pj) { pts[i].x -= ux; pts[i].y -= uy; pts[j].x += ux; pts[j].y += uy; }
+            else if (pi && !pj) { pts[j].x += ux * 2; pts[j].y += uy * 2; }
+            else if (!pi && pj) { pts[i].x -= ux * 2; pts[i].y -= uy * 2; }
+            moved++;
+          }
+        }
       }
       if (!pinned[i]) {
         pts[i].x = Math.max(m, Math.min(W - m, pts[i].x));
@@ -442,7 +480,14 @@ function waterArrangements(nMol, W, H, seed) {
 
   /* 고리 중심 — 상자를 K 칸으로 나눠 한 칸에 하나씩. 흔드는 폭을 칸의 9 % 로 묶어
      어떤 두 고리도 최소 거리 아래로 붙지 않게 한다(waterdensity_check.js 가 확인한다). */
-  const cols = 3, rows = Math.ceil(K / cols), centers = [];
+  /* 칸 나누기는 「중심끼리 가장 멀어지는」 배치를 «고른다» — 상자 비율이 바뀌어도
+     고리끼리 최소 거리 아래로 붙지 않는다(waterdensity_check.js 가 실제 간격을 잰다). */
+  let cols = 1, bestSep = -1;
+  for (let c = 1; c <= K; c++) {
+    const r = Math.ceil(K / c), sep = Math.min(W / c, H / r);
+    if (sep > bestSep) { bestSep = sep; cols = c; }
+  }
+  const rows = Math.ceil(K / cols), centers = [];
   const cw = W / cols, ch = H / rows;
   for (let k = 0; k < K; k++) {
     const c = k % cols, r = Math.floor(k / cols);
@@ -644,10 +689,16 @@ function arrangementAt(st) {
 
   /* ★ 보간한 «중간» 상태는 그 자체로는 겹칠 수 있다 —
        두 분자가 서로를 지나가면 화면에서 관통한다(매뉴얼 4부 ㊵ 와 같은 결함).
-       그래서 중간 상태에도 최소 거리 이완을 건다. 아직 격자에 있는 분자는 고정해
-       얼음 격자가 뭉개지지 않게 한다. 입력이 같으면 출력도 같다(경로 의존 없음). */
-  const pin = phase.map(function (e) { return e < 0.02; });
-  relax(pos, W, H, D_RENDER, pin, 90, mulberry32(WATERD.SEED + 11));
+       그래서 중간 상태에도 최소 거리 이완을 건다. 입력이 같으면 출력도 같다(경로 의존 없음).
+
+     ⚠ 예전에는 「아직 격자에 있는 분자」를 «고정»해 격자를 지키려 했는데, 그러면 녹은 분자가
+       고정된 분자들 사이에 끼어 «어느 방향으로도 못 나가는» 자리가 생긴다 — 600번을 돌려도
+       최소 거리가 0.095 에서 멈췄다(2026-09-04 실측). 고정은 필요하지도 않다:
+       얼음 격자의 이웃 거리(1.0×배율 ≈ 0.97)가 D_RENDER(0.86)보다 «크므로» 격자 분자끼리는
+       애초에 밀리지 않는다. 대신 상자 여백을 0 으로 주어 가장자리 분자가 안쪽으로
+       당겨지지 않게 한다(그것이 고정을 넣었던 진짜 이유였다). */
+  const nopin = phase.map(function () { return false; });
+  relax(pos, W, H, D_RENDER, nopin, 120, mulberry32(WATERD.SEED + 11), null, 0, 0);
 
   return { pos: pos, phase: phase, W: W, H: H, scale: scale, rings: openF, k0: k0, k1: k1, fk: fk };
 }
@@ -751,7 +802,7 @@ function roundRect(g, x, y, w, h, r) {
 }
 
 /* ───────────────────────── 거시 화면 ─────────────────────────
-   비커 단면 · 온도계 · 가열판 · 액면 확대 자.
+   비커 단면 · 온도계 · 가열판 · 액면 돋보기.
    ⚠ 그림은 얼음과 물을 위아래로 나누어 그린 도식이다. 전체 높이(= 전체 부피)는
      정확하지만, 실제로 물에 뜬 얼음은 부피의 약 92 % 가 물에 잠긴다 — 화면에 적는다. */
 function drawMacro(st) {
@@ -761,7 +812,7 @@ function drawMacro(st) {
   const F = fitCanvas(cv, H), g = F.g, w = F.w, h = F.h;
   g.clearRect(0, 0, w, h);
 
-  /* ── 배치 : [온도계][비커][액면 확대 자] 를 한 덩어리로 «가운데» 놓는다.
+  /* ── 배치 : [온도계][비커][액면 돋보기] 를 한 덩어리로 «가운데» 놓는다.
      왼쪽에 붙여 두면 넓은 화면에서 오른쪽 절반이 비어 허전하다(P4-B4). ── */
   const pad = 14;
   const narrow = w < 540;                       // 360 px 실측에서 아래 문구가 잘렸다
@@ -847,13 +898,16 @@ function drawMacro(st) {
   g.beginPath(); g.moveTo(bx - 7, bBot - hTot); g.lineTo(bx + beakerW + 7, bBot - hTot); g.stroke();
   g.setLineDash([]);
   g.fillStyle = C.amber; g.font = "600 11px system-ui,sans-serif"; g.textAlign = "right";
-  g.fillText(narrow ? "전체 부피" : "전체 부피 = 담긴 것의 높이", bx + beakerW - 3, bBot - hTot - 6);
+  g.fillText(narrow ? "전체 부피" : "전체 부피 = 담긴 것의 높이", bx + beakerW - 22, bBot - hTot - 7);
 
   /* ── 온도계 ── */
   drawThermo(g, gx, bTop, thermoW, bh + 8, st);
 
-  /* ── 액면 확대 자 ── */
-  drawRuler(g, bx + beakerW + gap2, bTop + 30, rulerW, bh - 52, st, pxPerV);
+  /* ── 액면 돋보기 ── */
+  /* 돋보기가 확대해 보이는 것은 «담긴 것의 맨 위»다 — 얼음 구간이면 얼음빛으로 채운다 */
+  drawLoupe(g, bx + beakerW + gap2 + rulerW / 2, bTop, bh, rulerW / 2 - 6,
+            st, pxPerV, bx + beakerW, bBot - hTot, narrow,
+            hIce > 0.3 ? "rgba(224,243,252,0.96)" : "rgba(37,99,235,0.42)");
 
   /* 바닥 설명 — 좁은 화면에서는 두 줄로 접는다 */
   g.fillStyle = C.t3; g.font = "11px system-ui,sans-serif"; g.textAlign = "center";
@@ -898,48 +952,101 @@ function drawThermo(g, x, y, w, h, st) {
   g.fillText(fmt(st.t, 1) + " ℃", cx, top - 6);
 }
 
-/* 액면 확대 자 — 「눈으로 보이지 않는 변화」를 정직하게 보이는 장치.
-   배율은 상수로 두지 않고 픽셀 기하에서 «유도»한다(원칙 13). */
-function drawRuler(g, x, y, w, h, st, pxPerV) {
-  let lo, hi, cap;
-  if (st.phase === "ice") {
-    lo = Math.min(vIce(WATERD.T_START), vIce(0)); hi = Math.max(vIce(WATERD.T_START), vIce(0));
-    cap = "얼음 −4 → 0 ℃";
-  } else if (st.phase === "water") {
-    lo = V_RHOMAX; hi = Math.max(vWater(0), vWater(WATERD.T_END));
-    cap = "물 0 → 10 ℃";
-  } else {
-    lo = vWater(0); hi = vIce(0); cap = "융해 (눈에 보입니다)";
+/* ── 액면 돋보기 ────────────────────────────────────────────────────
+   0~10 ℃ 액체 구간에서 물 1 g 의 부피는 0.03 % 만 변한다 — 200 px 액면에서 0.06 px 라
+   비커에서는 절대 보이지 않는다. 그래서 «액면만» 원형 돋보기로 확대해 보인다.
+
+   ★ 읽히게 만드는 것은 배율이 아니라 «견줄 대상»이다 —
+     돋보기 안에 「이 구간이 시작될 때의 액면」을 회색 파선으로 함께 두어
+     둘 사이가 벌어지는 것으로 변화를 읽게 한다(2026-09-04 사용자 선택).
+   ★ 배율은 상수로 박지 않고 픽셀 기하에서 «유도»한다(원칙 13).
+   ★ 융해 구간은 비커에서 그대로 보이므로 돋보기를 띄우지 않는다. */
+const SEG_REF = [
+  function () { return vIce(WATERD.T_START); },      // −4 ℃ 얼음
+  null,                                              // 융해 — 돋보기 없음
+  function () { return vWater(0); },                 // 0 ℃ 물
+  function () { return vWater(WATERD.T_MID); }       // 4 ℃ 물
+];
+const SEG_REF_NAME = ["−4 ℃일 때", "", "0 ℃일 때", "4 ℃일 때"];
+function segSpan(seg) {
+  if (seg === 0) return Math.abs(vIce(0) - vIce(WATERD.T_START));
+  if (seg === 2) return Math.abs(vWater(0) - V_RHOMAX);
+  if (seg === 3) return Math.abs(vWater(WATERD.T_END) - vWater(WATERD.T_MID));
+  return 0;
+}
+
+function drawLoupe(g, cx, colTop, colH, R, st, pxPerV, ax, ay, narrow, fillCol) {
+  const seg = st.seg;
+  if (seg === 1 || !SEG_REF[seg]) {
+    g.fillStyle = C.t2; g.font = "600 11px system-ui,sans-serif"; g.textAlign = "center";
+    g.fillText("융해 구간은", cx, colTop + colH / 2 - 8);
+    g.fillText("비커에서", cx, colTop + colH / 2 + 6);
+    g.fillText("그대로 보입니다", cx, colTop + colH / 2 + 20);
+    return;
   }
-  const span = hi - lo;
+  const ref = SEG_REF[seg](), span = segSpan(seg);
+  const full = span * 2.6;                       // 돋보기 세로 전체가 나타내는 부피 폭
   const v = specVolume(st);
-  const f = Math.max(0, Math.min(1, (v - lo) / span));
-  const mag = st.phase === "melt" ? 1 : (h / span) / pxPerV;
+  const cy = Math.max(colTop + R + 26, Math.min(colTop + colH - R - 24, ay));
+  const yOf = function (val) { return cy - (val - ref) / full * (2 * R); };
+  const mag = (2 * R / full) / pxPerV;
 
-  g.fillStyle = CSSV("--bg"); g.strokeStyle = C.line; g.lineWidth = 1;
-  roundRect(g, x, y, w, h, 6); g.fill(); g.stroke();
-  /* 채움 */
-  g.fillStyle = st.phase === "ice" ? "rgba(146,196,232,0.55)" : "rgba(56,132,220,0.32)";
-  g.fillRect(x + 1, y + h - f * h, w - 2, f * h);
-  g.strokeStyle = C.blue; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(x + 1, y + h - f * h); g.lineTo(x + w - 1, y + h - f * h); g.stroke();
+  /* 비커 → 돋보기 연결선 (돋보기가 「저기를 확대한 것」임을 잇는다) */
+  g.strokeStyle = "rgba(120,132,148,0.75)"; g.lineWidth = 1;
+  g.setLineDash([3, 3]);
+  g.beginPath(); g.moveTo(ax, ay - 5); g.lineTo(cx - R * 0.72, cy - R * 0.72); g.stroke();
+  g.beginPath(); g.moveTo(ax, ay + 5); g.lineTo(cx - R * 0.72, cy + R * 0.72); g.stroke();
+  g.setLineDash([]);
+  g.strokeStyle = C.blue; g.lineWidth = 1.6;
+  g.strokeRect(ax - 12, ay - 5, 12, 10);
 
-  /* 지금 값 표시 — 띠 안 눈금선 옆에 붙인다 */
-  g.fillStyle = C.blue; g.font = "600 10px system-ui,sans-serif"; g.textAlign = "center";
-  const yLine = y + h - f * h;
-  g.fillText(fmt(v, 4), x + w / 2, yLine + (f > 0.85 ? 13 : -5));
+  /* 돋보기 알 */
+  g.save();
+  g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.clip();
+  g.fillStyle = "#fff"; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+  const wallL = cx - R * 0.62, wallR = cx + R * 0.62;
+  /* 확대된 물 */
+  const yNow = yOf(v);
+  g.fillStyle = fillCol;
+  g.fillRect(wallL, yNow, wallR - wallL, cy + R - yNow);
+  /* 확대된 비커 벽 */
+  g.strokeStyle = C.stageLine; g.lineWidth = 2.2;
+  g.beginPath(); g.moveTo(wallL, cy - R); g.lineTo(wallL, cy + R); g.stroke();
+  g.beginPath(); g.moveTo(wallR, cy - R); g.lineTo(wallR, cy + R); g.stroke();
+  /* 구간 시작 액면 */
+  const yRef = yOf(ref);
+  g.strokeStyle = "rgba(95,107,122,0.95)"; g.lineWidth = 1.6; g.setLineDash([5, 4]);
+  g.beginPath(); g.moveTo(cx - R, yRef); g.lineTo(cx + R, yRef); g.stroke();
+  g.setLineDash([]);
+  /* 지금 액면 (얼음 구간이면 얼음 테두리색 — 비커의 그것과 같아야 이어져 읽힌다) */
+  g.strokeStyle = (st.phase === "ice") ? "rgba(70,120,160,0.95)" : C.blue;
+  g.lineWidth = 2.6;
+  g.beginPath(); g.moveTo(cx - R, yNow); g.lineTo(cx + R, yNow); g.stroke();
+  /* 둘 사이 화살표 */
+  if (Math.abs(yNow - yRef) > 7) {
+    const dir = yNow > yRef ? 1 : -1;
+    g.strokeStyle = C.amber; g.lineWidth = 1.8;
+    g.beginPath(); g.moveTo(cx, yRef); g.lineTo(cx, yNow); g.stroke();
+    g.beginPath();
+    g.moveTo(cx, yNow); g.lineTo(cx - 4, yNow - 5 * dir); g.lineTo(cx + 4, yNow - 5 * dir);
+    g.closePath(); g.fillStyle = C.amber; g.fill();
+  }
+  g.restore();
+  g.strokeStyle = C.gray; g.lineWidth = 2.4;   /* 돋보기 테두리 — 토큰 */
+  g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
 
-  g.fillStyle = C.t3; g.font = "9.5px system-ui,sans-serif"; g.textAlign = "left";
-  g.fillText(fmt(hi, 4), x + 3, y - 4);
-  g.fillText(fmt(lo, 4), x + 3, y + h + 11);
+  /* 라벨 */
   g.textAlign = "center";
   g.fillStyle = C.t2; g.font = "600 10.5px system-ui,sans-serif";
-  g.fillText(st.phase === "melt" ? "액면 눈금" : "액면 확대", x + w / 2, y - 30);
-  g.font = "600 11px system-ui,sans-serif"; g.fillStyle = C.amber;
-  g.fillText(st.phase === "melt" ? "×1 (비커에서 그대로 보임)" : "×" + Math.round(mag / 100) * 100,
-             x + w / 2, y - 17);
+  g.fillText("액면 돋보기", cx, cy - R - 15);
+  g.fillStyle = C.amber; g.font = "600 11px system-ui,sans-serif";
+  g.fillText("×" + Math.round(mag / 10) * 10, cx, cy - R - 3);
+  const pct = (v / ref - 1) * 100;
+  g.fillStyle = C.t2; g.font = "600 10.5px system-ui,sans-serif";
+  g.fillText((pct >= 0 ? "+" : "−") + Math.abs(pct).toFixed(3) + " %", cx, cy + R + 14);
   g.fillStyle = C.t3; g.font = "9.5px system-ui,sans-serif";
-  g.fillText(cap, x + w / 2, y + h + 24);
+  g.fillText("회색 = " + SEG_REF_NAME[seg], cx, cy + R + 27);
+  if (!narrow) g.fillText((st.phase === "ice" ? "진한 선" : "파랑") + " = 지금", cx, cy + R + 39);
 }
 
 /* ───────────────────────── 분자 화면 ───────────────────────── */
@@ -958,6 +1065,10 @@ function drawMicro(st, time) {
   const LEG = narrow
     ? ["점선 = 수소 결합 · 짧은 H = 화면 앞뒤 방향", "노란 면 = 고리 안쪽 빈 공간"]
     : ["점선 = 수소 결합 · 짧은 H = 화면 앞뒤 방향(네 번째 결합) · 노란 면 = 고리 안쪽 빈 공간"];
+  /* −4 ℃ 고스트를 그리는 구간이면 설명이 «한 줄 더» 필요하다 — 아래 여백을 그만큼 늘린다.
+     (한 줄에 몰아넣었더니 1194 px 에서 글자끼리 겹쳤다) */
+  const iceGhost = (st.phase === "ice" && st.t > WATERD.T_START + 1e-9);
+  if (iceGhost) LEG.push("");                       // 자리만 잡아 두고 배율을 안 뒤에 채운다
   const padL = 14, padR = 14, padT = 26, padB = 44 + LEG.length * 15;
   const availW = w - padL - padR, availH = h - padT - padB;
   /* 기준 배율 — 얼음(가장 큰 상자)이 꼭 들어가게. 상태마다 배율을 바꾸면
@@ -979,6 +1090,27 @@ function drawMicro(st, time) {
   const boxLblW = g.measureText(boxLbl).width;
 
   /* 흔들림 — 기본은 꺼져 있다(사용자 지시: 배열 변화에 집중) */
+  /* ── 영하 구간의 팽창을 «보이게» 한다 ────────────────────────────────
+     −4 → 0 ℃ 에서 얼음은 부피가 0.066 % 늘고 밀도가 0.066 % 떨어진다. 길이로는 0.033 %,
+     화면에서는 0.1 px 라 그냥 그리면 «아무 일도 안 일어나는 것»으로 보인다.
+     그래서 진짜 그림은 그대로 두고, «−4 ℃ 일 때의 자리»를 회색 고스트로 겹쳐 그리되
+     그 «차이만» 배율을 걸어 벌린다. 배율은 상수로 박지 않고 화면 기하에서 유도한다(원칙 13) —
+     0 ℃ 에서 가장 많이 밀려난 분자의 간격이 GHOST_PX 가 되도록 잡는다.
+     ★ 고스트는 «주석»이고 분자 자체는 참값이다. 배율을 화면에 적는다. */
+  const GHOST_PX = 9;
+  let ghostMag = 0, ghostShrink = 0;
+  if (iceGhost) {
+    const s4 = boxScale(stateAt(0));            // −4 ℃ 는 s=0
+    const frac = 1 - s4 / AR.scale;             // 지금까지 늘어난 «길이» 비율
+    const frac0 = 1 - s4 / boxScale({ phase: "ice", t: 0, melt: 0 });   // 0 ℃ 에서의 값
+    const halfDiag = Math.sqrt(AR.W * AR.W + AR.H * AR.H) / 2 * U;
+    ghostMag = frac0 > 1e-12 ? GHOST_PX / (halfDiag * frac0) : 0;
+    ghostShrink = frac * ghostMag;              // 고스트를 가운데 쪽으로 이만큼 당긴다
+  }
+  const gcx = ox + boxW / 2, gcy = oy + boxH / 2;
+  const GX = function (px) { return gcx + (px - gcx) * (1 - ghostShrink); };
+  const GY = function (py) { return gcy + (py - gcy) * (1 - ghostShrink); };
+
   /* 흔들림 진폭은 온도에 따라 커진다 — 교과서 50쪽 「분자 운동이 활발해지면서
      분자 사이의 거리가 멀어져 부피가 증가한다」가 고체 구간에서 실제로 일어나는 일이다.
      기본은 꺼져 있다(사용자 지시: 배열 변화에 집중). */
@@ -1075,8 +1207,26 @@ function drawMicro(st, time) {
     }
   }
 
-  /* 분자 */
+  /* −4 ℃ 고스트 — 상자 외곽선과 분자 자리 */
   const rO = WATERD.R_O * U, rH = WATERD.R_H * U, lOH = WATERD.OH_LEN * U;
+  if (ghostShrink > 1e-6) {
+    g.strokeStyle = "rgba(120,132,148,0.55)"; g.lineWidth = 1.3; g.setLineDash([3, 3]);
+    const gw2 = boxW * (1 - ghostShrink), gh2 = boxH * (1 - ghostShrink);
+    g.strokeRect(gcx - gw2 / 2, gcy - gh2 / 2, gw2, gh2);
+    g.lineWidth = 1;
+    for (let i = 0; i < NMOL; i++) {
+      const px = X(AR.pos[i].x), py = Y(AR.pos[i].y);
+      const gx = GX(px), gy = GY(py);
+      if ((gx - px) * (gx - px) + (gy - py) * (gy - py) < 1.2) continue;   // 거의 안 움직인 것은 생략
+      g.strokeStyle = "rgba(120,132,148,0.5)";
+      g.beginPath(); g.arc(gx, gy, rO, 0, Math.PI * 2); g.stroke();
+      g.strokeStyle = "rgba(120,132,148,0.42)";
+      g.beginPath(); g.moveTo(gx, gy); g.lineTo(px, py); g.stroke();
+    }
+    g.setLineDash([]);
+  }
+
+  /* 분자 */
   const half = WATERD.HOH_DEG / 2 * Math.PI / 180;
   const rnd = mulberry32(WATERD.SEED + 3);
   const waterTh = [];
@@ -1122,6 +1272,8 @@ function drawMicro(st, time) {
   g.fillText(narrow ? "분자 지름 — 변하지 않습니다" : "분자 지름 — 어느 온도에서도 변하지 않습니다",
              refX + rO * 2 + 9, refY + 4);
   g.fillStyle = C.t3; g.font = "10px system-ui,sans-serif";
+  if (iceGhost) LEG[LEG.length - 1] =
+    "회색 = −4 ℃일 때의 자리 (차이를 ×" + Math.round(ghostMag) + "배로 그림) — 격자가 «고르게» 넓어집니다";
   LEG.forEach(function (line, q) {
     g.fillText(line, padL, h - 9 - (LEG.length - 1 - q) * 14);
   });
@@ -1519,12 +1671,12 @@ function bind() {
 
 /* 구간별 관찰 안내 — 학습지 표의 네 행 순서 그대로.
    ★ 「보이지 않는 것」을 보라고 하지 않는다. 0~4·4~10 ℃ 의 부피 변화는 0.03 % 라
-     비커에서는 보이지 않으므로 액면 확대 자·그래프·막대로 안내한다. */
+     비커에서는 보이지 않으므로 액면 돋보기·그래프·막대로 안내한다. */
 const MACRO_HINT = [
-  "얼음이 아주 조금 팽창합니다(0.07 %). 비커에서는 보이지 않으니 온도계와 오른쪽 «액면 확대 자»를 보세요.",
+  "얼음이 아주 조금 팽창합니다(0.07 %). 비커에서는 보이지 않으니 온도계와 오른쪽 «액면 돋보기»를 보세요 — 회색 파선이 −4 ℃일 때의 액면입니다.",
   "얼음이 녹으면서 물이 차오르고 «전체 높이»가 내려갑니다 — 이 구간만 눈으로 바로 보입니다(−8.3 %).",
-  "물이 더 «촘촘»해집니다. 변화가 0.01 %라 액면 확대 자에서만 내려가는 것이 보입니다.",
-  "이제 열팽창이 이겨 다시 늘어납니다. 액면 확대 자가 방향을 바꿔 올라갑니다."
+  "물이 더 «촘촘»해집니다. 변화가 0.01 %라 «액면 돋보기» 안에서만 회색 파선 아래로 내려가는 것이 보입니다.",
+  "이제 열팽창이 이겨 다시 늘어납니다. «액면 돋보기»의 화살표가 방향을 바꿔 위를 가리킵니다."
 ];
 const MICRO_HINT = [
   "육각 고리와 노란 «빈 공간»을 봐 두세요. 이 구간에서 실제로 달라지는 것은 분자의 흔들림입니다 — 아래 체크박스를 켜 보세요.",
