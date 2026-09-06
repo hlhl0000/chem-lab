@@ -645,6 +645,360 @@ function atmTimesAbove(t) {
 
 
 
+/* ───────── 정적 2D 도식 모듈 — 코덱스 납품 v3 2026-09-07 (검증스크립트/_raoult_fx3/raoult_design.js · 수정 없이 그대로) ─────────
+   계약·검증 결과는 같은 폴더 README.md. 이 블록이 없으면 아래 FALLBACK_DESIGN 이 같은 계약으로 돈다. */
+(function () {
+  "use strict";
+
+  function beakerBack(g, spec) {
+    const x = spec.x;
+    const y = spec.y;
+    const w = spec.w;
+    const h = spec.h;
+    const surfaceY = spec.surfaceY;
+    const colors = spec.colors;
+
+    g.save();
+    g.fillStyle = colors.water;
+    g.fillRect(x + 2, surfaceY, w - 4, y + h - surfaceY);
+    if (spec.solnAlpha > 0) {
+      g.globalAlpha = spec.solnAlpha;
+      g.fillStyle = colors.soln;
+      g.fillRect(x + 2, surfaceY, w - 4, y + h - surfaceY);
+      g.globalAlpha = 1;
+    }
+    g.strokeStyle = colors.waterLine;
+    g.lineWidth = 1.8;
+    g.beginPath();
+    g.moveTo(x + 2, surfaceY);
+    g.lineTo(x + w - 2, surfaceY);
+    g.stroke();
+    g.restore();
+  }
+
+  function beakerFront(g, spec) {
+    const x = spec.x;
+    const y = spec.y;
+    const w = spec.w;
+    const h = spec.h;
+    const surfaceY = spec.surfaceY;
+    const colors = spec.colors;
+
+    g.save();
+    g.strokeStyle = colors.stageLine;
+    g.lineWidth = 2.6;
+    g.lineJoin = "round";
+    g.lineCap = "round";
+    g.beginPath();
+    g.moveTo(x, y + 4);
+    g.lineTo(x, y + h);
+    g.lineTo(x + w, y + h);
+    g.lineTo(x + w, y + 4);
+    g.stroke();
+
+    g.strokeStyle = colors.glassHi;
+    g.lineWidth = 2.2;
+    g.beginPath();
+    g.moveTo(x + 7, y + 18);
+    g.lineTo(x + 7, y + h - 12);
+    g.stroke();
+
+    g.fillStyle = colors.dGray;
+    g.fillRect(x - 5, y - 2, w + 10, 6);
+    g.fillRect(x + w / 2 - 3, y - 10, 6, 8);
+
+    if (spec.label) {
+      g.fillStyle = colors.t1;
+      g.font = "600 12px system-ui,sans-serif";
+      g.textAlign = "center";
+      g.textBaseline = "alphabetic";
+      g.fillText(spec.label, x + w / 2, surfaceY + (y + h - surfaceY) * 0.80);
+    }
+    g.restore();
+  }
+
+  function arrow(g, x0, y0, x1, y1, col, lw) {
+    const angle = Math.atan2(y1 - y0, x1 - x0);
+    const headLength = 6 + lw;
+
+    g.save();
+    g.strokeStyle = col;
+    g.fillStyle = col;
+    g.lineWidth = lw;
+    g.lineCap = "round";
+    g.lineJoin = "round";
+    g.beginPath();
+    g.moveTo(x0, y0);
+    g.lineTo(x1, y1);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(x1, y1);
+    g.lineTo(
+      x1 - headLength * Math.cos(angle - 0.5),
+      y1 - headLength * Math.sin(angle - 0.5)
+    );
+    g.lineTo(
+      x1 - headLength * Math.cos(angle + 0.5),
+      y1 - headLength * Math.sin(angle + 0.5)
+    );
+    g.closePath();
+    g.fill();
+    g.restore();
+  }
+
+  function arrowPair(g, spec) {
+    const x = spec.x;
+    const w = spec.w;
+    const top = spec.top;
+    const surfaceY = spec.surfaceY;
+    const colors = spec.colors;
+    const evapX = x + 0.28 * w;
+    const condX = x + 0.72 * w;
+    const length = Math.min(30, 0.28 * (surfaceY - top));
+
+    g.save();
+    arrow(g, evapX, surfaceY - 2, evapX, surfaceY - 2 - length, colors.t2, 2.2);
+    arrow(g, condX, surfaceY - 2 - length, condX, surfaceY - 2, colors.t2, 2.2);
+    g.fillStyle = colors.t1;
+    g.font = "600 11px system-ui,sans-serif";
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    g.fillText((spec.numbered ? "① " : "") + spec.evapText, evapX, surfaceY + 16);
+    g.fillText((spec.numbered ? "③ " : "") + spec.condText, condX, surfaceY + 16);
+    if (spec.numbered) {
+      g.fillStyle = colors.dBlue;
+      g.font = "600 12px system-ui,sans-serif";
+      g.fillText("②", x + w / 2, surfaceY - 0.45 * (surfaceY - top));
+    }
+    g.restore();
+  }
+
+  function h2o(g, x, y, r, ang, colors) {
+    const halfAngle = 104.5 * Math.PI / 360;
+    const bondLength = 0.95 * r;
+    const hydrogenRadius = 0.62 * r;
+    const angle1 = ang - Math.PI / 2 - halfAngle;
+    const angle2 = ang - Math.PI / 2 + halfAngle;
+    const h1x = x + Math.cos(angle1) * bondLength;
+    const h1y = y + Math.sin(angle1) * bondLength;
+    const h2x = x + Math.cos(angle2) * bondLength;
+    const h2y = y + Math.sin(angle2) * bondLength;
+
+    g.save();
+    g.strokeStyle = colors.dGray;
+    g.lineWidth = Math.max(1, 0.22 * r);
+    g.lineCap = "round";
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(h1x, h1y);
+    g.moveTo(x, y);
+    g.lineTo(h2x, h2y);
+    g.stroke();
+
+    g.fillStyle = colors.cpkH;
+    g.strokeStyle = colors.hStroke;
+    g.lineWidth = Math.max(1.1, 0.25 * r);
+    g.beginPath();
+    g.arc(h1x, h1y, hydrogenRadius, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    g.beginPath();
+    g.arc(h2x, h2y, hydrogenRadius, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+
+    g.fillStyle = colors.cpkO;
+    g.strokeStyle = colors.oStroke;
+    g.lineWidth = Math.max(1, 0.16 * r);
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    g.restore();
+  }
+
+  function solute(g, x, y, r, colors) {
+    g.save();
+    g.fillStyle = colors.solFill;
+    g.strokeStyle = colors.solStroke;
+    g.lineWidth = Math.max(1.2, 0.18 * r);
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    g.restore();
+  }
+
+  function loupe(g, spec, drawInside) {
+    const cx = spec.cx;
+    const cy = spec.cy;
+    const R = spec.R;
+    const src = spec.src;
+    const colors = spec.colors;
+    const loupeIsRight = cx >= src.x + src.w / 2;
+    const sourceX = loupeIsRight ? src.x + src.w : src.x;
+    const tangentX = cx + (loupeIsRight ? -0.72 : 0.72) * R;
+    const surfaceY = spec.kind === "surface" ? cy - 0.05 * R : cy - R;
+
+    g.save();
+    g.strokeStyle = colors.dGray;
+    g.globalAlpha = 0.75;
+    g.lineWidth = 1;
+    g.setLineDash([3, 3]);
+    g.beginPath();
+    g.moveTo(sourceX, src.y);
+    g.lineTo(tangentX, cy - 0.72 * R);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(sourceX, src.y + src.h);
+    g.lineTo(tangentX, cy + 0.72 * R);
+    g.stroke();
+    g.setLineDash([]);
+    g.globalAlpha = 1;
+
+    g.strokeStyle = colors.dBlue;
+    g.lineWidth = 1.6;
+    g.strokeRect(src.x, src.y, src.w, src.h);
+
+    g.save();
+    g.beginPath();
+    g.arc(cx, cy, R, 0, Math.PI * 2);
+    g.clip();
+    g.fillStyle = colors.cpkH;
+    g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+    g.fillStyle = colors.water;
+    g.fillRect(cx - R, surfaceY, 2 * R, cy + R - surfaceY);
+    if (spec.solnAlpha > 0) {
+      g.globalAlpha = spec.solnAlpha;
+      g.fillStyle = colors.soln;
+      g.fillRect(cx - R, surfaceY, 2 * R, cy + R - surfaceY);
+      g.globalAlpha = 1;
+    }
+    if (spec.kind === "surface") {
+      g.strokeStyle = colors.waterLine;
+      g.lineWidth = 1.6;
+      g.beginPath();
+      g.moveTo(cx - R, surfaceY);
+      g.lineTo(cx + R, surfaceY);
+      g.stroke();
+    }
+    if (typeof drawInside === "function") {
+      drawInside(g, { cx: cx, cy: cy, R: R, surfaceY: surfaceY });
+    }
+    g.restore();
+
+    g.strokeStyle = colors.dGray;
+    g.lineWidth = 2.4;
+    g.beginPath();
+    g.arc(cx, cy, R, 0, Math.PI * 2);
+    g.stroke();
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    if (spec.title) {
+      g.fillStyle = colors.t2;
+      g.font = "600 10.5px system-ui,sans-serif";
+      g.fillText(spec.title, cx, cy - R - 14);
+    }
+    if (spec.sub) {
+      g.fillStyle = colors.dAmber;
+      g.font = "600 10px system-ui,sans-serif";
+      g.fillText(spec.sub, cx, cy - R - 3);
+    }
+    if (spec.foot) {
+      g.fillStyle = colors.t3;
+      g.font = "10px system-ui,sans-serif";
+      g.fillText(spec.foot, cx, cy + R + 14);
+    }
+    g.setLineDash([]);
+    g.restore();
+  }
+
+  function valueBlock(g, spec) {
+    const colors = spec.colors;
+
+    g.save();
+    g.textBaseline = "alphabetic";
+    if (spec.mode === "side") {
+      g.textAlign = "left";
+      g.fillStyle = colors.t3;
+      g.font = "11px system-ui,sans-serif";
+      g.fillText(spec.atmLabel, spec.x, spec.y - 30);
+      g.fillStyle = colors.t1;
+      g.font = "600 13px system-ui,sans-serif";
+      g.fillText(spec.atmText, spec.x, spec.y - 14);
+      g.fillStyle = colors.t3;
+      g.font = "11px system-ui,sans-serif";
+      g.fillText(spec.title, spec.x, spec.y + 12);
+      g.fillStyle = colors.dBlue;
+      g.font = "600 15px system-ui,sans-serif";
+      g.fillText(spec.pressureText, spec.x, spec.y + 30);
+      g.fillStyle = colors.t3;
+      g.font = "10.5px system-ui,sans-serif";
+      g.fillText(spec.atmEqText, spec.x, spec.y + 46);
+    } else {
+      g.textAlign = "center";
+      g.fillStyle = colors.dBlue;
+      g.font = "600 13px system-ui,sans-serif";
+      g.fillText(spec.title + " " + spec.pressureText, spec.x, spec.y);
+      g.fillStyle = colors.t3;
+      g.font = "10.5px system-ui,sans-serif";
+      g.fillText(spec.atmLabel + " " + spec.atmText, spec.x, spec.y + 15);
+    }
+    g.restore();
+  }
+
+  function legend(g, spec) {
+    const centered = spec.align === "center";
+
+    g.save();
+    g.fillStyle = spec.colors.t2;
+    g.font = "11px system-ui,sans-serif";
+    g.textAlign = centered ? "center" : "left";
+    g.textBaseline = "alphabetic";
+    spec.lines.forEach(function (line, index) {
+      g.fillText(centered ? line.trim() : line, spec.x, spec.y + index * 15);
+    });
+    g.restore();
+  }
+
+  function deltaP(g, spec) {
+    g.save();
+    g.fillStyle = spec.colors.dRed;
+    g.font = "600 12px system-ui,sans-serif";
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    g.fillText("ΔP", spec.x, spec.y);
+    g.fillText(spec.text, spec.x, spec.y + 15);
+    g.restore();
+  }
+
+  function caption(g, spec) {
+    g.save();
+    g.fillStyle = spec.colors.t3;
+    g.font = "11px system-ui,sans-serif";
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    g.fillText(spec.text, spec.x, spec.y);
+    g.restore();
+  }
+
+  window.RAOULT_DESIGN = Object.freeze({
+    beakerBack: beakerBack,
+    beakerFront: beakerFront,
+    arrowPair: arrowPair,
+    h2o: h2o,
+    solute: solute,
+    arrow: arrow,
+    loupe: loupe,
+    valueBlock: valueBlock,
+    legend: legend,
+    deltaP: deltaP,
+    caption: caption
+  });
+}());
+
+
+
 const $ = id => document.getElementById(id);
 const CSSV = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const C = {};
@@ -752,33 +1106,127 @@ function sizeCanvas(cv, hCss) {
 /* 결정론적 난수 — 프로브 재현성 */
 function rnd(seed) { return Math.abs(Math.sin(seed * 12.9898 + 78.233) * 43758.5453) % 1; }
 
-/* ── 원시 도형 (waterdensity 와 같은 모양) ─────────────────────── */
-function drawH2O(g, x, y, r, ang) {
-  const half = HOH_DEG / 2 * Math.PI / 180, L = r * 0.95, rH = r * 0.62;
-  for (let k = 0; k < 2; k++) {
-    const a = ang - Math.PI / 2 + (k ? half : -half);
-    const hx = x + Math.cos(a) * L, hy = y + Math.sin(a) * L;
-    g.strokeStyle = "rgba(90,100,112,0.85)"; g.lineWidth = Math.max(1, r * 0.22);
-    g.beginPath(); g.moveTo(x, y); g.lineTo(hx, hy); g.stroke();
-    g.fillStyle = CPK_H; g.strokeStyle = H_STROKE; g.lineWidth = Math.max(1.1, r * 0.25);
-    g.beginPath(); g.arc(hx, hy, rH, 0, Math.PI * 2); g.fill(); g.stroke();
+/* ── 정적 2D 도식 — 코덱스 납품(window.RAOULT_DESIGN)이 있으면 그것, 없으면 FALLBACK ─────
+   계약: Codex_디자인요청_증기압력내림_v3.md §3·§4 — 11 함수 · 순수 · 색·좌표·문자열은 전부 인자.
+   FALLBACK 은 이 판까지 쓰던 요청자 구현(waterdensity 와 같은 모양)이다. */
+const FALLBACK_DESIGN = {
+  h2o(g, x, y, r, ang, c) {
+    const half = HOH_DEG / 2 * Math.PI / 180, L = r * 0.95, rH = r * 0.62;
+    for (let k = 0; k < 2; k++) {
+      const a = ang - Math.PI / 2 + (k ? half : -half);
+      const hx = x + Math.cos(a) * L, hy = y + Math.sin(a) * L;
+      g.strokeStyle = "rgba(90,100,112,0.85)"; g.lineWidth = Math.max(1, r * 0.22);
+      g.beginPath(); g.moveTo(x, y); g.lineTo(hx, hy); g.stroke();
+      g.fillStyle = c.cpkH; g.strokeStyle = c.hStroke; g.lineWidth = Math.max(1.1, r * 0.25);
+      g.beginPath(); g.arc(hx, hy, rH, 0, Math.PI * 2); g.fill(); g.stroke();
+    }
+    g.fillStyle = c.cpkO; g.strokeStyle = c.oStroke; g.lineWidth = Math.max(1, r * 0.16);
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke();
+  },
+  solute(g, x, y, r, c) {
+    g.fillStyle = c.solFill; g.strokeStyle = c.solStroke; g.lineWidth = Math.max(1.2, r * 0.18);
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke();
+  },
+  arrow(g, x0, y0, x1, y1, col, lw) {
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = lw;
+    g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+    const a = Math.atan2(y1 - y0, x1 - x0), hl = 6 + lw;
+    g.beginPath(); g.moveTo(x1, y1);
+    g.lineTo(x1 - hl * Math.cos(a - 0.5), y1 - hl * Math.sin(a - 0.5));
+    g.lineTo(x1 - hl * Math.cos(a + 0.5), y1 - hl * Math.sin(a + 0.5));
+    g.closePath(); g.fill();
+  },
+  beakerBack(g, s) {
+    const { x, y, w, h, surfaceY: sy, colors: c } = s, bot = y + h;
+    g.fillStyle = c.water; g.fillRect(x + 2, sy, w - 4, bot - sy);
+    if (s.solnAlpha > 0) { g.save(); g.globalAlpha = s.solnAlpha; g.fillStyle = c.soln; g.fillRect(x + 2, sy, w - 4, bot - sy); g.restore(); }
+    g.strokeStyle = c.waterLine; g.lineWidth = 1.8;
+    g.beginPath(); g.moveTo(x + 2, sy); g.lineTo(x + w - 2, sy); g.stroke();
+  },
+  beakerFront(g, s) {
+    const { x, y: top, w, h, surfaceY: sy, colors: c } = s, bot = top + h;
+    g.save();
+    g.strokeStyle = c.stageLine; g.lineWidth = 2.6; g.lineJoin = "round"; g.lineCap = "round";
+    g.beginPath(); g.moveTo(x, top + 4); g.lineTo(x, bot); g.lineTo(x + w, bot); g.lineTo(x + w, top + 4); g.stroke();
+    g.fillStyle = c.dGray; g.fillRect(x - 5, top - 2, w + 10, 6);
+    g.fillRect(x + w / 2 - 3, top - 10, 6, 8);          // 압력계 연결관
+    g.strokeStyle = c.glassHi; g.lineWidth = 2.2;
+    g.beginPath(); g.moveTo(x + 7, top + 18); g.lineTo(x + 7, bot - 12); g.stroke();
+    g.restore();
+    if (s.label) { g.fillStyle = c.t1; g.font = "600 12px system-ui,sans-serif"; g.textAlign = "center"; g.fillText(s.label, x + w / 2, sy + (bot - sy) * 0.80); }
+  },
+  arrowPair(g, s) {
+    const { x, w, top, surfaceY: sy, colors: c } = s;
+    const ax = x + w * 0.28, bx2 = x + w * 0.72, len = Math.min(30, (sy - top) * 0.28);
+    FALLBACK_DESIGN.arrow(g, ax, sy - 2, ax, sy - 2 - len, c.t2, 2.2);
+    FALLBACK_DESIGN.arrow(g, bx2, sy - 2 - len, bx2, sy - 2, c.t2, 2.2);
+    g.fillStyle = c.t1; g.font = "600 11px system-ui,sans-serif"; g.textAlign = "center";
+    g.fillText((s.numbered ? "① " : "") + s.evapText, ax, sy + 16);
+    g.fillText((s.numbered ? "③ " : "") + s.condText, bx2, sy + 16);
+    if (s.numbered) { g.fillStyle = c.dBlue; g.font = "600 12px system-ui,sans-serif"; g.fillText("②", x + w / 2, sy - (sy - top) * 0.45); }
+  },
+  loupe(g, s, drawInside) {
+    const { cx, cy, R, src, kind, colors: c } = s;
+    g.save();
+    g.strokeStyle = "rgba(120,132,148,0.75)"; g.lineWidth = 1; g.setLineDash([3, 3]);
+    const sx = src.x + src.w, toLeft = cx > sx;
+    const t1 = toLeft ? [cx - R * 0.72, cy - R * 0.72] : [cx + R * 0.72, cy - R * 0.72];
+    const t2 = toLeft ? [cx - R * 0.72, cy + R * 0.72] : [cx + R * 0.72, cy + R * 0.72];
+    g.beginPath(); g.moveTo(toLeft ? sx : src.x, src.y); g.lineTo(t1[0], t1[1]); g.stroke();
+    g.beginPath(); g.moveTo(toLeft ? sx : src.x, src.y + src.h); g.lineTo(t2[0], t2[1]); g.stroke();
+    g.setLineDash([]);
+    g.strokeStyle = c.dBlue; g.lineWidth = 1.6; g.strokeRect(src.x, src.y, src.w, src.h);
+    g.restore();
+    g.save();
+    g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.clip();
+    g.fillStyle = "#ffffff"; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+    const surfaceY = kind === "surface" ? cy - R * 0.05 : cy - R - 10;
+    g.fillStyle = c.water; g.fillRect(cx - R, surfaceY, 2 * R, cy + R - surfaceY);
+    if (s.solnAlpha > 0) { g.save(); g.globalAlpha = s.solnAlpha; g.fillStyle = c.soln; g.fillRect(cx - R, surfaceY, 2 * R, cy + R - surfaceY); g.restore(); }
+    if (kind === "surface") { g.strokeStyle = c.waterLine; g.lineWidth = 1.6; g.beginPath(); g.moveTo(cx - R, surfaceY); g.lineTo(cx + R, surfaceY); g.stroke(); }
+    if (typeof drawInside === "function") drawInside(g, { cx, cy, R, surfaceY });
+    g.restore();
+    g.strokeStyle = c.dGray; g.lineWidth = 2.4; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
+    g.textAlign = "center";
+    if (s.title) { g.fillStyle = c.t2; g.font = "600 10.5px system-ui,sans-serif"; g.fillText(s.title, cx, cy - R - 14); }
+    if (s.sub) { g.fillStyle = c.dAmber; g.font = "600 10px system-ui,sans-serif"; g.fillText(s.sub, cx, cy - R - 3); }
+    if (s.foot) { g.fillStyle = c.t3; g.font = "10px system-ui,sans-serif"; g.fillText(s.foot, cx, cy + R + 14); }
+  },
+  valueBlock(g, s) {
+    const c = s.colors;
+    if (s.mode === "side") {
+      const tx = s.x, sy = s.y; g.textAlign = "left";
+      g.fillStyle = c.t3; g.font = "11px system-ui,sans-serif"; g.fillText(s.atmLabel, tx, sy - 30);
+      g.fillStyle = c.t1; g.font = "600 13px system-ui,sans-serif"; g.fillText(s.atmText, tx, sy - 14);
+      g.fillStyle = c.t3; g.font = "11px system-ui,sans-serif"; g.fillText(s.title, tx, sy + 12);
+      g.fillStyle = c.dBlue; g.font = "600 15px system-ui,sans-serif"; g.fillText(s.pressureText, tx, sy + 30);
+      g.fillStyle = c.t3; g.font = "10.5px system-ui,sans-serif"; g.fillText(s.atmEqText, tx, sy + 46);
+    } else {
+      g.textAlign = "center";
+      g.fillStyle = c.dBlue; g.font = "600 13px system-ui,sans-serif"; g.fillText(s.title + " " + s.pressureText, s.x, s.y);
+      g.fillStyle = c.t3; g.font = "10.5px system-ui,sans-serif"; g.fillText(s.atmLabel + " " + s.atmText, s.x, s.y + 15);
+    }
+  },
+  legend(g, s) {
+    g.font = "11px system-ui,sans-serif"; g.fillStyle = s.colors.t2; g.textAlign = s.align === "center" ? "center" : "left";
+    s.lines.forEach((t, i) => g.fillText(s.align === "center" ? t.trim() : t, s.x, s.y + i * 15));
+  },
+  deltaP(g, s) {
+    g.fillStyle = s.colors.dRed; g.font = "600 12px system-ui,sans-serif"; g.textAlign = "center";
+    g.fillText("ΔP", s.x, s.y); g.fillText(s.text, s.x, s.y + 15);
+  },
+  caption(g, s) {
+    g.fillStyle = s.colors.t3; g.font = "11px system-ui,sans-serif"; g.textAlign = "center"; g.fillText(s.text, s.x, s.y);
   }
-  g.fillStyle = CPK_O; g.strokeStyle = O_STROKE; g.lineWidth = Math.max(1, r * 0.16);
-  g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke();
-}
-function drawSolute(g, x, y, r) {
-  g.fillStyle = SOL_FILL; g.strokeStyle = SOL_STROKE; g.lineWidth = Math.max(1.2, r * 0.18);
-  g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke();
-}
-function arrow(g, x0, y0, x1, y1, col, lw) {
-  g.strokeStyle = col; g.fillStyle = col; g.lineWidth = lw;
-  g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
-  const a = Math.atan2(y1 - y0, x1 - x0), hl = 6 + lw;
-  g.beginPath(); g.moveTo(x1, y1);
-  g.lineTo(x1 - hl * Math.cos(a - 0.5), y1 - hl * Math.sin(a - 0.5));
-  g.lineTo(x1 - hl * Math.cos(a + 0.5), y1 - hl * Math.sin(a + 0.5));
-  g.closePath(); g.fill();
-}
+};
+const DESIGN = (typeof window !== "undefined" && window.RAOULT_DESIGN) ? window.RAOULT_DESIGN : FALLBACK_DESIGN;
+/* 색 묶음 — 도식 모듈에 넘기는 유일한 색 원천(토큰 + CPK 예외) */
+const DC = { t1: C.t1, t2: C.t2, t3: C.t3, line: C.line, stageLine: C["stage-line"], dBlue: C["d-blue"], dRed: C["d-red"],
+  dAmber: C["d-amber"], dGray: C["d-gray"], glassHi: "rgba(160,200,228,0.75)", water: WATER_FILL, waterLine: WATER_LINE,
+  soln: SOLN_FILL, cpkO: CPK_O, cpkH: CPK_H, oStroke: O_STROKE, hStroke: H_STROKE, solFill: SOL_FILL, solStroke: SOL_STROKE };
+function drawH2O(g, x, y, r, ang) { DESIGN.h2o(g, x, y, r, ang, DC); }
+function drawSolute(g, x, y, r) { DESIGN.solute(g, x, y, r, DC); }
+function arrow(g, x0, y0, x1, y1, col, lw) { DESIGN.arrow(g, x0, y0, x1, y1, col, lw); }
 /* ── 운동·압력계 — 코덱스 납품(window.RAOULT_MOTION)이 있으면 그것, 없으면 FALLBACK ─────
    계약: vapor(opt)→{step(dt,state),draw(g,state,drawParticle),count()} · solute 동형 · gauge()→{draw(g,state)}
    FALLBACK 은 «화면이 멈추지 않게 하는 최소 구현»이다. 요구(표면에서 생성·소멸 · 표면 근처 밀도 ·
@@ -935,88 +1383,49 @@ function layout(w) {
   return { H, narrow, beakers, loupes, R, textW, textLeft, under };
 }
 
-/* ── 비커 (2D 도식) ──────────────────────────────────────────── */
+/* ── 비커 (2D 도식) — 그리기는 DESIGN(계약 §3), 배치·개수·운동은 여기 ─────────── */
 const FILL_FRAC = 0.58;
 function beakerSurfaceY(b) { return b.y + b.h - b.h * FILL_FRAC; }
 function headspace(b) { return { x: b.x + 6, y: b.y + 8, w: b.w - 12, h: beakerSurfaceY(b) - b.y - 8 }; }
 function liquidRect(b) { const sy = beakerSurfaceY(b); return { x: b.x + 8, y: sy + 8, w: b.w - 16, h: b.y + b.h - sy - 14 }; }
 
 function drawBeaker(g, b, o) {
-  const x = b.x, w = b.w, top = b.y, bot = b.y + b.h, sy = beakerSurfaceY(b);
-  /* 액체 — 용질이 있으면 노랑을 아주 옅게 섞는다(전체에 퍼져 있음) */
-  g.fillStyle = WATER_FILL; g.fillRect(x + 2, sy, w - 4, bot - sy);
-  if (o.soluteAmt > 0.001) { g.globalAlpha = o.soluteAmt; g.fillStyle = SOLN_FILL; g.fillRect(x + 2, sy, w - 4, bot - sy); g.globalAlpha = 1; }
+  const x = b.x, w = b.w, top = b.y, sy = beakerSurfaceY(b);
+  /* 뒤: 액체(용질이 있으면 노랑을 옅게 — 전체에 퍼져 있음) + 액면 선 */
+  DESIGN.beakerBack(g, { x, y: top, w, h: b.h, surfaceY: sy, solnAlpha: o.soluteAmt > 0.001 ? o.soluteAmt : 0, colors: DC });
   /* 용질 입자(운동은 팩토리) */
   if (o.solute) {
     const rS = Math.max(2.4, w * 0.02);
     o.solute.draw(g, { rect: liquidRect(b), count: o.soluteCount, injectXY: { x: x + w / 2, y: sy + 10 }, diffuse01: o.diffuse, reduced: REDUCED, colors: MOTION_COLORS },
       (gg, px, py) => drawSolute(gg, px, py, rS));
   }
-  g.strokeStyle = WATER_LINE; g.lineWidth = 1.8;
-  g.beginPath(); g.moveTo(x + 2, sy); g.lineTo(x + w - 2, sy); g.stroke();
-  /* 증발·응축 화살표 — 같은 굵기 한 쌍. 분자보다 «먼저» 그려 분자가 그 앞을 지나가게 한다.
-     개수 글자는 액면 «아래»(액체 위쪽 띠)에 둔다 — 기체 띠 위에 글자를 얹으면 지나가는 분자가
-     글자 밑에서 사라졌다 나타나 깜빡임으로 보인다(실측 · _raoult_diag.js). */
-  if (o.evap !== undefined) {
-    const ax = x + w * 0.28, bx2 = x + w * 0.72, len = Math.min(30, (sy - top) * 0.28);
-    arrow(g, ax, sy - 2, ax, sy - 2 - len, C.t2, 2.2);
-    arrow(g, bx2, sy - 2 - len, bx2, sy - 2, C.t2, 2.2);
-    g.fillStyle = C.t1; g.font = "600 11px system-ui,sans-serif"; g.textAlign = "center";
-    g.fillText((o.numbered ? "① " : "") + "증발 " + o.evap, ax, sy + 16);
-    g.fillText((o.numbered ? "③ " : "") + "응축 " + o.cond, bx2, sy + 16);
-    if (o.numbered) { g.fillStyle = C["d-blue"]; g.font = "600 12px system-ui,sans-serif"; g.fillText("②", x + w / 2, sy - (sy - top) * 0.45); }
-  }
+  /* 증발·응축 화살표 한 쌍 — 분자보다 «먼저» 그려 분자가 그 앞을 지나가게 한다. 개수 글자는 액면 «아래»
+     (기체 띠 위에 글자를 얹으면 지나가는 분자가 글자 밑에서 사라졌다 나타나 깜빡임으로 보인다 — 실측 · _raoult_diag.js) */
+  if (o.evap !== undefined) DESIGN.arrowPair(g, { x, w, top, surfaceY: sy, evapText: "증발 " + o.evap, condText: "응축 " + o.cond, numbered: !!o.numbered, colors: DC });
   /* 기체 분자(운동은 팩토리) — H₂O. 눈으로 하나하나 따라갈 수 있는 크기 */
   if (o.vapor) {
     const rO = Math.max(2.6, Math.min(4.2, w * 0.017));
     o.vapor.draw(g, o.vaporState, (gg, px, py, i) => drawH2O(gg, px, py, rO, rnd(i + 3) * 6.28));
   }
-  /* 유리 윤곽 — 내용물 «앞»에. 뚜껑 판 + 위에 압력계 */
-  g.save();
-  g.strokeStyle = C["stage-line"]; g.lineWidth = 2.6; g.lineJoin = "round"; g.lineCap = "round";
-  g.beginPath(); g.moveTo(x, top + 4); g.lineTo(x, bot); g.lineTo(x + w, bot); g.lineTo(x + w, top + 4); g.stroke();
-  g.fillStyle = "rgba(107,114,128,0.95)"; g.fillRect(x - 5, top - 2, w + 10, 6);
-  g.fillRect(x + w / 2 - 3, top - 10, 6, 8);          // 압력계 연결관
-  g.strokeStyle = "rgba(160,200,228,0.75)"; g.lineWidth = 2.2;
-  g.beginPath(); g.moveTo(x + 7, top + 18); g.lineTo(x + 7, bot - 12); g.stroke();
-  g.restore();
-  /* 압력계 다이얼 — 뚜껑 위 */
+  /* 앞: 유리 윤곽·뚜껑·연결관·라벨(액체 안 아래쪽 — 4단계 표본 상자·개수 글자와 겹치지 않게) */
+  DESIGN.beakerFront(g, { x, y: top, w, h: b.h, surfaceY: sy, label: o.label || "", colors: DC });
+  /* 압력계 다이얼 — 뚜껑 위 (v2 납품 gauge) */
   dial.draw(g, { cx: x + w / 2, cy: top - (DIAL_H - 38), r: DIAL_R, value: o.pressure, max: o.pmax, label: "압력계", sub: "mmHg", colors: MOTION_COLORS, reduced: REDUCED });
-  /* 라벨 — 액체 안 아래쪽(4단계 표본 상자·위쪽 개수 글자와 겹치지 않게) */
-  if (o.label) { g.fillStyle = C.t1; g.font = "600 12px system-ui,sans-serif"; g.textAlign = "center"; g.fillText(o.label, x + w / 2, sy + (bot - sy) * 0.80); }
 }
 /* 비커 옆(또는 아래) 글자 — 대기압·증기 압력 값. 세로 막대 대신 이것이 «값»의 자리다 */
 function drawValues(g, b, L, o) {
-  g.font = "600 12px system-ui,sans-serif";
-  if (L.textW) {
-    const tx = L.textLeft ? b.x - L.textW + 4 : b.x + b.w + 16, sy = beakerSurfaceY(b);
-    g.textAlign = "left";
-    g.fillStyle = C.t3; g.font = "11px system-ui,sans-serif"; g.fillText("대기압", tx, sy - 30);
-    g.fillStyle = C.t1; g.font = "600 13px system-ui,sans-serif"; g.fillText("760 mmHg", tx, sy - 14);
-    g.fillStyle = C.t3; g.font = "11px system-ui,sans-serif"; g.fillText(o.title, tx, sy + 12);
-    g.fillStyle = C["d-blue"]; g.font = "600 15px system-ui,sans-serif"; g.fillText(sig3(o.pressure) + " mmHg", tx, sy + 30);
-    g.fillStyle = C.t3; g.font = "10.5px system-ui,sans-serif"; g.fillText("= " + (o.pressure / 760).toFixed(3) + " atm", tx, sy + 46);
-  } else {
-    const cx = b.x + b.w / 2, y0 = b.y + b.h + 16;
-    g.textAlign = "center";
-    g.fillStyle = C["d-blue"]; g.font = "600 13px system-ui,sans-serif"; g.fillText(o.title + " " + sig3(o.pressure) + " mmHg", cx, y0);
-    g.fillStyle = C.t3; g.font = "10.5px system-ui,sans-serif"; g.fillText("대기압 760 mmHg", cx, y0 + 15);
-  }
+  const pt = sig3(o.pressure) + " mmHg", eq = "= " + (o.pressure / 760).toFixed(3) + " atm";
+  if (L.textW) DESIGN.valueBlock(g, { mode: "side", x: L.textLeft ? b.x - L.textW + 4 : b.x + b.w + 16, y: beakerSurfaceY(b),
+    atmLabel: "대기압", atmText: "760 mmHg", title: o.title, pressureText: pt, atmEqText: eq, colors: DC });
+  else DESIGN.valueBlock(g, { mode: "below", x: b.x + b.w / 2, y: b.y + b.h + 16,
+    atmLabel: "대기압", atmText: "760 mmHg", title: o.title, pressureText: pt, atmEqText: eq, colors: DC });
 }
 
-/* 1단계 범례 — 그림 안 번호 ①②③ 의 설명. 비커 오른쪽 글자 칸(넓을 때) 또는 비커 아래(좁을 때) */
+/* 1단계 범례 — 그림 안 번호 ①②③ 의 설명. 비커 옆 글자 칸(넓을 때) 또는 비커 아래(좁을 때) */
 const LEGEND1 = ["① 표면을 떠난다 ↑", "② 액면 근처에 머무르며", "    표면에 부딪힌다", "③ 되돌아온다 ↓"];
 function drawLegend(g, b, L) {
-  g.font = "11px system-ui,sans-serif"; g.fillStyle = C.t2;
-  if (L.textW) {
-    const tx = L.textLeft ? b.x - L.textW + 4 : b.x + b.w + 16, y0 = beakerSurfaceY(b) + 72;
-    g.textAlign = "left";
-    LEGEND1.forEach((s, i) => g.fillText(s, tx, y0 + i * 15));
-  } else {
-    const cx = b.x + b.w / 2, y0 = b.y + b.h + 16 + 34;
-    g.textAlign = "center";
-    LEGEND1.forEach((s, i) => g.fillText(s.trim(), cx, y0 + i * 15));
-  }
+  if (L.textW) DESIGN.legend(g, { x: L.textLeft ? b.x - L.textW + 4 : b.x + b.w + 16, y: beakerSurfaceY(b) + 72, lines: LEGEND1, align: "left", colors: DC });
+  else DESIGN.legend(g, { x: b.x + b.w / 2, y: b.y + b.h + 16 + 34, lines: LEGEND1, align: "center", colors: DC });
 }
 
 /* ── 돋보기 ───────────────────────────────────────────────────── */
@@ -1024,57 +1433,39 @@ const LOUPE_COLS = 7, LOUPE_ROWS_SURF = 4, LOUPE_ROWS_BULK = 6;
 const LOUPE_SURF = LOUPE_COLS * LOUPE_ROWS_SURF, LOUPE_BULK = LOUPE_COLS * LOUPE_ROWS_BULK;
 function drawLoupe(g, L, src, kind, o) {
   const { cx, cy, R } = L;
-  g.strokeStyle = "rgba(120,132,148,0.75)"; g.lineWidth = 1; g.setLineDash([3, 3]);
-  const sx = src.x + src.w, toLeft = cx > sx;
-  const t1 = toLeft ? [cx - R * 0.72, cy - R * 0.72] : [cx - R * 0.70, cy - R * 0.71];
-  const t2 = toLeft ? [cx - R * 0.72, cy + R * 0.72] : [cx + R * 0.70, cy - R * 0.71];
-  g.beginPath(); g.moveTo(toLeft ? sx : src.x, src.y); g.lineTo(t1[0], t1[1]); g.stroke();
-  g.beginPath(); g.moveTo(toLeft ? sx : src.x + src.w, toLeft ? src.y + src.h : src.y); g.lineTo(t2[0], t2[1]); g.stroke();
-  g.setLineDash([]);
-  g.strokeStyle = C["d-blue"]; g.lineWidth = 1.6; g.strokeRect(src.x, src.y, src.w, src.h);
-
-  g.save();
-  g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.clip();
-  g.fillStyle = "#ffffff"; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
-  const surfY = kind === "surface" ? cy - R * 0.05 : cy - R - 10;
-  g.fillStyle = WATER_FILL; g.fillRect(cx - R, surfY, 2 * R, cy + R - surfY);
-  if (o.xs > 0) { g.globalAlpha = o.xs / RAOULT.XS.max; g.fillStyle = SOLN_FILL; g.fillRect(cx - R, surfY, 2 * R, cy + R - surfY); g.globalAlpha = 1; }
-  if (kind === "surface") { g.strokeStyle = WATER_LINE; g.lineWidth = 1.6; g.beginPath(); g.moveTo(cx - R, surfY); g.lineTo(cx + R, surfY); g.stroke(); }
-
-  const cols = LOUPE_COLS, rows = kind === "surface" ? LOUPE_ROWS_SURF : LOUPE_ROWS_BULK;
-  const gx0 = cx - R * 0.92, gw = R * 1.84;
-  const gy0 = kind === "surface" ? surfY + R * 0.10 : cy - R * 0.85, gh = kind === "surface" ? (cy + R - gy0) : R * 1.7;
-  const cw = gw / cols, ch = gh / rows, rO = Math.min(cw, ch) * 0.30;
-  const jit = REDUCED ? 0 : 1.6, marks = o.sampleIdx || new Set();
-  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-    const idx = j * cols + i;
-    const x = gx0 + (i + 0.5) * cw + jit * Math.sin(st.clock * 1.3 + idx * 1.7), y = gy0 + (j + 0.5) * ch + jit * Math.cos(st.clock * 1.1 + idx * 2.3);
-    if (marks.has(idx)) drawSolute(g, x, y, rO * 1.45);
-    else drawH2O(g, x, y, rO, rnd(idx + 11) * 6.28 + (REDUCED ? 0 : 0.15 * Math.sin(st.clock + idx)));
-  }
-  if (kind === "surface") {
-    const nG = o.gasN || 5;
-    for (let k = 0; k < nG; k++) {
-      const x = cx - R * 0.8 + rnd(k * 3 + 5) * R * 1.6;
-      const y = surfY - 8 - rnd(k * 5 + 7) * (surfY - (cy - R * 0.9) - 10) * 0.55;    // 액면 «근처»에 몰린다
-      drawH2O(g, x, y, rO * 0.9, rnd(k + 41) * 6.28);
+  DESIGN.loupe(g, { cx, cy, R, src, kind, solnAlpha: o.xs > 0 ? o.xs / RAOULT.XS.max : 0,
+    title: o.label, sub: "분자 크기로 확대 · 도식", foot: o.sub || "", colors: DC }, (gg, clip) => {
+    /* 돋보기 «안»은 요청자 몫 — 격자 표집(4단계)·기체·증발/응축 애니메이션. 클립은 DESIGN 이 유지한다 */
+    const surfY = kind === "surface" ? (Number.isFinite(clip && clip.surfaceY) ? clip.surfaceY : cy - R * 0.05) : cy - R - 10;
+    const cols = LOUPE_COLS, rows = kind === "surface" ? LOUPE_ROWS_SURF : LOUPE_ROWS_BULK;
+    const gx0 = cx - R * 0.92, gw = R * 1.84;
+    const gy0 = kind === "surface" ? surfY + R * 0.10 : cy - R * 0.85, gh = kind === "surface" ? (cy + R - gy0) : R * 1.7;
+    const cw = gw / cols, ch = gh / rows, rO = Math.min(cw, ch) * 0.30;
+    const jit = REDUCED ? 0 : 1.6, marks = o.sampleIdx || new Set();
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      const idx = j * cols + i;
+      const x = gx0 + (i + 0.5) * cw + jit * Math.sin(st.clock * 1.3 + idx * 1.7), y = gy0 + (j + 0.5) * ch + jit * Math.cos(st.clock * 1.1 + idx * 2.3);
+      if (marks.has(idx)) drawSolute(gg, x, y, rO * 1.45);
+      else drawH2O(gg, x, y, rO, rnd(idx + 11) * 6.28 + (REDUCED ? 0 : 0.15 * Math.sin(st.clock + idx)));
     }
-    if (o.evapAnim) {
-      const ph = REDUCED ? 0.5 : (st.clock % 1.6) / 1.6;
-      const up = surfY - ph * (surfY - (cy - R * 0.75));
-      drawH2O(g, cx - R * 0.35, up, rO, 0.3);
-      arrow(g, cx - R * 0.35 + rO * 2.2, surfY - 4, cx - R * 0.35 + rO * 2.2, cy - R * 0.55, C.t2, 1.6);
-      const dn = (cy - R * 0.75) + ph * (surfY - (cy - R * 0.75));
-      drawH2O(g, cx + R * 0.35, dn, rO, -0.4);
-      arrow(g, cx + R * 0.35 - rO * 2.2, cy - R * 0.55, cx + R * 0.35 - rO * 2.2, surfY - 4, C.t2, 1.6);
+    if (kind === "surface") {
+      const nG = o.gasN || 5;
+      for (let k = 0; k < nG; k++) {
+        const x = cx - R * 0.8 + rnd(k * 3 + 5) * R * 1.6;
+        const y = surfY - 8 - rnd(k * 5 + 7) * (surfY - (cy - R * 0.9) - 10) * 0.55;    // 액면 «근처»에 몰린다
+        drawH2O(gg, x, y, rO * 0.9, rnd(k + 41) * 6.28);
+      }
+      if (o.evapAnim) {
+        const ph = REDUCED ? 0.5 : (st.clock % 1.6) / 1.6;
+        const up = surfY - ph * (surfY - (cy - R * 0.75));
+        drawH2O(gg, cx - R * 0.35, up, rO, 0.3);
+        arrow(gg, cx - R * 0.35 + rO * 2.2, surfY - 4, cx - R * 0.35 + rO * 2.2, cy - R * 0.55, C.t2, 1.6);
+        const dn = (cy - R * 0.75) + ph * (surfY - (cy - R * 0.75));
+        drawH2O(gg, cx + R * 0.35, dn, rO, -0.4);
+        arrow(gg, cx + R * 0.35 - rO * 2.2, cy - R * 0.55, cx + R * 0.35 - rO * 2.2, surfY - 4, C.t2, 1.6);
+      }
     }
-  }
-  g.restore();
-  g.strokeStyle = C["d-gray"]; g.lineWidth = 2.4; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
-  g.textAlign = "center";
-  g.fillStyle = C.t2; g.font = "600 10.5px system-ui,sans-serif"; g.fillText(o.label, cx, cy - R - 14);
-  g.fillStyle = C["d-amber"]; g.font = "600 10px system-ui,sans-serif"; g.fillText("분자 크기로 확대 · 도식", cx, cy - R - 3);
-  if (o.sub) { g.fillStyle = C.t3; g.font = "10px system-ui,sans-serif"; g.fillText(o.sub, cx, cy + R + 14); }
+  });
 }
 /* 두 돋보기는 «따로» 뽑는다 — 같은 수를 두 곳에 찍으면 동어반복이다(4부 ㉕) */
 function sampleSolute(cells, pTrue, k, seedBase) {
@@ -1105,9 +1496,7 @@ function drawStage() {
     drawValues(g, b0, L, { title: "증기 압력", pressure: pPureNow });
     drawValues(g, b1, L, { title: "증기 압력", pressure: pSol });
     /* ΔP — 두 비커 사이 */
-    const mx = (b0.x + b0.w + b1.x) / 2, my = b0.y + 30;
-    g.fillStyle = C["d-red"]; g.font = "600 12px system-ui,sans-serif"; g.textAlign = "center";
-    g.fillText("ΔP", mx, my); g.fillText(sig3(Math.max(0, pPureNow - pSol)), mx, my + 15);
+    DESIGN.deltaP(g, { x: (b0.x + b0.w + b1.x) / 2, y: b0.y + 30, text: sig3(Math.max(0, pPureNow - pSol)), colors: DC });
   } else {
     const b = L.beakers[0];
     const inj = soluteShown();
@@ -1137,8 +1526,8 @@ function drawStage() {
           sub: "왼쪽 ↑ 증발 · 오른쪽 ↓ 응축 — 둘 다 계속" });
     }
   }
-  g.fillStyle = C.t3; g.font = "11px system-ui,sans-serif"; g.textAlign = "center";
-  g.fillText(L.narrow ? "밀폐 비커 · 평면 도식 · 액면 고정" : "밀폐 비커 · 평면 도식 — 액면은 고정이고, 기체 분자를 액면 근처에 몰리게 그렸습니다", w / 2, h - 8);
+  DESIGN.caption(g, { x: w / 2, y: h - 8, colors: DC,
+    text: L.narrow ? "밀폐 비커 · 평면 도식 · 액면 고정" : "밀폐 비커 · 평면 도식 — 액면은 고정이고, 기체 분자를 액면 근처에 몰리게 그렸습니다" });
 }
 function vapStateFor(b, n, ev, co) {
   return { rect: headspace(b), surfaceY: beakerSurfaceY(b) - 2, targetN: n * GAS_SCALE, evapPerSec: ev, condPerSec: co, reduced: REDUCED, colors: MOTION_COLORS };
