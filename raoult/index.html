@@ -21,7 +21,6 @@
   .cols{display:grid; grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr); gap:14px; margin-top:14px}
   @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
   .stage canvas{display:block; width:100%}
-  #glFallback{display:none; padding:22px 16px; font-size:13.5px; color:var(--t2); line-height:1.7}
 
   .stagewrap{display:grid; grid-template-columns:minmax(0,1fr) 200px; gap:0}
   @media(max-width:743px){ .stagewrap{grid-template-columns:minmax(0,1fr) 128px} }
@@ -119,14 +118,7 @@
       <h2 id="stageTitle" style="font-size:15px;margin:0 0 10px;color:var(--t1)">무엇이 이 압력을 만드는가?</h2>
       <div class="stage stage--light stagewrap" id="stageWrap">
         <div style="position:relative">
-          <canvas id="gl" aria-label="밀폐한 비커 속 액체와 그 위 기체 공간을 그린 3차원 그림"></canvas>
-          <canvas id="zoom" style="display:none"
-            aria-label="액체 표면을 분자 크기로 확대한 그림. 표면에 머무르던 분자가 이따금 떠나고, 기체에서 이따금 돌아옵니다."></canvas>
-          <div id="glFallback">
-            그래픽 가속을 쓸 수 없어 그림을 그리지 못했습니다.
-            <b>오른쪽 압력 막대와 아래 측정값은 그대로 동작합니다.</b>
-            수치만으로도 이 활동을 끝까지 할 수 있습니다.
-          </div>
+          <canvas id="stage" aria-label="밀폐한 비커를 평면 도식으로 그린 그림. 돋보기를 켜면 액면을 분자 크기로 확대해 보입니다 — 표면에 머무르던 분자가 이따금 떠나고, 기체에서 이따금 돌아옵니다."></canvas>
         </div>
         <div id="gaugeWrap" class="stage stage--light" style="padding:0">
           <canvas id="gauge" aria-label="증기 압력을 세로 막대로 나타낸 압력계"></canvas>
@@ -235,7 +227,7 @@
           <li>이상 용액입니다. 실제 용액에서 나타나는 어긋남은 다루지 않습니다.</li>
           <li>비휘발성·비전해질 용질만 다룹니다.</li>
           <li>화면의 기체 분자 1개는 약 <b>0.41 mmHg</b>를 나타내는 <b>임의 배율</b>입니다.
-              분자 그림의 크기도 실제 비가 아니라 도식입니다.</li>
+              비커·분자 그림은 전부 <b>평면 도식</b>이며 크기도 실제 비가 아닙니다.</li>
           <li>조작 범위(온도 25~60 ℃, 용질 몰분율 0.05까지, 덮은 넓이 10~75 %)는
               화면에서 읽히는 크기와 교실에서 기다릴 수 있는 시간에서 정했습니다.</li>
         </ul>
