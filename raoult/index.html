@@ -11,8 +11,8 @@
   .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
   .head .sub{color:var(--t2); font-size:14px; margin:0; line-height:1.6}
 
-  .stages{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
-  .stg{font-family:inherit; font-size:14px; font-weight:700; padding:10px 14px; min-height:44px;
+  .stages{display:flex; gap:6px; flex-wrap:wrap; margin-top:14px}
+  .stg{font-family:inherit; font-size:13.5px; font-weight:700; padding:9px 12px; min-height:44px;
     border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
     cursor:pointer; box-shadow:var(--shadow)}
   .stg[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
@@ -21,10 +21,6 @@
   .cols{display:grid; grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr); gap:14px; margin-top:14px}
   @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
   .stage canvas{display:block; width:100%}
-
-  .stagewrap{display:grid; grid-template-columns:minmax(0,1fr) 200px; gap:0}
-  @media(max-width:743px){ .stagewrap{grid-template-columns:minmax(0,1fr) 128px} }
-  #gaugeWrap{border-left:0; border-top-left-radius:0; border-bottom-left-radius:0}
 
   .ctl{margin-bottom:12px}
   .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
@@ -43,41 +39,26 @@
     cursor:pointer; box-shadow:var(--shadow)}
   .btn[aria-pressed="true"]{border-color:var(--accent); box-shadow:inset 0 0 0 2px var(--accent);
     color:var(--accent-dark)}
-  .btn--primary{background:var(--accent); color:#fff; border-color:var(--accent)}
-
-  /* 탭 3 — 예측 게이트와 3지선다 */
-  .predict{margin-top:14px; background:var(--panel); border:1px solid var(--line);
-    border-radius:10px; padding:12px; box-shadow:var(--shadow)}
-  .predict h3{margin:0 0 8px; font-size:14.5px; color:var(--t1)}
-  .predict .opts{display:grid; gap:7px}
-  .pop{font-family:inherit; text-align:left; font-size:13.5px; padding:10px 12px; min-height:44px;
-    border-radius:9px; border:1px solid var(--line); background:var(--bg); color:var(--t2); cursor:pointer}
-  .pop[aria-pressed="true"]{border-color:var(--accent); box-shadow:inset 0 0 0 2px var(--accent);
-    color:var(--accent-dark); font-weight:700}
-  .modelpick{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:7px; margin-top:12px}
-  .mdl{font-family:inherit; padding:9px 10px; border-radius:10px; border:1px solid var(--line);
-    background:var(--panel); color:var(--t2); cursor:pointer; min-height:60px; text-align:left;
-    display:flex; flex-direction:column; gap:3px; box-shadow:var(--shadow)}
-  .mdl b{font-size:13.5px; color:var(--t1)}
-  .mdl span{font-size:12px; color:var(--t3); line-height:1.45}
-  .mdl[aria-pressed="true"]{border-color:var(--accent); box-shadow:inset 0 0 0 2px var(--accent)}
-  .mdl[aria-pressed="true"] b{color:var(--accent-dark)}
+  .btn[disabled]{opacity:.5; cursor:not-allowed}
 
   .note{font-size:12.5px; color:var(--t2); line-height:1.65; margin:10px 0 0;
     background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
   .note b{color:var(--t1)}
-  .note--warn{border-color:var(--d-amber)}
   .verdict{margin-top:10px; font-size:14px; font-weight:700; color:var(--d-green);
     background:var(--panel); border:1px solid var(--d-green); border-radius:9px; padding:11px 12px;
     line-height:1.6}
-  /* ★ 학생 자신의 «틀린 가정»의 결과를 초록(성공색)으로 띄우면 「내 예측이 맞았다」로 읽힌다.
-     그 경우만 주황으로 낸다 — 색이 옳고 그름을 말하게 두지 않는다 */
-  .verdict--assume{color:var(--d-amber); border-color:var(--d-amber); font-weight:600}
   .measuring{margin-top:10px; font-size:13.5px; font-weight:600; color:var(--d-amber);
     background:var(--panel); border:1px solid var(--d-amber); border-radius:9px; padding:11px 12px}
-  .evidence{margin-top:12px}
-  .evidence h3{margin:0 0 7px; font-size:14px; color:var(--t1)}
-  .evidence ul{margin:0; padding-left:19px; font-size:12.5px; color:var(--t2); line-height:1.75}
+
+  /* 6단계 「농도를 높여 본다」 — 측정 기록 표 (liquid/ 의 기록 표 관용구) */
+  .rec{margin-top:12px}
+  .rec table{width:100%; border-collapse:collapse; font-size:12.5px}
+  .rec th,.rec td{border-bottom:1px solid var(--line); padding:5px 6px; text-align:right;
+    font-variant-numeric:tabular-nums}
+  .rec th{color:var(--t3); font-weight:600}
+  .rec td:first-child,.rec th:first-child{text-align:left}
+  .rec .empty{color:var(--t3); font-size:12px; padding:8px 0}
+
   .limits{margin-top:14px; font-size:12px; color:var(--t3); line-height:1.7}
   .limits h3{margin:0 0 5px; font-size:13px; color:var(--t2)}
   .is-off{display:none}
@@ -89,114 +70,71 @@
 <div class="head">
   <h1>증기 압력 내림</h1>
   <p class="sub">밀폐 용기 속 액체는 증발과 응축이 같은 빠르기로 일어나는 동적 평형에 이릅니다.
-     그때 기체가 나타내는 압력이 증기 압력입니다. 여기에 <b>비휘발성 용질</b>을 녹이면 무엇이 달라지는지,
-     그리고 흔히 말하는 &ldquo;용질이 표면을 덮어 막는다&rdquo;가 정말 맞는지 직접 확인합니다.</p>
+     그때 기체가 압력계에 나타내는 값이 증기 압력입니다. 여기에 <b>비휘발성 용질</b>을 녹이면
+     무엇이 달라지는지 여섯 단계로 따라갑니다.</p>
 </div>
 
 <div class="stages" id="stages" role="group" aria-label="단계 선택">
-  <button class="stg tab" data-stage="1" data-tab="1" aria-pressed="true">1. 순물질의 증기 압력</button>
-  <button class="stg tab" data-stage="2" data-tab="2" aria-pressed="false">2. 용질을 넣으면</button>
-  <button class="stg tab" data-stage="3" data-tab="3" aria-pressed="false">3. 정말 「막아서」일까?</button>
+  <button class="stg tab" data-step="1" data-tab="1" aria-pressed="true">1. 증발이 시작된다</button>
+  <button class="stg tab" data-step="2" data-tab="2" aria-pressed="false">2. 동적 평형</button>
+  <button class="stg tab" data-step="3" data-tab="3" aria-pressed="false">3. 용질을 넣는다</button>
+  <button class="stg tab" data-step="4" data-tab="4" aria-pressed="false">4. 표면을 확대해 본다</button>
+  <button class="stg tab" data-step="5" data-tab="5" aria-pressed="false">5. 순물질과 견준다</button>
+  <button class="stg tab" data-step="6" data-tab="6" aria-pressed="false">6. 농도를 높여 본다</button>
 </div>
 <p class="stagedesc" id="stageDesc"></p>
 
 <div class="cols">
   <!-- 왼쪽: 무대 -->
   <div>
-    <!-- 탭 3 전용: 예측 게이트 -->
-    <div class="predict is-off" id="predictBox">
-      <h3>먼저 예측해 보세요 — 액체 표면을 덮개로 덮으면 증기 압력은?</h3>
-      <div class="opts">
-        <button class="pop" data-pred="down" aria-pressed="false">ⓐ 내려간다 — 나가는 것을 막으니까</button>
-        <button class="pop" data-pred="same" aria-pressed="false">ⓑ 그대로다 — 나가는 것도 들어오는 것도 함께 막히니까</button>
-        <button class="pop" data-pred="up" aria-pressed="false">ⓒ 올라간다</button>
-      </div>
-      <p class="note" style="margin-top:10px">예측을 고르기 전에는 결과를 보여 주지 않습니다.</p>
-    </div>
-
     <div class="card">
-      <h2 id="stageTitle" style="font-size:15px;margin:0 0 10px;color:var(--t1)">무엇이 이 압력을 만드는가?</h2>
-      <div class="stage stage--light stagewrap" id="stageWrap">
-        <div style="position:relative">
-          <canvas id="stage" aria-label="밀폐한 비커를 평면 도식으로 그린 그림. 돋보기를 켜면 액면을 분자 크기로 확대해 보입니다 — 표면에 머무르던 분자가 이따금 떠나고, 기체에서 이따금 돌아옵니다."></canvas>
-        </div>
-        <div id="gaugeWrap" class="stage stage--light" style="padding:0">
-          <canvas id="gauge" aria-label="증기 압력을 세로 막대로 나타낸 압력계"></canvas>
-        </div>
+      <h2 id="stageTitle" style="font-size:15px;margin:0 0 10px;color:var(--t1)"></h2>
+      <div class="stage stage--light" id="stageWrap">
+        <canvas id="stage" aria-label="밀폐한 비커를 평면 도식으로 그린 그림. 뚜껑 위 압력계가 증기 압력을 가리키고, 비커 옆에 대기압과 증기 압력 값이 글자로 적혀 있습니다. 돋보기를 켜면 액면을 분자 크기로 확대해 보입니다."></canvas>
       </div>
 
       <div class="btnrow">
-        <button class="btn" id="zoomBtn" aria-pressed="false">분자 수준으로 확대해 보기</button>
-        <button class="btn" id="splitBtn" aria-pressed="false" style="display:none">표면을 확대해 보기</button>
-        <button class="btn" id="skipBtn" style="display:none">평형으로 건너뛰기</button>
         <button class="btn" id="pauseBtn" aria-pressed="true">▶ 시작</button>
+        <button class="btn" id="injectBtn" style="display:none">용질 넣기</button>
+        <button class="btn" id="loupeBtn" aria-pressed="false">분자 수준으로 확대해 보기</button>
+        <button class="btn" id="recBtn" style="display:none">지금 값 기록</button>
       </div>
 
       <p class="note" id="mainNote"></p>
       <div class="measuring is-off" id="measuring">재는 중 — 아직 평형이 아닙니다. 증발 수와 응축 수가 같아질 때까지 기다리세요.</div>
       <div class="verdict is-off" id="verdict"></div>
-    </div>
 
-    <!-- 탭 3 전용: 세 모형 -->
-    <div class="is-off" id="modelBox">
-      <div class="modelpick" id="modelPick">
-        <button class="mdl" data-model="film1" aria-pressed="false">
-          <b>덮개가 나가는 것만 막는다</b><span>ⓐ를 고른 사람의 생각</span></button>
-        <button class="mdl" data-model="film2" aria-pressed="true">
-          <b>덮개가 양쪽을 함께 막는다</b><span>ⓑ를 고른 사람의 생각</span></button>
-        <button class="mdl" data-model="comp" aria-pressed="false">
-          <b>덮개가 아니라 조성이 다르다</b><span>용질이 액체 전체에 퍼져 있다</span></button>
+      <div class="rec is-off" id="recWrap">
+        <table id="recTbl">
+          <thead><tr><th>용매의 몰분율</th><th>용액의 증기 압력 (mmHg)</th><th>내려간 값 ΔP (mmHg)</th></tr></thead>
+          <tbody id="recBody"><tr><td class="empty" colspan="3">평형이 되면 「지금 값 기록」을 눌러 표를 채우세요.</td></tr></tbody>
+        </table>
       </div>
-      <p class="note note--warn" id="honest">
-        <b>이 프로그램은 세 가지 가정이 각각 어떤 결과를 내는지 보여 줍니다.</b>
-        어느 것이 옳은지는 프로그램이 아니라 <b>실제 측정과 열역학</b>이 정합니다. 아래 근거를 함께 읽으세요.
-      </p>
-      <div class="evidence" id="evidence">
-        <h3>프로그램 밖의 근거</h3>
-        <ul>
-          <li><b>저수지 실측</b> — 수면에 기름 단분자막을 깔면 증발 <b>속도</b>는 줄지만,
-              밀폐한 그릇에서 재는 <b>평형 증기 압력은 변하지 않습니다.</b></li>
-          <li><b>진단 문항 B3</b> — 포도당 0.1 mol과 요소 0.1 mol을 각각 물 1 kg에 녹이면
-              끓는점이 <b>같습니다.</b> 두 분자는 크기가 아주 다른데도 그렇습니다.</li>
-          <li><b>열역학</b> — 덮개가 한쪽만 막는다면, 덮은 그릇과 안 덮은 그릇을 이어
-              <b>영원히 저절로 증류</b>할 수 있게 됩니다. 그런 장치는 없습니다.</li>
-        </ul>
-      </div>
-      <p class="note" id="linkline">
-        <b>그래서 이렇게 이어집니다</b> — 용질이 덮개처럼 작용하는 것이라면 증기 압력은
-        <b>전혀 내려가지 않아야</b> 합니다. 그런데 실제로는 내려갑니다.
-      </p>
     </div>
   </div>
 
   <!-- 오른쪽: 조작과 측정값 -->
   <div>
     <div class="card">
-      <div class="ctl">
+      <div class="ctl" id="tCtl">
         <div class="row"><label for="tSl">온도</label><span class="val" id="tVal">45 ℃</span></div>
         <input type="range" id="tSl" min="25" max="60" step="1" value="45">
         <div class="rangeends"><span>25 ℃</span><span>60 ℃</span></div>
       </div>
 
       <div class="ctl is-off" id="xsCtl">
-        <div class="row"><label for="xsSl">용질의 몰분율</label><span class="val" id="xsVal">0.020</span></div>
-        <input type="range" id="xsSl" min="0" max="0.05" step="0.001" value="0.02">
-        <div class="rangeends"><span>0 (순물질)</span><span>0.05</span></div>
-      </div>
-
-      <div class="ctl is-off" id="coverCtl">
-        <div class="row"><label for="coverSl">표면을 덮은 넓이</label><span class="val" id="coverVal">50 %</span></div>
-        <input type="range" id="coverSl" min="0.10" max="0.75" step="0.01" value="0.5">
-        <div class="rangeends"><span>10 %</span><span>75 %</span></div>
+        <div class="row"><label for="xsSl">용질의 몰분율</label><span class="val" id="xsVal">0.030</span></div>
+        <input type="range" id="xsSl" min="0.01" max="0.05" step="0.001" value="0.03">
+        <div class="rangeends"><span>0.01</span><span>0.05</span></div>
       </div>
 
       <div class="ros">
         <div class="readout wide" id="roAtm"><div class="label">대기압 (늘 같습니다)</div>
           <div><span class="value" id="vAtm">1.000</span><span class="unit">atm (760 mmHg)</span></div></div>
 
-        <div class="readout" id="roP"><div class="label">지금 증기 압력</div>
+        <div class="readout wide" id="roP"><div class="label">지금 증기 압력</div>
           <div><span class="value" id="vP">—</span></div></div>
-        <div class="readout" id="roPpure"><div class="label">순물질의 증기 압력</div>
+        <div class="readout wide is-off" id="roPpure"><div class="label">순물질의 증기 압력</div>
           <div><span class="value" id="vPpure">—</span></div></div>
 
         <div class="readout is-off" id="roDp"><div class="label">내려간 값 ΔP</div>
@@ -212,7 +150,7 @@
         <div class="readout wide" id="roState"><div class="label">상태</div>
           <div><span class="value" id="vState">멈춤</span></div></div>
 
-        <div class="readout wide is-off" id="roSurf"><div class="label">두 구획에서 센 용질의 비율</div>
+        <div class="readout wide is-off" id="roSurf"><div class="label">두 곳에서 센 용질의 비율</div>
           <div><span class="value" id="vSurf">—</span></div></div>
       </div>
 
@@ -221,15 +159,12 @@
       <div class="limits">
         <h3>이 모형이 다루지 않는 것</h3>
         <ul style="margin:0;padding-left:18px">
-          <li>분자 사이의 끌림을 <b>직접 계산하지 않습니다.</b> 실제로 잰 증기 압력 곡선을 그대로 넣어
-              대신했습니다. 그래서 이 화면은 &ldquo;수소 결합이 원인이 아니다&rdquo;의
-              <b>증거가 아니라 가정</b>입니다.</li>
+          <li>비커·분자 그림은 전부 <b>평면 도식</b>입니다. 크기와 개수는 실제 비가 아닙니다. 그림의 기체 분자 1개는 약 <b>3 mmHg</b>를 나타내는 임의 배율이고, 오른쪽 「분자 (초당)」의 개수는 그보다 촘촘한 계산용 개수(1개 ≈ 0.41 mmHg)입니다.</li>
+          <li>기체 분자를 <b>액면 근처에 몰리게</b> 그렸습니다. 실제 기체는 용기 전체에 고르게 퍼집니다 — 표면에서 일어나는 교환을 보이기 위한 도식입니다.</li>
+          <li>분자 사이의 끌림을 <b>직접 계산하지 않습니다.</b> 실제로 잰 증기 압력 곡선을 그대로 넣어 대신했습니다.</li>
           <li>이상 용액입니다. 실제 용액에서 나타나는 어긋남은 다루지 않습니다.</li>
           <li>비휘발성·비전해질 용질만 다룹니다.</li>
-          <li>화면의 기체 분자 1개는 약 <b>0.41 mmHg</b>를 나타내는 <b>임의 배율</b>입니다.
-              비커·분자 그림은 전부 <b>평면 도식</b>이며 크기도 실제 비가 아닙니다.</li>
-          <li>조작 범위(온도 25~60 ℃, 용질 몰분율 0.05까지, 덮은 넓이 10~75 %)는
-              화면에서 읽히는 크기와 교실에서 기다릴 수 있는 시간에서 정했습니다.</li>
+          <li>조작 범위(온도 25~60 ℃, 용질 몰분율 0.01~0.05)는 화면에서 읽히는 크기와 교실에서 기다릴 수 있는 시간에서 정했습니다.</li>
         </ul>
       </div>
     </div>

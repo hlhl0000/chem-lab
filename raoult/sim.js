@@ -150,20 +150,506 @@ function atmTimesAbove(t) {
    ★ 이 줄을 지우거나 바꾸지 말 것. 바꾸면 raoult_check.js [G-6] 이 FAIL 한다.
 
    ── 렌더 방침 (사용자 확정 2026-09-07) ──────────────────────────────────
-   거시 세계도, 분자 화면도 «2D 도식»이다. WebGL 을 쓰지 않는다.
-   시각 언어는 같은 「용액」 칩의 waterdensity/ 를 따른다 —
-     · 비커 : 평면 윤곽(stageLine) + 옅은 청색 유리 하이라이트 · 물은 rgba(37,99,235,0.42)
-     · 돋보기 : 원형 클립 + 비커→돋보기 점선 연결선 + 회색 테두리 + ×배율 라벨
-     · 물 분자 : CPK(O 빨강·H 흰색) 공-막대, H–O–H 104.5°
-     · 용질   : 토큰 보라 단색 + 진한 테두리 (발광 없음 — 흰 무대에서 발광은 사라진다, 4부 ㉜)
-   거시 관찰이 기본이고 돋보기는 학생이 켠다(매뉴얼 §14①). 두 배율이 «한 화면»에 같이 있다.
+   거시 세계도, 분자 화면도 «2D 도식»이다. WebGL 을 쓰지 않는다. 시각 언어는 waterdensity/ 를 따른다.
+   · 비커 : 평면 윤곽 + 옅은 청색 하이라이트 · 물은 rgba(37,99,235,0.42)
+   · 압력계 : 뚜껑 위 «다이얼» + 비커 옆 «글자»로 대기압·증기 압력 값 (세로 막대는 증기 압력으로 읽히지 않았다)
+   · 물 분자 : CPK(O 빨강·H 흰색) 공-막대 · 용질 : 노랑(교과서 그림과 같은 색) + 진한 테두리
+   · 기체 분자는 «액면 근처에 몰려» 있다 — 차시 7 에서 학생이 받은 상(像)을 잇는 도식. 한계 목록에 적는다.
+   · 입자의 «운동»과 압력계 «디자인»은 window.RAOULT_MOTION(코덱스 납품) 이 맡는다.
+     없으면 아래 FALLBACK 이 같은 계약으로 돈다 — 화면이 멈추지 않게 하기 위한 최소 구현이다.
    ──────────────────────────────────────────────────────────────────── */
+
+/* ───────── 입자 운동·압력계 모듈 — 코덱스 납품 2026-09-07 (검증스크립트/_raoult_fx2/raoult_motion.js · 수정 없이 그대로) ─────────
+   계약·검증 결과는 같은 폴더 README.md. 이 블록이 없으면 아래 FALLBACK_MOTION 이 같은 계약으로 돈다. */
+(function (root) {
+  "use strict";
+
+  var TAU = Math.PI * 2;
+  var MAX_PARTICLES = 400;
+
+  function finiteNumber(value, fallback) {
+    return typeof value === "number" && isFinite(value) ? value : fallback;
+  }
+
+  function clamp(value, lo, hi) {
+    return Math.max(lo, Math.min(hi, value));
+  }
+
+  function fract(value) {
+    return value - Math.floor(value);
+  }
+
+  function makeRng(seed) {
+    var word = (finiteNumber(seed, 1) >>> 0) || 1;
+    return function () {
+      var t;
+      word = (word + 0x6D2B79F5) | 0;
+      t = Math.imul(word ^ (word >>> 15), 1 | word);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function seedController(opt) {
+    var explicit = opt && finiteNumber(opt.seed, null) !== null;
+    var rng = makeRng(explicit ? opt.seed : 1);
+    var opened = false;
+    return {
+      open: function (state) {
+        if (!opened) {
+          if (!explicit && state && finiteNumber(state.seed, null) !== null) {
+            rng = makeRng(state.seed);
+          }
+          opened = true;
+        }
+      },
+      next: function () { return rng(); }
+    };
+  }
+
+  function rectOf(state, surfaceBound) {
+    var r = state && state.rect ? state.rect : {};
+    var x = finiteNumber(r.x, 0);
+    var y = finiteNumber(r.y, 0);
+    var w = Math.max(4, finiteNumber(r.w, 4));
+    var h = Math.max(4, finiteNumber(r.h, 4));
+    var bottom = y + h;
+    if (surfaceBound) bottom = finiteNumber(state.surfaceY, bottom) - 2;
+    if (bottom < y + 2) bottom = y + 2;
+    return { left: x, top: y, right: x + w, bottom: bottom };
+  }
+
+  function mapParticles(items, oldBounds, nextBounds) {
+    var oldW;
+    var oldH;
+    var newW;
+    var newH;
+    var i;
+    var p;
+    if (!oldBounds) return;
+    if (oldBounds.left === nextBounds.left && oldBounds.top === nextBounds.top &&
+        oldBounds.right === nextBounds.right && oldBounds.bottom === nextBounds.bottom) return;
+    oldW = Math.max(1, oldBounds.right - oldBounds.left);
+    oldH = Math.max(1, oldBounds.bottom - oldBounds.top);
+    newW = nextBounds.right - nextBounds.left;
+    newH = nextBounds.bottom - nextBounds.top;
+    for (i = 0; i < items.length; i += 1) {
+      p = items[i];
+      p.x = nextBounds.left + clamp((p.x - oldBounds.left) / oldW, 0, 1) * newW;
+      p.y = nextBounds.top + clamp((p.y - oldBounds.top) / oldH, 0, 1) * newH;
+    }
+  }
+
+  function cappedMove(p, dt, maxSpeed) {
+    var speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+    var scale;
+    if (speed > maxSpeed) {
+      scale = maxSpeed / speed;
+      p.vx *= scale;
+      p.vy *= scale;
+    }
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+  }
+
+  function reflect(p, b) {
+    if (p.x < b.left) { p.x = b.left + (b.left - p.x); p.vx = Math.abs(p.vx); }
+    if (p.x > b.right) { p.x = b.right - (p.x - b.right); p.vx = -Math.abs(p.vx); }
+    if (p.y < b.top) { p.y = b.top + (b.top - p.y); p.vy = Math.abs(p.vy); }
+    if (p.y > b.bottom) { p.y = b.bottom - (p.y - b.bottom); p.vy = -Math.abs(p.vy); }
+    p.x = clamp(p.x, b.left, b.right);
+    p.y = clamp(p.y, b.top, b.bottom);
+  }
+
+  function vaporFactory(opt) {
+    var random = seedController(opt || {});
+    var particles = [];
+    var serial = 0;
+    var bounds = null;
+    var trackCredit = 0;
+    var exchangeCredit = 0;
+
+    function spawn(b) {
+      var width = b.right - b.left;
+      var height = b.bottom - b.top;
+      var phase = fract((serial + 0.5) * 0.61803398875 + random.next() * 0.035);
+      var speed = 18 + random.next() * 18;
+      var angle = -Math.PI * (0.22 + random.next() * 0.56);
+      var p = {
+        x: b.left + width * (0.04 + random.next() * 0.92),
+        y: b.bottom,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        home: Math.pow(phase, 4),
+        turn: 0.65 + random.next() * 1.35,
+        mode: 0,
+        ready: false
+      };
+      serial += 1;
+      particles.push(p);
+      return p;
+    }
+
+    function pending(mode) {
+      var n = 0;
+      var i;
+      for (i = 0; i < particles.length; i += 1) {
+        if (particles[i].mode === mode) n += 1;
+      }
+      return n;
+    }
+
+    function cancelModes() {
+      var i;
+      for (i = 0; i < particles.length; i += 1) {
+        particles[i].mode = 0;
+        particles[i].ready = false;
+      }
+    }
+
+    function markTail(mode) {
+      var i;
+      for (i = particles.length - 1; i >= 0; i -= 1) {
+        if (particles[i].mode === 0) {
+          particles[i].mode = mode;
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function moveParticle(p, dt, b) {
+      var height = Math.max(1, b.bottom - b.top);
+      var homeY;
+      var angle;
+      var speed;
+      if (p.mode !== 0) {
+        p.vy = Math.max(22, Math.abs(p.vy) + 22 * dt);
+        p.vx *= Math.max(0, 1 - 1.5 * dt);
+        cappedMove(p, dt, 52);
+        if (p.x < b.left || p.x > b.right) reflect(p, b);
+        if (p.y >= b.bottom) {
+          p.y = b.bottom;
+          p.ready = true;
+        }
+        return;
+      }
+
+      homeY = b.bottom - p.home * height;
+      p.vy += (homeY - p.y) * 0.75 * dt;
+      p.turn -= dt;
+      if (p.turn <= 0) {
+        angle = (random.next() - 0.5) * 0.66;
+        speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        p.vx = Math.cos(Math.atan2(p.vy, p.vx) + angle) * speed;
+        p.vy = Math.sin(Math.atan2(p.vy, p.vx) + angle) * speed;
+        p.turn = 0.65 + random.next() * 1.35;
+      }
+      cappedMove(p, dt, 45);
+      reflect(p, b);
+    }
+
+    function removeReady(b) {
+      var removed = 0;
+      var p;
+      var exchange;
+      while (removed < 3 && particles.length) {
+        p = particles[particles.length - 1];
+        if (p.mode === 0 || !p.ready) break;
+        exchange = p.mode === 2;
+        particles.pop();
+        if (exchange && particles.length < MAX_PARTICLES) spawn(b);
+        removed += 1;
+        if (exchange) break;
+      }
+    }
+
+    function step(dt, state) {
+      var d = clamp(finiteNumber(dt, 0), 0, 0.1);
+      var b = rectOf(state || {}, true);
+      var desired = clamp(Math.round(finiteNumber(state && state.targetN, 0)), 0, MAX_PARTICLES);
+      var reduced = !!(state && state.reduced);
+      var removePending;
+      var difference;
+      var rate;
+      var events;
+      var i;
+      var exchangeRate;
+
+      random.open(state);
+      mapParticles(particles, bounds, b);
+      bounds = b;
+
+      if (desired >= particles.length) {
+        if (pending(1) || pending(2)) cancelModes();
+        difference = desired - particles.length;
+        if (difference > 0) {
+          rate = Math.min(180, 10 + difference * 4);
+          trackCredit += rate * d;
+          events = Math.min(3, difference, Math.floor(trackCredit));
+          trackCredit -= events;
+          for (i = 0; i < events; i += 1) spawn(b);
+        } else {
+          trackCredit = 0;
+        }
+      } else {
+        for (i = 0; i < particles.length; i += 1) {
+          if (particles[i].mode === 2) particles[i].mode = 1;
+        }
+        removePending = pending(1);
+        difference = particles.length - desired - removePending;
+        if (difference > 0) {
+          rate = Math.min(180, 10 + (particles.length - desired) * 4);
+          trackCredit += rate * d;
+          events = Math.min(3, difference, Math.floor(trackCredit));
+          trackCredit -= events;
+          for (i = 0; i < events; i += 1) markTail(1);
+        }
+      }
+
+      if (particles.length === desired && pending(1) === 0 && pending(2) === 0 && desired > 0) {
+        exchangeRate = Math.max(0, Math.min(
+          finiteNumber(state && state.evapPerSec, 0),
+          finiteNumber(state && state.condPerSec, 0)
+        )) * 0.02;
+        exchangeCredit += exchangeRate * d;
+        if (exchangeCredit >= 1) {
+          exchangeCredit -= 1;
+          markTail(2);
+        }
+      } else if (particles.length !== desired) {
+        exchangeCredit = 0;
+      }
+
+      if (reduced) {
+        for (i = 0; i < particles.length; i += 1) {
+          if (particles[i].mode !== 0) {
+            particles[i].x = clamp(particles[i].x, b.left, b.right);
+            particles[i].y = b.bottom;
+            particles[i].ready = true;
+          }
+        }
+      } else {
+        for (i = 0; i < particles.length; i += 1) moveParticle(particles[i], d, b);
+      }
+      removeReady(b);
+    }
+
+    function draw(g, state, drawParticle) {
+      var i;
+      if (typeof drawParticle !== "function") return;
+      for (i = 0; i < particles.length; i += 1) {
+        drawParticle(g, particles[i].x, particles[i].y, i);
+      }
+    }
+
+    return {
+      step: step,
+      draw: draw,
+      count: function () { return particles.length; }
+    };
+  }
+
+  function soluteFactory(opt) {
+    var random = seedController(opt || {});
+    var particles = [];
+    var bounds = null;
+
+    function makeParticle(index, b) {
+      var quadrant = index % 4;
+      var localIndex = Math.floor(index / 4);
+      var u = fract((localIndex + 0.5) * 0.61803398875 + random.next() * 0.025);
+      var v = fract((localIndex + 0.5) * 0.75487766625 + random.next() * 0.025);
+      var homeU = (quadrant % 2) * 0.5 + (0.18 + u * 0.64) * 0.5;
+      var homeV = Math.floor(quadrant / 2) * 0.5 + (0.18 + v * 0.64) * 0.5;
+      var speed = 5 + random.next() * 5;
+      var angle = random.next() * TAU;
+      return {
+        x: b.left + homeU * (b.right - b.left),
+        y: b.top + homeV * (b.bottom - b.top),
+        homeU: homeU,
+        homeV: homeV,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        turn: 0.45 + random.next() * 1.1
+      };
+    }
+
+    function step(dt, state) {
+      var d = clamp(finiteNumber(dt, 0), 0, 0.1);
+      var b = rectOf(state || {}, false);
+      var desired = clamp(Math.round(finiteNumber(state && state.count, 0)), 0, MAX_PARTICLES);
+      var reduced = !!(state && state.reduced);
+      var p;
+      var i;
+      var homeX;
+      var homeY;
+      var angle;
+      var speed;
+
+      random.open(state);
+      mapParticles(particles, bounds, b);
+      bounds = b;
+      while (particles.length < desired) particles.push(makeParticle(particles.length, b));
+      while (particles.length > desired) particles.pop();
+      if (reduced) return;
+
+      for (i = 0; i < particles.length; i += 1) {
+        p = particles[i];
+        homeX = b.left + p.homeU * (b.right - b.left);
+        homeY = b.top + p.homeV * (b.bottom - b.top);
+        p.vx += (homeX - p.x) * 0.30 * d;
+        p.vy += (homeY - p.y) * 0.30 * d;
+        p.turn -= d;
+        if (p.turn <= 0) {
+          angle = (random.next() - 0.5) * 1.15;
+          speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+          p.vx = Math.cos(Math.atan2(p.vy, p.vx) + angle) * speed;
+          p.vy = Math.sin(Math.atan2(p.vy, p.vx) + angle) * speed;
+          p.turn = 0.45 + random.next() * 1.1;
+        }
+        cappedMove(p, d, 14);
+        reflect(p, b);
+      }
+    }
+
+    function draw(g, state, drawParticle) {
+      var r = state && state.rect ? state.rect : {};
+      var ix = state && state.injectXY ? finiteNumber(state.injectXY.x, finiteNumber(r.x, 0) + finiteNumber(r.w, 0) / 2) : finiteNumber(r.x, 0) + finiteNumber(r.w, 0) / 2;
+      var iy = state && state.injectXY ? finiteNumber(state.injectXY.y, finiteNumber(r.y, 0)) : finiteNumber(r.y, 0);
+      var diffuse = state && state.reduced ? 1 : clamp(finiteNumber(state && state.diffuse01, 0), 0, 1);
+      var eased = 1 - Math.pow(1 - diffuse, 3);
+      var i;
+      var p;
+      if (typeof drawParticle !== "function") return;
+      for (i = 0; i < particles.length; i += 1) {
+        p = particles[i];
+        drawParticle(g, ix + (p.x - ix) * eased, iy + (p.y - iy) * eased, i);
+      }
+    }
+
+    return {
+      step: step,
+      draw: draw,
+      count: function () { return particles.length; }
+    };
+  }
+
+  function tickText(value) {
+    var a = Math.abs(value);
+    if (a >= 100) return String(Math.round(value));
+    if (a >= 10) return String(Math.round(value * 10) / 10);
+    return String(Math.round(value * 100) / 100);
+  }
+
+  function gaugeFactory() {
+    var shown = null;
+    return {
+      draw: function (g, state) {
+        var cx = finiteNumber(state && state.cx, 0);
+        var cy = finiteNumber(state && state.cy, 0);
+        var r = Math.max(18, finiteNumber(state && state.r, 18));
+        var max = Math.max(0.000001, finiteNumber(state && state.max, 1));
+        var target = clamp(finiteNumber(state && state.value, 0), 0, max);
+        var colors = state && state.colors ? state.colors : {};
+        var start = Math.PI * 5 / 6;
+        var sweep = Math.PI * 4 / 3;
+        var fraction;
+        var angle;
+        var i;
+        var a;
+        var inner;
+        var outer;
+        var tx;
+        var ty;
+
+        if (!g) return;
+        if (shown === null || (state && state.reduced)) shown = target;
+        else {
+          shown += (target - shown) * 0.18;
+          if (Math.abs(target - shown) < max * 0.0005) shown = target;
+        }
+        fraction = clamp(shown / max, 0, 1);
+        angle = start + sweep * fraction;
+
+        g.save();
+        g.lineCap = "round";
+        g.lineJoin = "round";
+        g.fillStyle = colors.face;
+        g.strokeStyle = colors.rim;
+        g.lineWidth = Math.max(2, r * 0.055);
+        g.beginPath();
+        g.arc(cx, cy, r, 0, TAU);
+        g.fill();
+        g.stroke();
+
+        g.strokeStyle = colors.tick;
+        g.lineWidth = Math.max(1, r * 0.018);
+        g.beginPath();
+        g.arc(cx, cy, r * 0.78, start, start + sweep);
+        g.stroke();
+
+        for (i = 0; i <= 20; i += 1) {
+          a = start + sweep * i / 20;
+          outer = r * 0.82;
+          inner = r * (i % 5 === 0 ? 0.68 : 0.74);
+          g.lineWidth = i % 5 === 0 ? Math.max(1.4, r * 0.025) : Math.max(0.8, r * 0.013);
+          g.beginPath();
+          g.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+          g.lineTo(cx + Math.cos(a) * outer, cy + Math.sin(a) * outer);
+          g.stroke();
+        }
+
+        g.fillStyle = colors.muted;
+        g.font = "600 " + Math.max(8, r * 0.105) + "px system-ui,sans-serif";
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        for (i = 0; i <= 4; i += 1) {
+          a = start + sweep * i / 4;
+          tx = cx + Math.cos(a) * r * 0.57;
+          ty = cy + Math.sin(a) * r * 0.57;
+          g.fillText(tickText(max * i / 4), tx, ty);
+        }
+
+        g.strokeStyle = colors.needle;
+        g.lineWidth = Math.max(2, r * 0.038);
+        g.beginPath();
+        g.moveTo(cx - Math.cos(angle) * r * 0.12, cy - Math.sin(angle) * r * 0.12);
+        g.lineTo(cx + Math.cos(angle) * r * 0.62, cy + Math.sin(angle) * r * 0.62);
+        g.stroke();
+        g.fillStyle = colors.needle;
+        g.beginPath();
+        g.arc(cx, cy, r * 0.075, 0, TAU);
+        g.fill();
+        g.strokeStyle = colors.rim;
+        g.lineWidth = Math.max(1, r * 0.018);
+        g.stroke();
+
+        g.fillStyle = colors.text;
+        g.font = "700 " + Math.max(9, r * 0.125) + "px system-ui,sans-serif";
+        g.fillText(state && state.label ? state.label : "", cx, cy + r * 0.42);
+        g.fillStyle = colors.muted;
+        g.font = "500 " + Math.max(8, r * 0.095) + "px system-ui,sans-serif";
+        g.fillText(state && state.sub ? state.sub : "", cx, cy + r * 0.60);
+        g.restore();
+      }
+    };
+  }
+
+  root.RAOULT_MOTION = {
+    vapor: vaporFactory,
+    solute: soluteFactory,
+    gauge: gaugeFactory
+  };
+}(window));
+
+
 
 const $ = id => document.getElementById(id);
 const CSSV = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const C = {};
 ["--t1","--t2","--t3","--line","--panel","--accent","--d-blue","--d-cyan","--d-red",
- "--d-green","--d-amber","--d-violet","--d-gray","--p-silver","--stage-line"].forEach(k => {
+ "--d-green","--d-amber","--d-violet","--d-gray","--p-silver","--p-yellow","--stage-line"].forEach(k => {
   C[k.slice(2)] = CSSV(k) || "#888";
 });
 const REDUCED = matchMedia("(prefers-reduced-motion:reduce)").matches;
@@ -171,126 +657,115 @@ const REDUCED = matchMedia("(prefers-reduced-motion:reduce)").matches;
 /* CPK 는 토큰 예외다(매뉴얼 §4). 테두리는 waterdensity 와 같은 darker() 로 만든다 */
 const CPK_O = "#FF0D0D", CPK_H = "#FFFFFF";
 function darker(hex, f) {
-  const n = parseInt(hex.slice(1), 16);
+  if (!hex.startsWith("#") || hex.length < 7) return "rgb(80,80,80)";
+  const n = parseInt(hex.slice(1, 7), 16);
   return "rgb(" + Math.round((n >> 16 & 255) * f) + "," + Math.round((n >> 8 & 255) * f) + "," +
     Math.round((n & 255) * f) + ")";
 }
 const O_STROKE = darker(CPK_O, 0.5), H_STROKE = darker(CPK_H, 0.45);
-const SOL_FILL = C["d-violet"], SOL_STROKE = darker(C["d-violet"].startsWith("#") ? C["d-violet"] : "#6d28d9", 0.55);
+/* 용질 = 노랑 (사용자 확정 2026-09-07 · 교과서 그림 Ⅱ-10 의 용질 색). 빨강은 CPK O 와 겹친다 */
+const SOL_FILL = C["p-yellow"], SOL_STROKE = darker(C["p-yellow"], 0.55);
 const HOH_DEG = 104.5;
 const WATER_FILL = "rgba(37,99,235,0.42)", WATER_LINE = "rgba(29,78,216,0.9)";
-const SOLN_FILL = "rgba(109,40,217,0.30)";
+const SOLN_FILL = "rgba(250,204,21,0.22)";
 
-/* ── 단계 × 요소 가시성의 «단일 원천» (매뉴얼 §13①).
-   applyStage() 만 display 를 건드린다. 다른 곳에서 display 를 대입하면 게이팅이 조용히 뚫린다. */
+/* ── 단계 × 요소 가시성의 «단일 원천» (매뉴얼 §13①). applyStep() 만 display 를 건드린다. */
 const SHOW = {
-  1: { xsCtl:0, coverCtl:0, roDp:0, roX:0, roSurf:0, predictBox:0, modelBox:0, splitBtn:0, skipBtn:0, zoomBtn:1 },
-  2: { xsCtl:1, coverCtl:0, roDp:1, roX:1, roSurf:0, predictBox:0, modelBox:0, splitBtn:1, skipBtn:0, zoomBtn:0 },
-  3: { xsCtl:0, coverCtl:1, roDp:1, roX:1, roSurf:0, predictBox:1, modelBox:1, splitBtn:0, skipBtn:1, zoomBtn:1 }
+  1: { tCtl:0, xsCtl:0, loupeBtn:1, injectBtn:0, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:0 },
+  2: { tCtl:1, xsCtl:0, loupeBtn:1, injectBtn:0, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:0 },
+  3: { tCtl:0, xsCtl:0, loupeBtn:0, injectBtn:1, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:1 },
+  4: { tCtl:0, xsCtl:0, loupeBtn:1, injectBtn:0, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:1 },
+  5: { tCtl:0, xsCtl:0, loupeBtn:0, injectBtn:0, recBtn:0, recWrap:0, roPpure:1, roDp:1, roX:1 },
+  6: { tCtl:1, xsCtl:1, loupeBtn:0, injectBtn:0, recBtn:1, recWrap:1, roPpure:1, roDp:1, roX:1 }
 };
-/* ⚠ 보일 때 쓸 display 값을 «명시»한다. style.display = "" 는 .is-off 같은 클래스 규칙을
-   못 이겨서 요소가 숨은 채로 남는다 (매뉴얼 §13④ — 이 시뮬 제작 중 실제로 걸렸다). */
-const SHOWVAL = {
-  xsCtl: "block", coverCtl: "block", roDp: "block", roX: "block", roSurf: "block",
-  predictBox: "block", modelBox: "block",
-  splitBtn: "inline-block", skipBtn: "inline-block", zoomBtn: "inline-block"
-};
+/* ⚠ style.display = "" 는 .is-off 클래스를 못 이긴다 — 명시값을 쓴다(매뉴얼 §13④ · 실측) */
+const SHOWVAL = { tCtl:"block", xsCtl:"block", loupeBtn:"inline-block", injectBtn:"inline-block",
+  recBtn:"inline-block", recWrap:"block", roPpure:"block", roDp:"block", roX:"block", roSurf:"block" };
+
 const TITLE = {
-  1: "무엇이 이 압력을 만드는가?",
-  2: "용질을 넣으면 무엇이 달라지는가?",
-  3: "정말 「막아서」 내려가는 것일까?"
+  1: "뚜껑을 덮은 직후 — 무슨 일이 일어나는가?",
+  2: "증발하는 수 = 응축하는 수가 되면?",
+  3: "용질을 넣으면 어디로 가는가?",
+  4: "표면에는 용질이 더 많을까?",
+  5: "압력계 두 개를 견주면?",
+  6: "용질을 더 넣을수록?"
 };
 const DESC = {
-  1: "밀폐한 그릇 속 물입니다. 온도를 바꿔 가며, 증발하는 분자 수와 응축하는 분자 수가 같아지는 순간을 찾아보세요. 「분자 수준으로 확대해 보기」를 누르면 액면을 돋보기로 확대해 표면에서 무슨 일이 일어나는지 보입니다.",
-  2: "왼쪽은 순수한 물, 오른쪽은 비휘발성 용질을 녹인 용액입니다. 용질은 액체 «전체»에 고르게 퍼집니다. 「표면을 확대해 보기」로 액체 속 한 곳과 표면 한 곳을 돋보기로 각각 세어 비교해 보세요.",
-  3: "이 탭은 세 가지 «가정»을 각각 돌려 봅니다. 먼저 예측을 고르면 「덮개가 양쪽을 함께 막는다」부터 돌아갑니다. 그다음 다른 가정도 눌러 보고, 아래 「프로그램 밖의 근거」와 견주어 보세요."
+  1: "밀폐한 비커 속 물입니다. ▶ 를 누르면 표면에서 분자가 떠나 액면 근처에 쌓이기 시작하고, 쌓인 분자 중 일부는 되돌아옵니다. 압력계 바늘이 어떻게 움직이는지 보세요.",
+  2: "떠나는 수와 되돌아오는 수가 같아지면 바늘이 멈춥니다 — 그때가 동적 평형이고, 바늘이 가리키는 값이 증기 압력입니다. 온도를 바꿔 다시 평형을 찾아보세요.",
+  3: "「용질 넣기」를 누르면 비휘발성 용질(노랑)이 액체 «전체»로 퍼집니다. 표면에 뜨지도, 바닥에 가라앉지도 않습니다.",
+  4: "「분자 수준으로 확대해 보기」로 액체 «속» 한 곳과 «표면» 한 곳을 각각 세어 보세요. 뽑을 때마다 조금씩 다르지만 어느 쪽으로도 치우치지 않습니다.",
+  5: "왼쪽은 순수한 물, 오른쪽은 용액입니다. 같은 온도에서 두 압력계를 견주세요.",
+  6: "용질의 몰분율을 올려 가며 평형마다 「지금 값 기록」을 눌러 표를 채우세요. 내려간 값 ΔP 가 몰분율과 어떻게 이어지는지 찾아보세요."
 };
 const NOTE = {
-  1: "<b>증기 압력</b>은 동적 평형에 이르렀을 때 기체가 나타내는 압력입니다. 액체의 양이나 그릇의 부피와는 관계가 없습니다.",
-  2: "용질이 있으면 용매는 그 액체를 <b>떠나기 어려워집니다.</b> 붙잡혀서가 아니라, <b>용액 전체에서</b> 용매 분자가 차지하는 비율이 줄었기 때문입니다.<br><span style=\"color:var(--t3)\">(더 정확히는 액체 쪽에 있을 때의 배치 가짓수가 늘어난 것입니다. 왜 그것이 증발을 줄이는지는 Ⅲ단원에서 다룹니다.)</span>",
-  3: "<b>차단은 속도를 바꾸고, 평형을 바꾸지 않습니다.</b> 덮개를 많이 씌울수록 평형에 이르는 데 <b>오래 걸리지만</b>, 도달한 뒤의 압력은 같습니다."
+  1: "표면을 떠난 분자는 <b>액면 근처에 머무르며</b> 표면에 부딪힙니다. 이 부딪힘이 압력계를 밀어 올립니다.",
+  2: "<b>증기 압력</b>은 동적 평형에 이르렀을 때 기체가 나타내는 압력입니다. 액체의 양이나 그릇의 부피와는 관계가 없습니다.",
+  3: "용질은 액체 <b>전체</b>에 고르게 퍼집니다. 용액 전체에서 물 분자가 차지하는 비율이 그만큼 줄어듭니다.",
+  4: "표면의 조성은 <b>전체의 조성과 같습니다.</b> 표면이 특별한 곳이 아닙니다.",
+  5: "용질이 있으면 용매는 그 액체를 <b>떠나기 어려워집니다.</b> 붙잡혀서가 아니라, <b>용액 전체에서</b> 용매 분자가 차지하는 비율이 줄었기 때문입니다.",
+  6: "내려간 값 ΔP 는 <b>용질의 몰분율에 비례</b>합니다 — 용질의 종류나 크기가 아니라 «개수의 비율»만 봅니다."
 };
 const SIDE = {
-  1: "온도를 올리면 증발하는 분자가 늘고, 그만큼 응축하는 분자도 늘어 더 높은 압력에서 다시 평형이 됩니다.",
-  2: "용질의 몰분율을 올려 가며 두 막대의 차이(ΔP)가 어떻게 변하는지 보세요.",
-  3: "덮은 넓이를 바꿔 보세요. 어떤 가정에서는 평형값이 바뀌고, 어떤 가정에서는 바뀌지 않습니다."
+  1: "바늘이 올라가는 동안은 떠나는 수가 되돌아오는 수보다 많습니다.",
+  2: "온도를 올리면 떠나는 분자가 늘고, 그만큼 되돌아오는 분자도 늘어 더 높은 압력에서 다시 평형이 됩니다.",
+  3: "몰분율은 «용액 전체»의 조성량입니다.",
+  4: "두 돋보기는 서로 «따로» 뽑습니다. 여러 번 누적하면 두 비율이 가까워집니다.",
+  5: "두 비커는 온도·부피·뚜껑이 같습니다. 다른 것은 용질뿐입니다.",
+  6: "표의 ΔP 를 몰분율로 나눠 보세요 — 온도가 같으면 그 비가 거의 같습니다."
 };
 
 /* ── 상태 ─────────────────────────────────────────────────────── */
 const st = {
-  stage: 1,
+  step: 1,
   t: RAOULT.T.init,
-  xs: RAOULT.XS.init,
-  cover: RAOULT.COVER.init,
-  model: "film2",
-  predicted: null,        // 탭 3 예측 게이트 — null 이면 결과를 그리지 않는다
-  running: false,         // 첫 진입은 «일시정지» (매뉴얼 §10)
-  loupe: false,           // 돋보기 켜짐 (탭 1·3: 표면 하나 · 탭 2: 액체 속 + 표면 둘)
-  nPure: 0,               // 순물질 쪽 기체 분자 수 (결정론)
-  nSol: 0,                // 용액(또는 탭 3의 현재 가정) 쪽 기체 분자 수
-  eqSince: null,          // 평형 밴드에 들어온 시각 (s)
-  clock: 0,
-  diffuse: 0,             // 탭 2 용질 확산 진행도 0~1
-  sampA: 0, sampB: 0, sampPer: 40,  // 탭 2 돋보기에서 «따로» 센 두 곳의 용질 개수(이번 뽑기)
-  cumA: 0, cumB: 0, cumN: 0, cumSeed: -1  // 누적 — 한 번만 뽑으면 요동이 신호보다 크다
+  xs: 0.03,
+  running: false,          // 첫 진입은 «일시정지» (매뉴얼 §10)
+  loupe: false,
+  injected: false,         // 3단계에서 「용질 넣기」를 눌렀는가
+  diffuse: 0,              // 용질 확산 진행 0~1
+  nPure: 0, nSol: 0,       // 기체 분자 수 (결정론 · 계산부)
+  eqSince: null, clock: 0,
+  cumA: 0, cumB: 0, cumN: 0, cumSeed: -1,   // 4단계 두 돋보기 누적 표집
+  rec: []                  // 6단계 기록 표
 };
+/* 용질이 «들어 있는» 단계인가 — 계산부에 넘길 X용질 */
+function activeXs() { return (st.step >= 4 || (st.step === 3 && st.injected)) ? st.xs : 0; }
+function twoBeakers() { return st.step >= 5; }
+function soluteShown() { return st.step >= 3; }
 
-/* 탭 3에서 「지금 무엇을 재고 있는가」 — 모형에 따라 계산부의 어느 세트를 쓰는지 */
-function activeModel() { return st.stage === 3 ? st.model : "comp"; }
-function activeCover() { return st.stage === 3 ? st.cover : 0; }
-/* 탭 3 은 X용질 을 «고정»한다. 슬라이더로 열어 두면 덮인 넓이와 같아지는 순간
-   막·증발만(P°·f)과 조성(P°·X)이 «비트 단위로 같은 수»를 내어 두 모형을 가릴 수 없다. */
-function activeXs()    { return st.stage === 1 ? 0 : st.stage === 3 ? RAOULT.XS_TAB3 : st.xs; }
-/* 덮개층을 «그리는가» — 막 가정 둘에서만. 조성 가정에는 덮개가 없다 */
-function coverShown()  { return st.stage === 3 && !gated() && st.model !== "comp" ? st.cover : 0; }
-
-/* 탭 3의 결과를 감추는 게이트 (매뉴얼 §13③ — 그리는 코드 자체를 건너뛴다) */
-function gated() { return st.stage === 3 && st.predicted === null; }
-
-/* ── 압력 표기 단일 원천 (매뉴얼 §14④) ───────────────────────── */
-/* ★ 자릿수가 아니라 «유효숫자»로 고정한다. Antoine 이 문헌 대비 0.24~0.31 % 어긋나므로
-   60 ℃ 에서 「149.0」으로 쓰면 0.03 % 정밀도를 주장하게 되어 모형보다 7배 정밀하다
-   (매뉴얼 P5 M7 정밀도 과장). 3자리면 상대 정밀도가 모형 오차와 같은 자릿수가 된다. */
+/* ── 압력 표기 단일 원천 (매뉴얼 §14④ · 유효숫자 3자리 — P5 M7) ─────────── */
 function sig3(v) { return v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2); }
-function fmtP(mmHg) { return sig3(mmHg); }
-function fmtDp(mmHg) { return sig3(mmHg); }
-/* atm 우선 병기 — 차시 7 liquid/ 와 교과서 57쪽이 모두 atm 을 앞에 쓴다 (매뉴얼 §14④) */
 function setPress(mmHg) { return (mmHg / RAOULT.MMHG_PER_ATM).toFixed(3) + " atm (" + sig3(mmHg) + " mmHg)"; }
 
 /* ── 캔버스 ─────────────────────────────────────────────────── */
-const stageCv = $("stage"), gaugeCv = $("gauge");
+const stageCv = $("stage");
 function sizeCanvas(cv, hCss) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   cv.style.height = hCss + "px";
-  const w = Math.max(1, Math.round(cv.clientWidth * dpr));
-  const h = Math.max(1, Math.round(hCss * dpr));
+  const w = Math.max(1, Math.round(cv.clientWidth * dpr)), h = Math.max(1, Math.round(hCss * dpr));
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
   const g = cv.getContext("2d");
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { g, w: cv.clientWidth, h: hCss };
 }
+/* 결정론적 난수 — 프로브 재현성 */
+function rnd(seed) { return Math.abs(Math.sin(seed * 12.9898 + 78.233) * 43758.5453) % 1; }
 
-/* 결정론적 난수 — 그림이 프레임마다 흔들리지 않게(프로브 재현성) */
-function rnd(seed) {
-  return Math.abs(Math.sin(seed * 12.9898 + 78.233) * 43758.5453) % 1;
-}
-
-/* ── 원시 도형 — waterdensity 와 같은 모양 ────────────────────── */
-/* 물 분자 하나. ang = 분자 축의 회전(라디안). r = O 반지름. */
+/* ── 원시 도형 (waterdensity 와 같은 모양) ─────────────────────── */
 function drawH2O(g, x, y, r, ang) {
-  const half = HOH_DEG / 2 * Math.PI / 180, L = r * 0.95, rH = r * 0.60;
+  const half = HOH_DEG / 2 * Math.PI / 180, L = r * 0.95, rH = r * 0.62;
   for (let k = 0; k < 2; k++) {
     const a = ang - Math.PI / 2 + (k ? half : -half);
     const hx = x + Math.cos(a) * L, hy = y + Math.sin(a) * L;
     g.strokeStyle = "rgba(90,100,112,0.85)"; g.lineWidth = Math.max(1, r * 0.22);
     g.beginPath(); g.moveTo(x, y); g.lineTo(hx, hy); g.stroke();
-    g.fillStyle = CPK_H; g.strokeStyle = H_STROKE; g.lineWidth = Math.max(0.8, r * 0.12);
+    g.fillStyle = CPK_H; g.strokeStyle = H_STROKE; g.lineWidth = Math.max(1.1, r * 0.25);
     g.beginPath(); g.arc(hx, hy, rH, 0, Math.PI * 2); g.fill(); g.stroke();
   }
   g.fillStyle = CPK_O; g.strokeStyle = O_STROKE; g.lineWidth = Math.max(1, r * 0.16);
   g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke();
 }
-/* 용질 입자 — 단색 + 진한 테두리. 크기는 «도식»이다(§7 L-4). 발광·후광 없음. */
 function drawSolute(g, x, y, r) {
   g.fillStyle = SOL_FILL; g.strokeStyle = SOL_STROKE; g.lineWidth = Math.max(1.2, r * 0.18);
   g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke();
@@ -304,202 +779,286 @@ function arrow(g, x0, y0, x1, y1, col, lw) {
   g.lineTo(x1 - hl * Math.cos(a + 0.5), y1 - hl * Math.sin(a + 0.5));
   g.closePath(); g.fill();
 }
-
-/* ── 기체 분자 (화면용) ────────────────────────────────────────
-   개수는 계산부의 종단값을 향해 결정론적으로 가고, «자리»만 흩뿌린다.
-   평형에 닿은 뒤에도 교환 사건을 계속 일으킨다 (매뉴얼 §14③-2 — 정지 = 평형 오독 방지). */
-const gasP = [], gasS = [];
-function syncGas(arr, want) {
-  want = Math.max(0, Math.round(want));
-  while (arr.length < want) arr.push({ x: rnd(arr.length * 3.1 + 1), y: rnd(arr.length * 7.7 + 2), a: 0, s: arr.length });
-  while (arr.length > want) arr.splice(Math.floor(rnd(st.clock * 13 + arr.length) * arr.length), 1);
-  for (const g of arr) g.a = Math.min(1, g.a + 0.08);
-}
-let swapTimer = 0;
-function exchangeTick(dt) {
-  swapTimer += dt;
-  if (swapTimer < 0.35) return;
-  swapTimer = 0;
-  for (const arr of [gasP, gasS]) {
-    if (arr.length > 2) {
-      arr.splice(Math.floor(rnd(st.clock * 17) * arr.length), 1);
-      arr.push({ x: rnd(st.clock * 5 + 3), y: rnd(st.clock * 9 + 4), a: 0, s: Math.floor(st.clock * 100) });
-    }
+/* ── 운동·압력계 — 코덱스 납품(window.RAOULT_MOTION)이 있으면 그것, 없으면 FALLBACK ─────
+   계약: vapor(opt)→{step(dt,state),draw(g,state,drawParticle),count()} · solute 동형 · gauge()→{draw(g,state)}
+   FALLBACK 은 «화면이 멈추지 않게 하는 최소 구현»이다. 요구(표면에서 생성·소멸 · 표면 근처 밀도 ·
+   깜빡임 없음 · 용질 자유 운동)는 같은 방향으로 만족시키되 정교함은 납품분이 맡는다. */
+/* ⚠ 운동의 난수는 mulberry32 다(waterdensity 와 같다). rnd() 의 sin 해시를 «연속 호출»하면 값이 상관되어
+   입자가 한쪽으로 흘렀다(10회 시간 평균 사분면 699/1487/474/690 — 실측). 정적 배치엔 rnd 를 써도 된다. */
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const FALLBACK_MOTION = {
+  vapor(opt) {
+    const P = [], seed = (opt && opt.seed) || 1;
+    let acc = 0;
+    const R = mulberry32(seed * 7919);
+    return {
+      step(dt, s) {
+        const r = s.rect, sy = s.surfaceY, cap = 400;
+        const want = Math.min(cap, Math.max(0, s.targetN));
+        /* 개수 추종 — 프레임당 최대 3건, 생성은 «표면에서», 소멸은 표면에 닿은 것만 */
+        /* 초기 상승 속도와 아래 되돌림은 «공간 높이에 비례» — 절대 px/s 로 두면 낮은 비커(두 비커 판)에서
+           뚜껑에 더 자주 닿아 분포가 평평해진다(실측 54 %). 생성은 프레임당 2건까지 — 3건이면 100 ms 창에서 23 % 튀었다 */
+        /* 최대 도달 높이 ≈ up²/(2·되돌림). 0.20·h 로 두니 26 px 를 못 넘어 액면에 «막»처럼 붙었다(100 %).
+           0.45·h 면 빠른 것은 공간의 절반쯤 올라가고 느린 것은 낮게 머문다 — «대부분» 근처, «전부» 아님 */
+        const up = 20 + 0.45 * r.h;
+        let diff = want - P.length, ops = 0;
+        while (diff > 0.5 && ops < 2) { P.push({ x: r.x + 6 + R() * (r.w - 12), y: sy - 2, vx: (R() - 0.5) * 30, vy: -up * (0.6 + 0.8 * R()), dying: false }); diff--; ops++; }
+        if (diff < -0.5) { for (const p of P) if (ops < 3 && !p.dying && p.y > sy - r.h * 0.35) { p.dying = true; p.vy = Math.abs(p.vy) + 20; ops++; if (++diff >= -0.5) break; } }
+        /* 평형에서도 교환 — 초당 한 쌍 정도 */
+        acc += dt; if (acc > 0.9 && P.length > 3 && Math.abs(diff) < 0.5) { acc = 0; const k = P.findIndex(p => !p.dying && p.y > sy - r.h * 0.3); if (k >= 0) { P[k].dying = true; P[k].vy = 30; } P.push({ x: r.x + 6 + R() * (r.w - 12), y: sy - 2, vx: (R() - 0.5) * 30, vy: -25 - R() * 25, dying: false }); }
+        /* reduced: 운동은 멈추되 «개수»는 따라간다. 한 줄에 몰아 두지 않고 액면 근처 띠(아래 35 %)에 고정 배치 —
+           한 줄이면 서로 겹쳐 한 개처럼 보이고 말풍선에 가려진다(육안 실측) */
+        if (s.reduced) {
+          for (let i = P.length - 1; i >= 0; i--) if (P[i].dying) P.splice(i, 1);
+          for (let i = 0; i < P.length; i++) { const p = P[i]; if (p.y > sy - 5 || p.y < r.y + 6) { p.y = sy - 5 - rnd(seed * 77 + i * 3) * r.h * 0.35; } }
+          return;
+        }
+        const step = Math.min(dt, 0.05);
+        for (let i = P.length - 1; i >= 0; i--) {
+          const p = P[i];
+          p.vy += (18 + 0.25 * r.h) * step;                   // 액면 쪽 되돌림(공간 높이에 비례) → 표면 근처 밀도
+          p.vx += (R() - 0.5) * 8 * step;
+          const sp = Math.hypot(p.vx, p.vy); if (sp > 55) { p.vx *= 55 / sp; p.vy *= 55 / sp; }
+          p.x += p.vx * step; p.y += p.vy * step;
+          if (p.x < r.x + 4) { p.x = r.x + 4; p.vx = Math.abs(p.vx); }
+          if (p.x > r.x + r.w - 4) { p.x = r.x + r.w - 4; p.vx = -Math.abs(p.vx); }
+          if (p.y < r.y + 6) { p.y = r.y + 6; p.vy = Math.abs(p.vy) * 0.6; }
+          if (p.y > sy - 3) { if (p.dying) { P.splice(i, 1); continue; } p.y = sy - 3; p.vy = -Math.abs(p.vy) * 0.9 - 8; }
+        }
+      },
+      draw(g, s, dp) { for (let i = 0; i < P.length; i++) dp(g, P[i].x, P[i].y, i); },
+      count() { return P.length; }
+    };
+  },
+  solute(opt) {
+    const P = [], seed = (opt && opt.seed) || 2;
+    const R = mulberry32(seed * 104729);
+    return {
+      step(dt, s) {
+        const r = s.rect;
+        while (P.length < s.count) P.push({ u: R(), v: R(), vx: (R() - 0.5) * 12, vy: (R() - 0.5) * 12 });
+        while (P.length > s.count) P.pop();
+        if (s.reduced) return;
+        const step = Math.min(dt, 0.05);
+        for (const p of P) {
+          p.vx += (R() - 0.5) * 20 * step; p.vy += (R() - 0.5) * 20 * step;
+          const sp = Math.hypot(p.vx, p.vy); if (sp > 14) { p.vx *= 14 / sp; p.vy *= 14 / sp; }
+          p.u += p.vx * step / r.w; p.v += p.vy * step / r.h;
+          if (p.u < 0.03) { p.u = 0.03; p.vx = Math.abs(p.vx); } if (p.u > 0.97) { p.u = 0.97; p.vx = -Math.abs(p.vx); }
+          if (p.v < 0.05) { p.v = 0.05; p.vy = Math.abs(p.vy); } if (p.v > 0.95) { p.v = 0.95; p.vy = -Math.abs(p.vy); }
+        }
+      },
+      draw(g, s, dp) {
+        const r = s.rect, e = 1 - Math.pow(1 - s.diffuse01, 3), ix = s.injectXY.x, iy = s.injectXY.y;
+        for (let i = 0; i < P.length; i++) {
+          const tx = r.x + P[i].u * r.w, ty = r.y + P[i].v * r.h;
+          dp(g, ix + (tx - ix) * e, iy + (ty - iy) * e, i);
+        }
+      },
+      count() { return P.length; }
+    };
+  },
+  gauge() {
+    return {
+      draw(g, s) {
+        const { cx, cy, r } = s, a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
+        g.fillStyle = s.colors.face; g.strokeStyle = s.colors.rim; g.lineWidth = 2;
+        g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill(); g.stroke();
+        g.strokeStyle = s.colors.tick; g.lineWidth = 1.2;
+        for (let k = 0; k <= 4; k++) {
+          const a = a0 + (a1 - a0) * k / 4;
+          g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - 3), cy + Math.sin(a) * (r - 3)); g.lineTo(cx + Math.cos(a) * (r - 8), cy + Math.sin(a) * (r - 8)); g.stroke();
+        }
+        g.fillStyle = s.colors.text; g.font = "9px system-ui,sans-serif"; g.textAlign = "center";
+        g.fillText("0", cx + Math.cos(a0) * (r - 14), cy + Math.sin(a0) * (r - 14) + 3);
+        g.fillText(sig3(s.max), cx + Math.cos(a1) * (r - 14), cy + Math.sin(a1) * (r - 14) + 3);
+        const a = a0 + (a1 - a0) * Math.max(0, Math.min(1, s.value / s.max));
+        g.strokeStyle = s.colors.needle; g.lineWidth = 2.2;
+        g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * (r - 6), cy + Math.sin(a) * (r - 6)); g.stroke();
+        g.fillStyle = s.colors.needle; g.beginPath(); g.arc(cx, cy, 2.6, 0, Math.PI * 2); g.fill();
+        /* 라벨은 알 «밖» 아래에 — 안에 쓰면 r=22 에서 바늘·눈금과 겹친다(육안 실측) */
+        g.fillStyle = s.colors.muted; g.font = "600 9.5px system-ui,sans-serif";
+        g.fillText(s.label, cx + r + 4, cy + 4);
+        g.textAlign = "left";
+      }
+    };
   }
-}
+};
+const MOTION = (typeof window !== "undefined" && window.RAOULT_MOTION) ? window.RAOULT_MOTION : FALLBACK_MOTION;
+/* ⚠ reduced-motion 에서는 기체만 FALLBACK 을 쓴다. 납품 모듈은 RM 에서 「살아 있는 입자의 위치를 바꾸지
+   않는다」를 문자 그대로 지켜, 액면 2 px 위에서 태어난 입자가 영영 그 자리에 남아 «한 줄 막»이 된다(프로브·육안).
+   FALLBACK 은 RM 에서 입자를 액면 근처 «띠»에 정적으로 흩어 둔다 — 개수는 똑같이 상태를 따른다.
+   납품 파일은 고치지 않는다(원본 보존 · N5-1). 이 분기는 통합 보정이며 README 에도 적었다. */
+const VAPOR_FACTORY = REDUCED ? FALLBACK_MOTION.vapor : MOTION.vapor;
+const vapP = VAPOR_FACTORY({ seed: 7 }), vapS = VAPOR_FACTORY({ seed: 13 }), solM = MOTION.solute({ seed: 11 }), dial = MOTION.gauge();
+const GAS_MMHG = 3;                                   // 그림의 기체 분자 1개 ≈ 3 mmHg (index.html 「다루지 않는 것」과 같은 수)
+const GAS_SCALE = 1 / (GAS_MMHG * RAOULT.SCALE);      // 계산부 분자 수 → 화면 입자 수 (60 ℃ 에서 약 50개, 상한 400 안)
+const SOL_DOTS = 24;                 // X용질 0.05 에서 24개. 개수는 도식이다(정직한 «비율»은 돋보기가 센다)
+function soluteDots(xs) { return Math.round(SOL_DOTS * xs / RAOULT.XS.max); }
+const MOTION_COLORS = { face: "#ffffff", rim: C["stage-line"], needle: C["d-red"], tick: C["d-gray"], text: C.t2, muted: C.t3 };
 
-/* ── 배치 ──────────────────────────────────────────────────────
-   [비커 …] 왼쪽 · [돋보기 …] 오른쪽. 좁은 화면(< 520 px)에서는 돋보기를 «아래»에 둔다
-   (waterdensity 와 같은 규칙 — 옆에 두면 비커가 성냥갑이 된다). */
-const H_BASE = 370;
+/* ── 배치 ────────────────────────────────────────────────────── */
+const H_BASE = 440;
+const DIAL_R = 34, DIAL_H = 84, DIAL_MAX = 200, GAP2 = 40;   // 압력계 반지름 · 뚜껑 위 자리 · 눈금 끝(mmHg, 온도를 바꿔도 같은 계기) · 두 비커 사이
 function layout(w) {
   const narrow = w < 520;
-  const nB = st.stage === 2 ? 2 : 1;
-  const nL = st.loupe ? (st.stage === 2 ? 2 : 1) : 0;
-  const pad = 12;
+  const nB = twoBeakers() ? 2 : 1;
+  const nL = st.loupe ? (st.step === 4 ? 2 : 1) : 0;
+  const pad = 12, dialH = DIAL_H;
   let R = 0, loupeW = 0, loupeH = 0;
   if (nL) {
-    /* 아래 배치: 제목(위 24) + 알(2R) + 부제(아래 30) + 바닥 설명 줄(20). 서로 겹치지 않게 «띠»로 잡는다 */
     if (narrow) { R = Math.max(40, Math.min(66, (w - pad * 2 - 24) / (nL * 2 + 0.6))); loupeH = 2 * R + 74; }
-    else { R = nL === 2 ? Math.min(66, (H_BASE - 100) / 4) : 86; loupeW = 2 * R + 40; }
+    else { R = nL === 2 ? 56 : 82; loupeW = 2 * R + 40; }
   }
   const H = H_BASE + loupeH;
-  /* 비커 띠는 바닥 설명 한 줄(26 px)을 남긴다. 비커 라벨은 «액체 안»에 쓰므로 아래 여백이 더 필요 없다 */
-  const area = { x: pad, y: pad + 22, w: w - pad * 2 - loupeW, h: H_BASE - pad - 22 - 26 };
-  const bw = Math.max(70, Math.min(190, (area.w - (nB - 1) * 22) / nB));
-  const bx0 = area.x + (area.w - (bw * nB + (nB - 1) * 22)) / 2;
+  const textW = (!narrow && nB === 1) ? 150 : 0;   // 비커 옆 글자 칸 (비커 하나일 때)
+  const textLeft = textW > 0 && nL > 0;            // 돋보기가 켜지면 글자 칸을 «왼쪽»으로 — 연결 점선이 글자를 가로지르지 않게(육안)
+  /* 비커 «아래» 글자: 비커가 둘이거나 화면이 좁으면 값 두 줄. 1단계 좁은 화면이면 범례 네 줄 더 */
+  const under = (nB === 2 || narrow) ? 34 + ((narrow && st.step === 1) ? 62 : 0) : 0;
+  const area = { x: pad + (textLeft ? textW : 0), y: pad + dialH, w: w - pad * 2 - loupeW - textW, h: H_BASE - pad - dialH - 26 - under };
+  const bw = Math.max(70, Math.min(nB === 2 ? 210 : 250, (area.w - (nB - 1) * GAP2) / nB));
+  const bx0 = area.x + (area.w - (bw * nB + (nB - 1) * GAP2)) / 2;
   const beakers = [];
-  for (let i = 0; i < nB; i++) beakers.push({ x: bx0 + i * (bw + 22), y: area.y, w: bw, h: area.h });
+  for (let i = 0; i < nB; i++) beakers.push({ x: bx0 + i * (bw + GAP2), y: area.y, w: bw, h: area.h });
   const loupes = [];
   if (nL) {
     if (!narrow) {
       const cx = w - pad - R - 8;
-      const ys = nL === 2 ? [area.y + R + 6, area.y + area.h - R - 4] : [area.y + area.h / 2 - 6];
+      const ys = nL === 2 ? [area.y + R + 4, area.y + area.h - R - 14] : [area.y + area.h / 2];
       ys.forEach(cy => loupes.push({ cx, cy, R }));
     } else {
-      const cy = H_BASE + 24 + R;                      // 위 24 px 는 돋보기 제목 자리
+      const cy = H_BASE + 24 + R;
       const xs = nL === 2 ? [w / 2 - R - 12, w / 2 + R + 12] : [w / 2];
       xs.forEach(cx => loupes.push({ cx, cy, R }));
     }
   }
-  return { H, narrow, beakers, loupes, R };
+  return { H, narrow, beakers, loupes, R, textW, textLeft, under };
 }
 
-/* ── 비커 (2D 도식) ────────────────────────────────────────────
-   b = {x,y,w,h} · opts = { label, solute(0~1), cover(0~1), gas(배열), evap, cond, dots }
-   액면은 «고정»이다(§3-7 — 증발로 줄어드는 양은 0.01 % 수준이라 보이지 않는 것이 옳다). */
+/* ── 비커 (2D 도식) ──────────────────────────────────────────── */
 const FILL_FRAC = 0.58;
 function beakerSurfaceY(b) { return b.y + b.h - b.h * FILL_FRAC; }
+function headspace(b) { return { x: b.x + 6, y: b.y + 8, w: b.w - 12, h: beakerSurfaceY(b) - b.y - 8 }; }
+function liquidRect(b) { const sy = beakerSurfaceY(b); return { x: b.x + 8, y: sy + 8, w: b.w - 16, h: b.y + b.h - sy - 14 }; }
+
 function drawBeaker(g, b, o) {
-  const x = b.x, w = b.w, top = b.y, bot = b.y + b.h;
-  const sy = beakerSurfaceY(b);
-  /* 액체 — 물색을 용질 짙기만큼 보라 쪽으로 (「전체에 퍼져 있다」를 색으로) */
-  g.fillStyle = WATER_FILL;
-  g.fillRect(x + 2, sy, w - 4, bot - sy);
-  if (o.solute > 0.001) {
-    g.fillStyle = SOLN_FILL; g.globalAlpha = o.solute; g.fillRect(x + 2, sy, w - 4, bot - sy); g.globalAlpha = 1;
+  const x = b.x, w = b.w, top = b.y, bot = b.y + b.h, sy = beakerSurfaceY(b);
+  /* 액체 — 용질이 있으면 노랑을 아주 옅게 섞는다(전체에 퍼져 있음) */
+  g.fillStyle = WATER_FILL; g.fillRect(x + 2, sy, w - 4, bot - sy);
+  if (o.soluteAmt > 0.001) { g.globalAlpha = o.soluteAmt; g.fillStyle = SOLN_FILL; g.fillRect(x + 2, sy, w - 4, bot - sy); g.globalAlpha = 1; }
+  /* 용질 입자(운동은 팩토리) */
+  if (o.solute) {
+    const rS = Math.max(2.4, w * 0.02);
+    o.solute.draw(g, { rect: liquidRect(b), count: o.soluteCount, injectXY: { x: x + w / 2, y: sy + 10 }, diffuse01: o.diffuse, reduced: REDUCED, colors: MOTION_COLORS },
+      (gg, px, py) => drawSolute(gg, px, py, rS));
   }
-  /* 용질 입자 — 액체 «전체»에 고르게. 투입 직후에는 위에서 퍼져 내려온다(diffuse) */
-  if (o.dots && o.dots.length) {
-    const rS = Math.max(2.2, w * 0.017);
-    for (const d of o.dots) {
-      const tx = x + 6 + d.u * (w - 12), ty = sy + 6 + d.v * (bot - sy - 12);
-      const e = 1 - Math.pow(1 - o.diffuse, 3);                    // 감속
-      const px = (x + w / 2) + (tx - (x + w / 2)) * e;
-      const py = (sy + 8) + (ty - (sy + 8)) * e;
-      drawSolute(g, px, py, rS);
-    }
-  }
-  /* 액면 선 */
   g.strokeStyle = WATER_LINE; g.lineWidth = 1.8;
   g.beginPath(); g.moveTo(x + 2, sy); g.lineTo(x + w - 2, sy); g.stroke();
-  /* 덮개층 — 탭 3 막 가정에서만. 왼쪽에서부터 cover 비율만큼 */
-  if (o.cover > 0.001) {
-    g.fillStyle = "rgba(120,105,80,0.85)";
-    g.fillRect(x + 2, sy - 5, (w - 4) * o.cover, 5);
-  }
-  /* 기체 분자 — 액면 위 공간에 작은 H₂O */
-  if (o.gas) {
-    const hs = { x: x + 8, y: top + 16, w: w - 16, h: sy - top - 26 };
-    const rO = Math.max(1.6, Math.min(2.6, w * 0.014));
-    for (const p of o.gas) {
-      g.globalAlpha = 0.45 + 0.55 * p.a;
-      drawH2O(g, hs.x + p.x * hs.w, hs.y + p.y * hs.h, rO, rnd(p.s) * 6.28);
-    }
-    g.globalAlpha = 1;
-  }
-  /* 증발·응축 화살표 — «같은 굵기». 교과서 그림 Ⅱ-10 에는 응축 화살표가 없다(검토자 실측).
-     둘을 같은 굵기로 나란히 두는 것이 이 그림의 요점이다. 개수는 옆 숫자가 말한다. */
+  /* 증발·응축 화살표 — 같은 굵기 한 쌍. 분자보다 «먼저» 그려 분자가 그 앞을 지나가게 한다.
+     개수 글자는 액면 «아래»(액체 위쪽 띠)에 둔다 — 기체 띠 위에 글자를 얹으면 지나가는 분자가
+     글자 밑에서 사라졌다 나타나 깜빡임으로 보인다(실측 · _raoult_diag.js). */
   if (o.evap !== undefined) {
-    const ax = x + w * 0.36, bx2 = x + w * 0.64, len = Math.min(26, (sy - top) * 0.32);
+    const ax = x + w * 0.28, bx2 = x + w * 0.72, len = Math.min(30, (sy - top) * 0.28);
     arrow(g, ax, sy - 2, ax, sy - 2 - len, C.t2, 2.2);
     arrow(g, bx2, sy - 2 - len, bx2, sy - 2, C.t2, 2.2);
-    g.fillStyle = C.t2; g.font = "600 10px system-ui,sans-serif"; g.textAlign = "center";
-    g.fillText("증발 " + o.evap, ax, sy - 4 - len - 4);
-    g.fillText("응축 " + o.cond, bx2, sy - 4 - len - 4);
+    g.fillStyle = C.t1; g.font = "600 11px system-ui,sans-serif"; g.textAlign = "center";
+    g.fillText((o.numbered ? "① " : "") + "증발 " + o.evap, ax, sy + 16);
+    g.fillText((o.numbered ? "③ " : "") + "응축 " + o.cond, bx2, sy + 16);
+    if (o.numbered) { g.fillStyle = C["d-blue"]; g.font = "600 12px system-ui,sans-serif"; g.fillText("②", x + w / 2, sy - (sy - top) * 0.45); }
   }
-  /* 유리 윤곽 — 내용물 «앞»에 그린다(안 그러면 바닥선이 물에 덮인다). 밀폐 뚜껑 포함 */
+  /* 기체 분자(운동은 팩토리) — H₂O. 눈으로 하나하나 따라갈 수 있는 크기 */
+  if (o.vapor) {
+    const rO = Math.max(2.6, Math.min(4.2, w * 0.017));
+    o.vapor.draw(g, o.vaporState, (gg, px, py, i) => drawH2O(gg, px, py, rO, rnd(i + 3) * 6.28));
+  }
+  /* 유리 윤곽 — 내용물 «앞»에. 뚜껑 판 + 위에 압력계 */
   g.save();
   g.strokeStyle = C["stage-line"]; g.lineWidth = 2.6; g.lineJoin = "round"; g.lineCap = "round";
-  g.beginPath();
-  g.moveTo(x, top + 4); g.lineTo(x, bot); g.lineTo(x + w, bot); g.lineTo(x + w, top + 4);
-  g.stroke();
-  /* 뚜껑 — 판 + 손잡이 */
-  g.fillStyle = "rgba(107,114,128,0.95)";
-  g.fillRect(x - 5, top - 2, w + 10, 6);
-  g.fillRect(x + w / 2 - 6, top - 10, 12, 8);
-  /* 유리 하이라이트 — 흰색이 아니라 옅은 청색(§5) */
+  g.beginPath(); g.moveTo(x, top + 4); g.lineTo(x, bot); g.lineTo(x + w, bot); g.lineTo(x + w, top + 4); g.stroke();
+  g.fillStyle = "rgba(107,114,128,0.95)"; g.fillRect(x - 5, top - 2, w + 10, 6);
+  g.fillRect(x + w / 2 - 3, top - 10, 6, 8);          // 압력계 연결관
   g.strokeStyle = "rgba(160,200,228,0.75)"; g.lineWidth = 2.2;
   g.beginPath(); g.moveTo(x + 7, top + 18); g.lineTo(x + 7, bot - 12); g.stroke();
   g.restore();
-  /* 라벨 — 비커 «아래»가 아니라 «액체 안»에 쓴다 (waterdensity 의 「물」「얼음」과 같은 자리).
-     아래에 쓰면 바닥 설명·돋보기 제목과 겹친다 — 육안에서 실제로 잡혔다. */
-  if (o.label) {
-    g.fillStyle = C.t1; g.font = "600 12px system-ui,sans-serif"; g.textAlign = "center";
-    g.fillText(o.label, x + w / 2, sy + (bot - sy) * 0.58);
+  /* 압력계 다이얼 — 뚜껑 위 */
+  dial.draw(g, { cx: x + w / 2, cy: top - (DIAL_H - 38), r: DIAL_R, value: o.pressure, max: o.pmax, label: "압력계", sub: "mmHg", colors: MOTION_COLORS, reduced: REDUCED });
+  /* 라벨 — 액체 안 아래쪽(4단계 표본 상자·위쪽 개수 글자와 겹치지 않게) */
+  if (o.label) { g.fillStyle = C.t1; g.font = "600 12px system-ui,sans-serif"; g.textAlign = "center"; g.fillText(o.label, x + w / 2, sy + (bot - sy) * 0.80); }
+}
+/* 비커 옆(또는 아래) 글자 — 대기압·증기 압력 값. 세로 막대 대신 이것이 «값»의 자리다 */
+function drawValues(g, b, L, o) {
+  g.font = "600 12px system-ui,sans-serif";
+  if (L.textW) {
+    const tx = L.textLeft ? b.x - L.textW + 4 : b.x + b.w + 16, sy = beakerSurfaceY(b);
+    g.textAlign = "left";
+    g.fillStyle = C.t3; g.font = "11px system-ui,sans-serif"; g.fillText("대기압", tx, sy - 30);
+    g.fillStyle = C.t1; g.font = "600 13px system-ui,sans-serif"; g.fillText("760 mmHg", tx, sy - 14);
+    g.fillStyle = C.t3; g.font = "11px system-ui,sans-serif"; g.fillText(o.title, tx, sy + 12);
+    g.fillStyle = C["d-blue"]; g.font = "600 15px system-ui,sans-serif"; g.fillText(sig3(o.pressure) + " mmHg", tx, sy + 30);
+    g.fillStyle = C.t3; g.font = "10.5px system-ui,sans-serif"; g.fillText("= " + (o.pressure / 760).toFixed(3) + " atm", tx, sy + 46);
+  } else {
+    const cx = b.x + b.w / 2, y0 = b.y + b.h + 16;
+    g.textAlign = "center";
+    g.fillStyle = C["d-blue"]; g.font = "600 13px system-ui,sans-serif"; g.fillText(o.title + " " + sig3(o.pressure) + " mmHg", cx, y0);
+    g.fillStyle = C.t3; g.font = "10.5px system-ui,sans-serif"; g.fillText("대기압 760 mmHg", cx, y0 + 15);
   }
 }
 
-/* ── 돋보기 ─────────────────────────────────────────────────────
-   L = {cx,cy,R} · src = {x,y,w,h} 비커 위의 «확대 대상» 사각형 · kind = "surface" | "bulk"
-   opts = { xs, cover, evapAnim, sampleIdx, label, sub, gasN }
-   ★ 격자 칸 수는 «여기 상수 하나»가 원천이다. 표집(sampleSolute)도 같은 수를 써야
-     「용질 n / 칸수」 표기와 그림이 일치한다(J-N5). 7 열 × 표면 4 행 / 속 6 행.              */
+/* 1단계 범례 — 그림 안 번호 ①②③ 의 설명. 비커 오른쪽 글자 칸(넓을 때) 또는 비커 아래(좁을 때) */
+const LEGEND1 = ["① 표면을 떠난다 ↑", "② 액면 근처에 머무르며", "    표면에 부딪힌다", "③ 되돌아온다 ↓"];
+function drawLegend(g, b, L) {
+  g.font = "11px system-ui,sans-serif"; g.fillStyle = C.t2;
+  if (L.textW) {
+    const tx = L.textLeft ? b.x - L.textW + 4 : b.x + b.w + 16, y0 = beakerSurfaceY(b) + 72;
+    g.textAlign = "left";
+    LEGEND1.forEach((s, i) => g.fillText(s, tx, y0 + i * 15));
+  } else {
+    const cx = b.x + b.w / 2, y0 = b.y + b.h + 16 + 34;
+    g.textAlign = "center";
+    LEGEND1.forEach((s, i) => g.fillText(s.trim(), cx, y0 + i * 15));
+  }
+}
+
+/* ── 돋보기 ───────────────────────────────────────────────────── */
 const LOUPE_COLS = 7, LOUPE_ROWS_SURF = 4, LOUPE_ROWS_BULK = 6;
 const LOUPE_SURF = LOUPE_COLS * LOUPE_ROWS_SURF, LOUPE_BULK = LOUPE_COLS * LOUPE_ROWS_BULK;
 function drawLoupe(g, L, src, kind, o) {
   const { cx, cy, R } = L;
-  /* 비커 → 돋보기 연결선 (돋보기가 「저기를 확대한 것」임을 잇는다) */
   g.strokeStyle = "rgba(120,132,148,0.75)"; g.lineWidth = 1; g.setLineDash([3, 3]);
-  const sx = src.x + src.w, sy0 = src.y, sy1 = src.y + src.h;
-  const toLeft = cx > sx;
+  const sx = src.x + src.w, toLeft = cx > sx;
   const t1 = toLeft ? [cx - R * 0.72, cy - R * 0.72] : [cx - R * 0.70, cy - R * 0.71];
   const t2 = toLeft ? [cx - R * 0.72, cy + R * 0.72] : [cx + R * 0.70, cy - R * 0.71];
-  g.beginPath(); g.moveTo(toLeft ? sx : src.x, sy0); g.lineTo(t1[0], t1[1]); g.stroke();
-  g.beginPath(); g.moveTo(toLeft ? sx : src.x + src.w, toLeft ? sy1 : sy0); g.lineTo(t2[0], t2[1]); g.stroke();
+  g.beginPath(); g.moveTo(toLeft ? sx : src.x, src.y); g.lineTo(t1[0], t1[1]); g.stroke();
+  g.beginPath(); g.moveTo(toLeft ? sx : src.x + src.w, toLeft ? src.y + src.h : src.y); g.lineTo(t2[0], t2[1]); g.stroke();
   g.setLineDash([]);
-  g.strokeStyle = C["d-blue"]; g.lineWidth = 1.6;
-  g.strokeRect(src.x, src.y, src.w, src.h);
+  g.strokeStyle = C["d-blue"]; g.lineWidth = 1.6; g.strokeRect(src.x, src.y, src.w, src.h);
 
-  /* 알 */
   g.save();
   g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.clip();
   g.fillStyle = "#ffffff"; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
-
-  const surfY = kind === "surface" ? cy - R * 0.05 : cy - R - 10;   // bulk 는 액면이 알 밖
-  /* 액체 */
+  const surfY = kind === "surface" ? cy - R * 0.05 : cy - R - 10;
   g.fillStyle = WATER_FILL; g.fillRect(cx - R, surfY, 2 * R, cy + R - surfY);
-  if (o.xs > 0) { g.fillStyle = SOLN_FILL; g.globalAlpha = o.xs / RAOULT.XS.max; g.fillRect(cx - R, surfY, 2 * R, cy + R - surfY); g.globalAlpha = 1; }
-  if (kind === "surface") {
-    g.strokeStyle = WATER_LINE; g.lineWidth = 1.6;
-    g.beginPath(); g.moveTo(cx - R, surfY); g.lineTo(cx + R, surfY); g.stroke();
-  }
+  if (o.xs > 0) { g.globalAlpha = o.xs / RAOULT.XS.max; g.fillStyle = SOLN_FILL; g.fillRect(cx - R, surfY, 2 * R, cy + R - surfY); g.globalAlpha = 1; }
+  if (kind === "surface") { g.strokeStyle = WATER_LINE; g.lineWidth = 1.6; g.beginPath(); g.moveTo(cx - R, surfY); g.lineTo(cx + R, surfY); g.stroke(); }
 
-  /* 액체 속 분자 격자 — 8 × 5. 용질은 표집한 칸에 «대신» 들어간다(전체 조성과 같은 비율) */
-  /* 7 열 × (표면 4 / 속 6) 행. 반지름을 칸의 0.30 으로 잡아야 H 두 개가 «V 자»로 읽힌다 —
-     0.24 면 빨간 점으로만 보였다(육안 실측). 표집 칸 수(sampleSolute 의 cells)와 같아야 한다 */
   const cols = LOUPE_COLS, rows = kind === "surface" ? LOUPE_ROWS_SURF : LOUPE_ROWS_BULK;
   const gx0 = cx - R * 0.92, gw = R * 1.84;
   const gy0 = kind === "surface" ? surfY + R * 0.10 : cy - R * 0.85, gh = kind === "surface" ? (cy + R - gy0) : R * 1.7;
   const cw = gw / cols, ch = gh / rows, rO = Math.min(cw, ch) * 0.30;
-  const jit = REDUCED ? 0 : 1.6;
-  const marks = o.sampleIdx || new Set();
+  const jit = REDUCED ? 0 : 1.6, marks = o.sampleIdx || new Set();
   for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
     const idx = j * cols + i;
-    const jx = jit * Math.sin(st.clock * 1.3 + idx * 1.7), jy = jit * Math.cos(st.clock * 1.1 + idx * 2.3);
-    const x = gx0 + (i + 0.5) * cw + jx, y = gy0 + (j + 0.5) * ch + jy;
+    const x = gx0 + (i + 0.5) * cw + jit * Math.sin(st.clock * 1.3 + idx * 1.7), y = gy0 + (j + 0.5) * ch + jit * Math.cos(st.clock * 1.1 + idx * 2.3);
     if (marks.has(idx)) drawSolute(g, x, y, rO * 1.45);
     else drawH2O(g, x, y, rO, rnd(idx + 11) * 6.28 + (REDUCED ? 0 : 0.15 * Math.sin(st.clock + idx)));
   }
-
   if (kind === "surface") {
-    /* 기체 쪽 분자 — 몇 개만 흩뿌린다(개수는 압력 막대가 말한다) */
     const nG = o.gasN || 5;
     for (let k = 0; k < nG; k++) {
-      const x = cx - R * 0.8 + rnd(k * 3 + 5) * R * 1.6, y = cy - R * 0.9 + rnd(k * 5 + 7) * (surfY - (cy - R * 0.9) - 10);
+      const x = cx - R * 0.8 + rnd(k * 3 + 5) * R * 1.6;
+      const y = surfY - 8 - rnd(k * 5 + 7) * (surfY - (cy - R * 0.9) - 10) * 0.55;    // 액면 «근처»에 몰린다
       drawH2O(g, x, y, rO * 0.9, rnd(k + 41) * 6.28);
     }
-    /* 탈출·복귀 사건 — 한 쌍이 번갈아 움직인다. 평형에서도 멈추지 않는다(§14③-2) */
     if (o.evapAnim) {
       const ph = REDUCED ? 0.5 : (st.clock % 1.6) / 1.6;
       const up = surfY - ph * (surfY - (cy - R * 0.75));
@@ -509,293 +1068,165 @@ function drawLoupe(g, L, src, kind, o) {
       drawH2O(g, cx + R * 0.35, dn, rO, -0.4);
       arrow(g, cx + R * 0.35 - rO * 2.2, cy - R * 0.55, cx + R * 0.35 - rO * 2.2, surfY - 4, C.t2, 1.6);
     }
-    /* 덮개층 (탭 3 막 가정) */
-    if (o.cover > 0.001) {
-      g.fillStyle = "rgba(120,105,80,0.85)";
-      g.fillRect(cx - R, surfY - 7, 2 * R * o.cover, 7);
-      g.fillStyle = C.t2; g.font = "600 10px system-ui,sans-serif"; g.textAlign = "left";
-      g.fillText("덮개 " + Math.round(o.cover * 100) + " %", cx - R + 6, surfY - 11);
-    }
   }
   g.restore();
-  g.strokeStyle = C["d-gray"]; g.lineWidth = 2.4;
-  g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
-
-  /* 라벨. ⚠ 「×N」 배율은 쓰지 않는다 — 이 비커는 도식이라 물리적 배율이 없다.
-     waterdensity 의 ×1070 은 실제 부피 눈금(pxPerV)에서 유도한 값이고, 여기는 그런 눈금이 없다.
-     숫자를 붙이면 지어낸 정밀도가 된다(P5 M7). */
+  g.strokeStyle = C["d-gray"]; g.lineWidth = 2.4; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
   g.textAlign = "center";
-  g.fillStyle = C.t2; g.font = "600 10.5px system-ui,sans-serif";
-  g.fillText(o.label, cx, cy - R - 14);
-  g.fillStyle = C["d-amber"]; g.font = "600 10px system-ui,sans-serif";
-  g.fillText("분자 크기로 확대 · 도식", cx, cy - R - 3);
+  g.fillStyle = C.t2; g.font = "600 10.5px system-ui,sans-serif"; g.fillText(o.label, cx, cy - R - 14);
+  g.fillStyle = C["d-amber"]; g.font = "600 10px system-ui,sans-serif"; g.fillText("분자 크기로 확대 · 도식", cx, cy - R - 3);
   if (o.sub) { g.fillStyle = C.t3; g.font = "10px system-ui,sans-serif"; g.fillText(o.sub, cx, cy + R + 14); }
 }
-
-/* 용질 자리 표집 — 두 돋보기는 «따로» 뽑는다. 같은 수를 두 곳에 그대로 찍으면
-   「달랐을 수도 있었는가」의 답이 아니오가 되어 증거가 아니라 동어반복이다(매뉴얼 4부 ㉕). */
+/* 두 돋보기는 «따로» 뽑는다 — 같은 수를 두 곳에 찍으면 동어반복이다(4부 ㉕) */
 function sampleSolute(cells, pTrue, k, seedBase) {
   const set = new Set(); let n = 0;
-  for (let i = 0; i < cells; i++) {
-    const r = rnd(seedBase * 97 + k * 131 + i * 17);
-    if (r < pTrue) { set.add(i); n++; }
-  }
+  for (let i = 0; i < cells; i++) if (rnd(seedBase * 97 + k * 131 + i * 17) < pTrue) { set.add(i); n++; }
   return { set, n };
 }
 
-/* 용질 점(거시) — 몰분율에 비례한 개수, 자리는 고정 시드.
-   ⚠ 상한 24개. 64개로 두니 X=0.05 인데 액체가 «보라색 덩어리»로 읽혔다(육안 실측) —
-   검토자가 경고한 M1(은유 오염): 화면에 용질이 많아 보일수록 「막는다」가 그럴듯해진다.
-   정직한 «개수»는 돋보기가 센다(1/32 등). 거시 점은 「전체에 퍼져 있다」만 말하면 된다. */
-const DOTS = [];
-for (let i = 0; i < 24; i++) DOTS.push({ u: rnd(i * 2 + 1), v: rnd(i * 2 + 2) });
-function dotsFor(xs) { return DOTS.slice(0, Math.round(24 * xs / RAOULT.XS.max)); }
-
-/* ── 무대 그리기 ──────────────────────────────────────────────── */
+/* ── 무대 ────────────────────────────────────────────────────── */
 function drawStage() {
-  const w0 = stageCv.clientWidth;
-  if (w0 < 40) return;
+  const w0 = stageCv.clientWidth; if (w0 < 40) return;
   const L = layout(w0);
   const { g, w, h } = sizeCanvas(stageCv, L.H);
-  g.clearRect(0, 0, w, h);
-  g.fillStyle = "#ffffff"; g.fillRect(0, 0, w, h);
+  g.clearRect(0, 0, w, h); g.fillStyle = "#ffffff"; g.fillRect(0, 0, w, h);
 
-  const m = activeModel(), cv = activeCover(), xs = activeXs();
-  const ev = gated() ? undefined : evapRate(st.t, xs, m, cv).toFixed(0);
-  const co = gated() ? undefined : (condCoef(m, cv) * st.nSol).toFixed(0);
+  const xs = activeXs();
+  const P0 = pPure(st.t), pSol = st.nSol / RAOULT.SCALE, pPureNow = st.nPure / RAOULT.SCALE;
+  const pmax = DIAL_MAX;   // 눈금 고정 — 온도를 올리면 «같은 계기»에서 바늘이 더 올라간다
+  const evS = evapRate(st.t, xs, "comp", 0), coS = condCoef("comp", 0) * st.nSol;
+  const evP = evapRate(st.t, 0, "comp", 0), coP = condCoef("comp", 0) * st.nPure;
 
-  /* 비커들 */
-  if (st.stage === 2) {
+  if (twoBeakers()) {
     const b0 = L.beakers[0], b1 = L.beakers[1];
-    drawBeaker(g, b0, { label: "순수한 물", solute: 0, cover: 0, gas: gasP,
-      evap: evapRate(st.t, 0, "comp", 0).toFixed(0), cond: (condCoef("comp", 0) * st.nPure).toFixed(0) });
-    drawBeaker(g, b1, { label: "용액", solute: st.diffuse * st.xs / RAOULT.XS.max, cover: 0, gas: gasS,
-      evap: ev, cond: co, dots: dotsFor(st.xs), diffuse: st.diffuse });
+    drawBeaker(g, b0, { label: "순수한 물", soluteAmt: 0, vapor: vapP, vaporState: vapStateFor(b0, st.nPure, evP, coP),
+      evap: evP.toFixed(0), cond: coP.toFixed(0), pressure: pPureNow, pmax });
+    drawBeaker(g, b1, { label: "용액", soluteAmt: st.xs / RAOULT.XS.max, solute: solM, soluteCount: soluteDots(st.xs), diffuse: 1,
+      vapor: vapS, vaporState: vapStateFor(b1, st.nSol, evS, coS), evap: evS.toFixed(0), cond: coS.toFixed(0), pressure: pSol, pmax });
+    drawValues(g, b0, L, { title: "증기 압력", pressure: pPureNow });
+    drawValues(g, b1, L, { title: "증기 압력", pressure: pSol });
+    /* ΔP — 두 비커 사이 */
+    const mx = (b0.x + b0.w + b1.x) / 2, my = b0.y + 30;
+    g.fillStyle = C["d-red"]; g.font = "600 12px system-ui,sans-serif"; g.textAlign = "center";
+    g.fillText("ΔP", mx, my); g.fillText(sig3(Math.max(0, pPureNow - pSol)), mx, my + 15);
   } else {
     const b = L.beakers[0];
-    drawBeaker(g, b, { label: st.stage === 3 ? "용액 (용질 몰분율 0.05)" : "순수한 물",
-      solute: st.stage === 3 ? 1 : 0, cover: coverShown(), gas: gated() ? [] : gasS,
-      evap: ev, cond: co, dots: st.stage === 3 ? dotsFor(RAOULT.XS_TAB3) : null, diffuse: 1 });
+    const inj = soluteShown();
+    drawBeaker(g, b, { label: inj ? "용액" : "순수한 물", soluteAmt: inj ? (st.diffuse * st.xs / RAOULT.XS.max) : 0,
+      solute: inj ? solM : null, soluteCount: inj ? soluteDots(st.xs) : 0, diffuse: st.diffuse,
+      vapor: vapS, vaporState: vapStateFor(b, st.nSol, evS, coS), evap: evS.toFixed(0), cond: coS.toFixed(0), pressure: pSol, pmax,
+      numbered: st.step === 1 });
+    drawValues(g, b, L, { title: "증기 압력", pressure: pSol });
+    /* 1단계 도식 범례 — 번호는 그림 안(①③은 화살표 글자, ②는 기체 띠), 설명은 그림 «밖».
+       설명 상자를 기체 띠 위에 얹으면 지나가는 분자를 덮어 깜빡임으로 보인다(실측). */
+    if (st.step === 1) drawLegend(g, b, L);
   }
 
-  /* 돋보기 */
   if (st.loupe) {
-    if (st.stage === 2) {
-      const b1 = L.beakers[1];
-      const sy = beakerSurfaceY(b1);
-      const seedBase = Math.floor(st.clock / 2);
-      const pTrue = st.xs;
-      const A = sampleSolute(LOUPE_BULK, pTrue, 0, seedBase);
-      const B = sampleSolute(LOUPE_SURF, pTrue, 1, seedBase);
-      st.sampA = A.n; st.sampB = B.n; st.sampPer = LOUPE_BULK;
+    if (st.step === 4) {
+      const b1 = L.beakers[0], sy = beakerSurfaceY(b1), seedBase = Math.floor(st.clock / 2);
+      const A = sampleSolute(LOUPE_BULK, st.xs, 0, seedBase), B = sampleSolute(LOUPE_SURF, st.xs, 1, seedBase);
       if (seedBase !== st.cumSeed) { st.cumSeed = seedBase; st.cumA += A.n / LOUPE_BULK; st.cumB += B.n / LOUPE_SURF; st.cumN += 1; }
-      drawLoupe(g, L.loupes[0], { x: b1.x + b1.w * 0.42, y: sy + (b1.y + b1.h - sy) * 0.55 - 7, w: 14, h: 14 },
-        "bulk", { xs: st.xs, sampleIdx: A.set, label: "액체 속 한 곳",
-          sub: "용질 " + A.n + " / " + LOUPE_BULK });
-      drawLoupe(g, L.loupes[1], { x: b1.x + b1.w * 0.42, y: sy - 7, w: 14, h: 14 },
-        "surface", { xs: st.xs, sampleIdx: B.set, label: "표면 한 곳", evapAnim: false,
-          sub: "용질 " + B.n + " / " + LOUPE_SURF });
+      drawLoupe(g, L.loupes[0], { x: b1.x + b1.w * 0.42, y: sy + (b1.y + b1.h - sy) * 0.55 - 7, w: 14, h: 14 }, "bulk",
+        { xs: st.xs, sampleIdx: A.set, label: "액체 속 한 곳", sub: "용질 " + A.n + " / " + LOUPE_BULK });
+      drawLoupe(g, L.loupes[1], { x: b1.x + b1.w * 0.42, y: sy - 7, w: 14, h: 14 }, "surface",
+        { xs: st.xs, sampleIdx: B.set, label: "표면 한 곳", evapAnim: false, sub: "용질 " + B.n + " / " + LOUPE_SURF });
     } else {
-      const b = L.beakers[0];
-      const sy = beakerSurfaceY(b);
-      const marks = st.stage === 3 ? sampleSolute(LOUPE_SURF, RAOULT.XS_TAB3, 2, 7).set : null;
+      const b = L.beakers[0], sy = beakerSurfaceY(b);
       drawLoupe(g, L.loupes[0], { x: b.x + b.w * 0.42, y: sy - 7, w: 14, h: 14 }, "surface",
-        { xs: st.stage === 3 ? RAOULT.XS_TAB3 : 0, sampleIdx: marks, cover: coverShown(),
-          label: "액면 돋보기", evapAnim: !gated(),
-          gasN: gated() ? 0 : Math.max(2, Math.min(9, Math.round(st.nSol / 30))),
-          sub: gated() ? "예측을 고르면 보입니다" : "왼쪽 ↑ 증발 · 오른쪽 ↓ 응축 — 둘 다 계속" });
+        { xs: 0, label: "액면 돋보기", evapAnim: true, gasN: Math.max(2, Math.min(9, Math.round(st.nSol / 30))),
+          sub: "왼쪽 ↑ 증발 · 오른쪽 ↓ 응축 — 둘 다 계속" });
     }
   }
-
-  /* 바닥 설명 — 캔버스 «맨 아래» 한 줄. 돋보기가 아래에 있으면 그 밑으로 내려간다.
-     길면 잘린다(390 px 실측) — 좁은 화면에서는 더 짧은 문장을 쓴다 */
   g.fillStyle = C.t3; g.font = "11px system-ui,sans-serif"; g.textAlign = "center";
-  const foot = L.narrow
-    ? "밀폐 비커 · 평면 도식 · 액면 고정"
-    : (st.stage === 2 ? "두 비커 모두 밀폐 · 평면 도식 — 분자 그림의 크기·개수는 실제 비가 아닙니다"
-                      : "밀폐 비커 · 평면 도식 — 액면은 고정입니다(증발로 주는 양은 0.01 % 수준)");
-  g.fillText(foot, w / 2, h - 8);
+  g.fillText(L.narrow ? "밀폐 비커 · 평면 도식 · 액면 고정" : "밀폐 비커 · 평면 도식 — 액면은 고정이고, 기체 분자를 액면 근처에 몰리게 그렸습니다", w / 2, h - 8);
 }
-
-/* ── 압력 막대 (메인이 직접 그린다) ─────────────────────────────
-   축은 0 ~ 1.2·P°(T) 로 «자동»이다. 고정 0~800 이면 ΔP 가 1 px 미만이 되어 읽히지 않는다.
-   대기압은 축 밖이므로 수치와 「몇 배 위」 표기로 늘 보인다. */
-const PLOT_H = 324;
-function drawGauge() {
-  const { g, w: W, h: H } = sizeCanvas(gaugeCv, PLOT_H + 46);
-  g.clearRect(0, 0, W, H);
-  g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, H);
-
-  const top = 26, bottom = top + PLOT_H;
-  const P0 = pPure(st.t), axisMax = 1.2 * P0;
-  const yFor = v => bottom - Math.max(0, Math.min(v, axisMax)) / axisMax * PLOT_H;
-
-  g.strokeStyle = C.line; g.lineWidth = 1; g.fillStyle = C.t3;
-  g.font = "10.5px system-ui,sans-serif"; g.textAlign = "left";
-  const stepT = axisMax > 120 ? 40 : axisMax > 60 ? 20 : 10;
-  for (let v = 0; v <= axisMax; v += stepT) {
-    const y = yFor(v);
-    g.beginPath(); g.moveTo(34, y); g.lineTo(W - 6, y); g.stroke();
-    g.fillText(String(v), 6, y + 3.5);
-  }
-  /* 축 단위 「mmHg」 글자는 뺀다 — 대기압 라벨과 겹쳤다(육안). 단위는 오른쪽 readout 이 병기한다 */
-
-  if (gated()) {
-    g.fillStyle = C.t3; g.font = "12px system-ui,sans-serif";
-    g.fillText("예측을 고르면", 44, top + 130);
-    g.fillText("결과가 나옵니다", 44, top + 148);
-    return;
-  }
-
-  const bars = st.stage === 2
-    ? [{ label: "순물질", v: st.nPure / RAOULT.SCALE, col: C["d-blue"] },
-       { label: "용액",   v: st.nSol  / RAOULT.SCALE, col: C["d-cyan"] }]
-    : [{ label: st.stage === 3 ? "지금" : "증기 압력", v: st.nSol / RAOULT.SCALE, col: C["d-blue"] }];
-  if (st.stage === 3) bars.unshift({ label: "순물질", v: P0, col: C["p-silver"] });
-
-  const bw = Math.min(46, (W - 52) / bars.length - 10);
-  bars.forEach((b, i) => {
-    const x = 42 + i * (bw + 14);
-    const y = yFor(b.v);
-    g.fillStyle = b.col; g.fillRect(x, y, bw, bottom - y);
-    g.fillStyle = C.t1; g.font = "600 11.5px system-ui,sans-serif"; g.textAlign = "left";
-    g.fillText(fmtP(b.v), x, y - 5);
-    g.fillStyle = C.t2; g.font = "11px system-ui,sans-serif";
-    g.fillText(b.label, x, bottom + 15);
-  });
-
-  if (bars.length === 2 && Math.abs(bars[0].v - bars[1].v) > 1e-9) {
-    const x0 = 42 + bw + 6, y1 = yFor(bars[0].v), y2 = yFor(bars[1].v);
-    g.strokeStyle = C["d-red"]; g.lineWidth = 1.6;
-    g.beginPath(); g.moveTo(x0, y1); g.lineTo(x0, y2); g.stroke();
-    for (const [yy, dir] of [[y1, 1], [y2, -1]]) {
-      g.beginPath(); g.moveTo(x0, yy); g.lineTo(x0 - 3.5, yy + 5 * dir);
-      g.lineTo(x0 + 3.5, yy + 5 * dir); g.closePath(); g.fillStyle = C["d-red"]; g.fill();
-    }
-    g.fillStyle = C["d-red"]; g.font = "600 11px system-ui,sans-serif";
-    g.fillText("ΔP " + fmtDp(Math.abs(bars[0].v - bars[1].v)), x0 + 6, (y1 + y2) / 2 + 3);
-  }
-
-  g.strokeStyle = C["d-red"]; g.setLineDash([5, 4]); g.lineWidth = 1.4;
-  g.beginPath(); g.moveTo(34, top - 6); g.lineTo(W - 6, top - 6); g.stroke();
-  g.setLineDash([]);
-  g.fillStyle = C["d-red"]; g.font = "600 10.5px system-ui,sans-serif";
-  /* 폭 200 px(데스크톱)·128 px(모바일) 안에 들어가야 한다 — 긴 문장은 오른쪽이 잘렸다(육안 실측).
-     「760 mmHg」는 오른쪽 readout 이 늘 병기하므로 여기서는 «몇 배 위»만 말하면 된다 */
-  const times = atmTimesAbove(st.t).toFixed(0);
-  g.fillText(W < 160 ? "↑ 대기압 " + times + "배 위" : "↑ 대기압 760 · 이 축의 " + times + "배 위", 36, top - 10);
+function vapStateFor(b, n, ev, co) {
+  return { rect: headspace(b), surfaceY: beakerSurfaceY(b) - 2, targetN: n * GAS_SCALE, evapPerSec: ev, condPerSec: co, reduced: REDUCED, colors: MOTION_COLORS };
 }
 
 /* ── 측정값 갱신 ─────────────────────────────────────────────── */
 function updateReadouts() {
-  const P0 = pPure(st.t);
-  $("vAtm").textContent = "1.000";
-  $("vPpure").textContent = setPress(P0);
-  $("vX").textContent = xSolvent(activeXs()).toFixed(3);
-
-  if (gated()) {
-    for (const id of ["vP", "vEvap", "vCond", "vDp"]) $(id).textContent = "—";
-    $("vState").textContent = "예측을 기다리는 중";
-    return;
-  }
-
-  const m = activeModel(), cv = activeCover(), xs = activeXs();
+  const P0 = pPure(st.t), xs = activeXs();
   const pNow = st.nSol / RAOULT.SCALE;
+  $("vAtm").textContent = "1.000";
   $("vP").textContent = setPress(pNow);
-  $("vDp").textContent = fmtDp(st.stage === 2 ? (st.nPure - st.nSol) / RAOULT.SCALE : Math.max(0, P0 - pNow));
+  $("vPpure").textContent = setPress(st.nPure / RAOULT.SCALE);
+  $("vX").textContent = xSolvent(xs).toFixed(3);
+  $("vDp").textContent = sig3(Math.max(0, (st.nPure - st.nSol) / RAOULT.SCALE));
+  const ev = evapRate(st.t, xs, "comp", 0), co = condCoef("comp", 0) * st.nSol;
+  $("vEvap").textContent = ev.toFixed(0); $("vCond").textContent = co.toFixed(0);
 
-  const ev = evapRate(st.t, xs, m, cv);
-  const co = condCoef(m, cv) * st.nSol;
-  $("vEvap").textContent = ev.toFixed(0);
-  $("vCond").textContent = co.toFixed(0);
-
-  const eq = atEq(st.nSol, st.t, xs, m, cv);
-  const roState = $("roState");
-  roState.classList.remove("is-ok", "is-warn");
-  if (!st.running) { $("vState").textContent = "멈춤 — ▶ 를 누르세요"; }
+  const eq = atEq(st.nSol, st.t, xs, "comp", 0);
+  const roState = $("roState"); roState.classList.remove("is-ok", "is-warn");
+  if (!st.running) $("vState").textContent = "멈춤 — ▶ 를 누르세요";
   else if (eq) { $("vState").textContent = "동적 평형"; roState.classList.add("is-ok"); }
   else { $("vState").textContent = "재는 중"; roState.classList.add("is-warn"); }
-
-  /* 「재는 중」과 결론 문구는 «지금 실제로 평형인 순간»에만 갈린다 (매뉴얼 §14③-3).
-     ⚠ 「재는 중」의 조건은 상태 칸과 «같은 판정»(eq)을 써야 한다 — 다르면 J-N5 위반(육안 실측). */
+  /* 「재는 중」과 결론은 «같은 판정»(eq)을 읽는다 — 다르면 J-N5 위반(육안 실측) */
   const settled = eq && st.eqSince !== null && (st.clock - st.eqSince) >= RAOULT.SETTLE_S;
   $("measuring").classList.toggle("is-off", !(st.running && !eq));
-  const vd = $("verdict");
-  vd.classList.toggle("is-off", !settled);
-  /* ★ 결론 상자의 «색»이 옳고 그름을 말한다. 학생 자신의 틀린 가정(film1)의 결과를
-     초록(성공색)으로 띄우면 「내 예측이 맞았다」로 읽힌다. film1 은 주황(가정)으로. */
-  vd.classList.toggle("verdict--assume", st.stage === 3 && st.model === "film1");
+  const vd = $("verdict"); vd.classList.toggle("is-off", !settled);
   if (settled) {
-    if (st.stage === 1) vd.innerHTML = "증발하는 분자 수 = 응축하는 분자 수. <b>지금이 동적 평형</b>이고, 이때 기체가 나타내는 압력이 <b>증기 압력</b>입니다.";
-    else if (st.stage === 2) vd.innerHTML = "용액의 증기 압력이 순물질보다 <b>" + fmtDp((st.nPure - st.nSol) / RAOULT.SCALE) + " mmHg 낮습니다.</b> 용매의 몰분율 " + xSolvent(st.xs).toFixed(3) + " 를 순물질의 증기 압력에 곱한 값입니다.";
-    else if (st.model === "film2") vd.innerHTML = "덮개를 " + Math.round(st.cover * 100) + " % 씌웠는데 평형 증기 압력은 <b>순물질과 같습니다.</b> 달라진 것은 <b>여기까지 오는 데 걸린 시간</b>뿐입니다.";
-    else if (st.model === "film1") vd.innerHTML = "<b>이것은 「덮개가 나가는 것만 막는다」고 «가정»했을 때의 결과입니다.</b> 덮개를 " + Math.round(st.cover * 100) + " % 씌우면 증기 압력도 " + Math.round(st.cover * 100) + " % 내려갑니다.<br>그런데 <b>실제 저수지 실측에서는 단분자막을 깔아도 평형 증기 압력이 변하지 않습니다.</b> 아래 「프로그램 밖의 근거」를 읽고, 옆 단추로 <b>「덮개가 양쪽을 함께 막는다」</b>도 눌러 보세요.";
-    else vd.innerHTML = "용질이 액체 <b>전체</b>에 퍼져 있을 때의 결과입니다. 덮개를 아무리 바꿔도 이 값은 <b>용매의 몰분율</b>만 따라갑니다.";
+    if (st.step <= 2) vd.innerHTML = "증발하는 분자 수 = 응축하는 분자 수. <b>지금이 동적 평형</b>이고, 압력계가 가리키는 <b>" + sig3(pNow) + " mmHg</b> 가 이 온도에서 물의 증기 압력입니다.";
+    else if (st.step <= 4) vd.innerHTML = "용액도 동적 평형에 이르렀습니다. 증기 압력은 <b>" + sig3(pNow) + " mmHg</b> — 순수한 물(" + sig3(P0) + " mmHg)보다 낮습니다.";
+    else vd.innerHTML = "용액의 증기 압력이 순물질보다 <b>" + sig3((st.nPure - st.nSol) / RAOULT.SCALE) + " mmHg 낮습니다.</b> 용매의 몰분율 " + xSolvent(st.xs).toFixed(3) + " 을 순물질의 증기 압력에 곱한 값입니다.";
   }
-
-  if (st.stage === 2 && st.loupe) {
-    /* 돋보기가 «따로» 표집한 값을 그대로 읽는다 — 두 곳이 다른 계산을 하면 어긋난다(F-1) */
-    const a = st.cumN ? (st.cumA / st.cumN * 100).toFixed(1) : "0.0";
-    const b = st.cumN ? (st.cumB / st.cumN * 100).toFixed(1) : "0.0";
+  $("recBtn").disabled = !settled;
+  if (st.step === 4 && st.loupe) {
+    const a = st.cumN ? (st.cumA / st.cumN * 100).toFixed(1) : "0.0", b = st.cumN ? (st.cumB / st.cumN * 100).toFixed(1) : "0.0";
     $("vSurf").textContent = "액체 속 " + a + " % · 표면 " + b + " %  (" + st.cumN + "번 누적)";
   }
 }
 
 /* ── 단계 전환 (표시 여부의 단일 원천) ───────────────────────── */
-function applyStage() {
-  const s = SHOW[st.stage];
-  for (const id in s) {
-    const el = $(id);
-    if (el) el.style.display = s[id] ? SHOWVAL[id] : "none";
-  }
-  $("roSurf").style.display = (st.stage === 2 && st.loupe) ? SHOWVAL.roSurf : "none";
-  $("stageTitle").textContent = TITLE[st.stage];
-  $("stageDesc").textContent = DESC[st.stage];
-  /* ⚠ 탭 3 의 안내 문구는 «지금 고른 가정»에 따라 달라져야 한다 — 고정하면 화면과 어긋난다(J-N5) */
-  $("mainNote").innerHTML = st.stage === 3
-    ? (gated() ? "먼저 위에서 <b>예측</b>을 고르세요. 고르기 전에는 결과를 보여 주지 않습니다."
-      : st.model === "film1"
-        ? "지금은 <b>「덮개가 나가는 것만 막는다」</b>고 가정한 결과입니다. 이 가정이 옳은지는 <b>프로그램이 아니라 실측</b>이 정합니다."
-      : st.model === "film2"
-        ? "<b>차단은 속도를 바꾸고, 평형을 바꾸지 않습니다.</b> 덮개를 많이 씌울수록 평형에 이르는 데 <b>오래 걸리지만</b>, 도달한 뒤의 압력은 같습니다."
-        : "용질이 액체 <b>전체</b>에 퍼져 있을 때입니다. 덮개와 무관하게 <b>용매의 몰분율</b>만 압력을 정합니다.")
-    : NOTE[st.stage];
-  $("sideNote").textContent = SIDE[st.stage];
-  for (const b of document.querySelectorAll(".stg"))
-    b.setAttribute("aria-pressed", String(+b.dataset.stage === st.stage));
-  const zb = $("zoomBtn"), sb = $("splitBtn");
-  zb.setAttribute("aria-pressed", String(st.loupe));
-  zb.textContent = st.loupe ? "돋보기 닫기" : "분자 수준으로 확대해 보기";
-  sb.setAttribute("aria-pressed", String(st.loupe));
-  sb.textContent = st.loupe ? "돋보기 닫기" : "표면을 확대해 보기";
-  /* ⚠ 여기서 eqSince 를 지우지 않는다 — 돋보기를 켜고 끄는 것은 물리를 바꾸는 조작이 아니다 */
-  drawStage(); drawGauge(); updateReadouts();
+function applyStep() {
+  const s = SHOW[st.step];
+  for (const id in s) { const el = $(id); if (el) el.style.display = s[id] ? SHOWVAL[id] : "none"; }
+  $("roSurf").style.display = (st.step === 4 && st.loupe) ? SHOWVAL.roSurf : "none";
+  $("stageTitle").textContent = TITLE[st.step];
+  $("stageDesc").textContent = DESC[st.step];
+  $("mainNote").innerHTML = NOTE[st.step];
+  $("sideNote").textContent = SIDE[st.step];
+  for (const b of document.querySelectorAll(".stg")) b.setAttribute("aria-pressed", String(+b.dataset.step === st.step));
+  const lb = $("loupeBtn");
+  lb.setAttribute("aria-pressed", String(st.loupe));
+  lb.textContent = st.loupe ? "돋보기 닫기" : (st.step === 4 ? "두 곳을 확대해 보기" : "분자 수준으로 확대해 보기");
+  $("injectBtn").disabled = st.injected;
+  $("injectBtn").textContent = st.injected ? "용질을 넣었습니다" : "용질 넣기";
+  drawStage(); updateReadouts();
+}
+function renderRec() {
+  const tb = $("recBody");
+  if (!st.rec.length) { tb.innerHTML = '<tr><td class="empty" colspan="3">평형이 되면 「지금 값 기록」을 눌러 표를 채우세요.</td></tr>'; return; }
+  tb.innerHTML = st.rec.map(r => "<tr><td>" + r.x.toFixed(3) + "</td><td>" + sig3(r.p) + "</td><td>" + sig3(r.dp) + "</td></tr>").join("");
 }
 
 /* ── 루프 ─────────────────────────────────────────────────────── */
 let raf = null, last = 0;
 function frame(ts) {
   raf = requestAnimationFrame(frame);
-  /* ⚠ dt 캡은 0.25 s 다. 0.05 로 두면 느린 기기(교실 태블릿·소프트웨어 렌더)에서 물리 시간이
-     «화면 속도에 끌려가» 평형 도달이 늦어진다 — 프로브에서 실제로 잡혔다(6 s 에 71.4/71.7).
-     stepN 은 지수 해라 dt 가 커도 정확하다. 캡은 탭 복귀 직후의 큰 점프만 막으면 된다. */
+  /* dt 캡 0.25 s — 느린 기기에서 물리 시간이 화면 속도에 끌려가지 않게. stepN 은 지수 해라 정확하다 */
   const dt = last ? Math.min(0.25, (ts - last) / 1000) : 0;
   last = ts;
+  const xs = activeXs();
   if (st.running) {
     st.clock += dt;
-    const m = activeModel(), cv = activeCover(), xs = activeXs();
-    st.nSol = stepN(st.nSol, st.t, xs, m, cv, dt);
+    st.nSol = stepN(st.nSol, st.t, xs, "comp", 0, dt);
     st.nPure = stepN(st.nPure, st.t, 0, "comp", 0, dt);
-    st.diffuse = Math.min(1, st.diffuse + dt / (REDUCED ? 0.001 : 2.6));
-    if (atEq(st.nSol, st.t, xs, m, cv)) { if (st.eqSince === null) st.eqSince = st.clock; }
-    else st.eqSince = null;
-    exchangeTick(dt);
+    if (st.injected) st.diffuse = Math.min(1, st.diffuse + dt / (REDUCED ? 0.001 : 2.6));
+    if (atEq(st.nSol, st.t, xs, "comp", 0)) { if (st.eqSince === null) st.eqSince = st.clock; } else st.eqSince = null;
   }
-  syncGas(gasP, st.nPure * 0.16);
-  syncGas(gasS, st.nSol * 0.16);
-  drawStage();
-  drawGauge();
-  updateReadouts();
+  /* 입자 운동은 «멈춤»에서도 돈다(개수는 고정) — 화면이 얼어 보이지 않게. reduced 면 팩토리가 알아서 멈춘다 */
+  const L = layout(stageCv.clientWidth || 480);
+  const b0 = L.beakers[0], b1 = L.beakers[1] || L.beakers[0];
+  const evS = evapRate(st.t, xs, "comp", 0), coS = condCoef("comp", 0) * st.nSol;
+  vapS.step(dt, vapStateFor(twoBeakers() ? b1 : b0, st.nSol, evS, coS));
+  if (twoBeakers()) vapP.step(dt, vapStateFor(b0, st.nPure, evapRate(st.t, 0, "comp", 0), condCoef("comp", 0) * st.nPure));
+  if (soluteShown()) {
+    const bb = twoBeakers() ? b1 : b0;
+    /* 투입점은 step 에도 «실제 좌표»로 넘긴다 — 납품 모듈은 확산 원점을 step 에서 읽는다 */
+    solM.step(dt, { rect: liquidRect(bb), count: soluteDots(st.xs), injectXY: { x: bb.x + bb.w / 2, y: beakerSurfaceY(bb) + 10 }, diffuse01: st.diffuse, reduced: REDUCED, colors: MOTION_COLORS });
+  }
+  drawStage(); updateReadouts();
 }
 function startLoop() { if (!raf) { last = 0; raf = requestAnimationFrame(frame); } }
 function stopLoop() { if (raf) { cancelAnimationFrame(raf); raf = null; } }
@@ -803,72 +1234,36 @@ function stopLoop() { if (raf) { cancelAnimationFrame(raf); raf = null; } }
 /* ── 조작 배선 ───────────────────────────────────────────────── */
 function bind() {
   for (const b of document.querySelectorAll(".stg")) b.addEventListener("click", () => {
-    st.stage = +b.dataset.stage;
-    st.loupe = false; st.eqSince = null;
-    if (st.stage === 2) { st.diffuse = 0; st.cumA = st.cumB = st.cumN = 0; st.cumSeed = -1; }
-    applyStage();
+    const next = +b.dataset.step;
+    st.step = next; st.loupe = false; st.eqSince = null;
+    if (next === 1) { st.nSol = 0; st.nPure = 0; st.clock = 0; st.injected = false; st.diffuse = 0; st.running = false; $("pauseBtn").textContent = "▶ 시작"; }
+    if (next === 3) { st.injected = false; st.diffuse = 0; }
+    if (next >= 4 && !st.injected) { st.injected = true; st.diffuse = 1; }   // 뒤 단계로 건너뛰면 «이미 넣은» 상태
+    if (next >= 5) st.nPure = Math.max(st.nPure, st.nSol);                    // 순물질 쪽도 이미 평형 근처에서 출발
+    st.cumA = st.cumB = st.cumN = 0; st.cumSeed = -1;
+    applyStep();
   });
-
-  $("tSl").addEventListener("input", e => {
-    st.t = +e.target.value; $("tVal").textContent = st.t + " ℃"; st.eqSince = null;
-  });
-  $("xsSl").addEventListener("input", e => {
-    st.xs = +e.target.value; $("xsVal").textContent = st.xs.toFixed(3); st.eqSince = null;
-    st.cumA = st.cumB = st.cumN = 0; st.cumSeed = -1;      // 조성이 바뀌면 누적을 비운다
-  });
-  $("coverSl").addEventListener("input", e => {
-    st.cover = +e.target.value; $("coverVal").textContent = Math.round(st.cover * 100) + " %"; st.eqSince = null;
-  });
-
-  const toggleLoupe = () => { st.loupe = !st.loupe; applyStage(); };
-  $("zoomBtn").addEventListener("click", toggleLoupe);
-  $("splitBtn").addEventListener("click", toggleLoupe);
-
+  $("tSl").addEventListener("input", e => { st.t = +e.target.value; $("tVal").textContent = st.t + " ℃"; st.eqSince = null; });
+  $("xsSl").addEventListener("input", e => { st.xs = +e.target.value; $("xsVal").textContent = st.xs.toFixed(3); st.eqSince = null; st.cumA = st.cumB = st.cumN = 0; st.cumSeed = -1; });
+  $("loupeBtn").addEventListener("click", () => { st.loupe = !st.loupe; applyStep(); });
+  $("injectBtn").addEventListener("click", () => { if (st.injected) return; st.injected = true; st.diffuse = 0; st.eqSince = null; if (!st.running) { st.running = true; $("pauseBtn").textContent = "⏸ 잠시 멈춤"; $("pauseBtn").setAttribute("aria-pressed", "false"); } applyStep(); });
   $("pauseBtn").addEventListener("click", () => {
     st.running = !st.running;
     $("pauseBtn").textContent = st.running ? "⏸ 잠시 멈춤" : "▶ 시작";
     $("pauseBtn").setAttribute("aria-pressed", String(!st.running));
   });
-  $("skipBtn").addEventListener("click", () => {
-    st.nSol = terminalN(st.t, activeXs(), activeModel(), activeCover());
-    st.nPure = terminalN(st.t, 0, "comp", 0);
-    st.eqSince = st.clock - RAOULT.SETTLE_S;
+  $("recBtn").addEventListener("click", () => {
+    const p = st.nSol / RAOULT.SCALE, dp = (st.nPure - st.nSol) / RAOULT.SCALE;
+    st.rec.push({ x: xSolvent(st.xs), p, dp }); renderRec();
   });
-
-  for (const b of document.querySelectorAll(".pop")) b.addEventListener("click", () => {
-    st.predicted = b.dataset.pred;
-    for (const o of document.querySelectorAll(".pop"))
-      o.setAttribute("aria-pressed", String(o === b));
-    /* ★ 예측이 무엇이든 «첫 실행은 항상 막·양방향»이다.
-       예측에 대응하는 모형을 곧바로 돌리면, ⓐ(★★★ 오개념)를 고른 학생만 자기 예측이
-       화면에 그대로 재현되는 것을 먼저 보게 된다 — 상충 단계에서 상충이 사라진다. */
-    st.model = "film2";
-    for (const o of document.querySelectorAll(".mdl"))
-      o.setAttribute("aria-pressed", String(o.dataset.model === st.model));
-    st.eqSince = null;
-    applyStage();
-  });
-  for (const b of document.querySelectorAll(".mdl")) b.addEventListener("click", () => {
-    if (gated()) return;
-    st.model = b.dataset.model;
-    for (const o of document.querySelectorAll(".mdl"))
-      o.setAttribute("aria-pressed", String(o === b));
-    st.eqSince = null;
-    applyStage();
-  });
-
-  /* 탭에서 벗어나면 rAF 를 멈추고, 돌아오면 «반드시» 되살린다 (복구 누락이 흔한 함정) */
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) stopLoop(); else startLoop();
-  });
-  window.addEventListener("resize", () => { drawStage(); drawGauge(); });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stopLoop(); else startLoop(); });
+  window.addEventListener("resize", () => drawStage());
 }
 
 /* ── 시작 ─────────────────────────────────────────────────────── */
 bind();
 $("tVal").textContent = st.t + " ℃";
 $("xsVal").textContent = st.xs.toFixed(3);
-$("coverVal").textContent = Math.round(st.cover * 100) + " %";
-st.nPure = 0; st.nSol = 0;
-applyStage();
+renderRec();
+applyStep();
 startLoop();
