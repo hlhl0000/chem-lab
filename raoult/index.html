@@ -102,6 +102,7 @@
       <div class="btnrow">
         <button class="btn" id="pauseBtn" aria-pressed="true">▶ 시작</button>
         <button class="btn" id="loupeBtn" aria-pressed="false">분자 수준으로 확대해 보기</button>
+        <button class="btn" id="sampleBtn" style="display:none">다른 곳을 세어 보기</button>
         <button class="btn" id="recBtn" style="display:none">지금 값 기록</button>
       </div>
 
@@ -128,12 +129,15 @@
       </div>
 
       <div class="ctl is-off" id="xsCtl">
-        <div class="row"><label for="xsSl">용질의 몰분율</label><span class="val" id="xsVal">0.030</span></div>
-        <input type="range" id="xsSl" min="0.01" max="0.05" step="0.001" value="0.03">
-        <div class="rangeends"><span>0.01</span><span>0.05</span></div>
+        <div class="row"><label for="xsSl">용질의 몰분율</label><span class="val" id="xsVal">0.050</span></div>
+        <input type="range" id="xsSl" min="0.01" max="0.10" step="0.001" value="0.05">
+        <div class="rangeends"><span>0.01</span><span>0.10</span></div>
       </div>
 
       <div class="ros">
+        <div class="readout wide is-off" id="roT"><div class="label">온도 (이 단계에서는 바꾸지 않습니다)</div>
+          <div><span class="value" id="vT">45</span><span class="unit">℃</span></div></div>
+
         <div class="readout wide" id="roAtm"><div class="label">대기압 (늘 같습니다)</div>
           <div><span class="value" id="vAtm">1.000</span><span class="unit">atm (760 mmHg)</span></div></div>
 
@@ -169,7 +173,7 @@
           <li>분자 사이의 끌림을 <b>직접 계산하지 않습니다.</b> 실제로 잰 증기 압력 곡선을 그대로 넣어 대신했습니다.</li>
           <li>이상 용액입니다. 실제 용액에서 나타나는 어긋남은 다루지 않습니다.</li>
           <li>비휘발성·비전해질 용질만 다룹니다.</li>
-          <li>조작 범위(온도 25~60 ℃, 용질 몰분율 0.01~0.05)는 화면에서 읽히는 크기와 교실에서 기다릴 수 있는 시간에서 정했습니다.</li>
+          <li>조작 범위(온도 25~60 ℃, 용질 몰분율 0.01~0.10)는 화면에서 읽히는 크기와 교실에서 기다릴 수 있는 시간에서 정했습니다.</li>
         </ul>
       </div>
     </div>

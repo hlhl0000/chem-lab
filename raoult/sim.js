@@ -33,7 +33,9 @@ const RAOULT = {
                      두 값이 절대 겹치지 않게 한다.
      ------------------------------------------------------------------ */
   T: { min: 25, max: 60, step: 1, init: 45 },
-  XS: { min: 0, max: 0.05, step: 0.001, init: 0.02 },
+  /* X용질 상한 0.10 · 기본 0.05 (2026-09-07 동료 검토 「용액과 차이가 잘 안 보인다」 반영. 이전 0.05 · 0.02).
+     이상 용액 가정은 화면의 한계 목록에 이미 선언돼 있고, 상한에서의 몰랄 농도는 검산 [부속]이 찍는다. */
+  XS: { min: 0, max: 0.10, step: 0.001, init: 0.05 },
   COVER: { min: 0.10, max: 0.75, step: 0.01, init: 0.5 },
 
   /* 탭 3 에서 쓰는 «고정» 용질 몰분율. 슬라이더로 열지 않는다 (위 ★ 참조) */
@@ -1023,18 +1025,20 @@ const HOH_DEG = 104.5;
 const WATER_FILL = "rgba(37,99,235,0.42)", WATER_LINE = "rgba(29,78,216,0.9)";
 const SOLN_FILL = "rgba(250,204,21,0.22)";
 
-/* ── 단계 × 요소 가시성의 «단일 원천» (매뉴얼 §13①). applyStep() 만 display 를 건드린다. */
+/* ── 단계 × 요소 가시성의 «단일 원천» (매뉴얼 §13①). applyStep() 만 display 를 건드린다.
+   roT: 온도 슬라이더가 «숨은» 단계에는 온도를 값으로 보인다 — 2단계에서 바꾼 온도가 뒤 단계에 «보이지 않게»
+   이어지지 않도록(동료 검토 1 「2번 탭의 온도가 1번 탭에도 영향」). 1단계 진입은 온도도 초기값으로 되돌린다(bind). */
 const SHOW = {
-  1: { tCtl:0, xsCtl:0, loupeBtn:1, injectBtn:0, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:0 },
-  2: { tCtl:1, xsCtl:0, loupeBtn:1, injectBtn:0, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:0 },
-  3: { tCtl:0, xsCtl:0, loupeBtn:0, injectBtn:1, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:1 },
-  4: { tCtl:0, xsCtl:0, loupeBtn:1, injectBtn:0, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:1 },
-  5: { tCtl:0, xsCtl:0, loupeBtn:0, injectBtn:0, recBtn:0, recWrap:0, roPpure:1, roDp:1, roX:1 },
-  6: { tCtl:1, xsCtl:1, loupeBtn:0, injectBtn:0, recBtn:1, recWrap:1, roPpure:1, roDp:1, roX:1 }
+  1: { tCtl:0, xsCtl:0, loupeBtn:1, injectBtn:0, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:0, roT:1 },
+  2: { tCtl:1, xsCtl:0, loupeBtn:1, injectBtn:0, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:0, roT:0 },
+  3: { tCtl:0, xsCtl:0, loupeBtn:0, injectBtn:1, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:1, roT:1 },
+  4: { tCtl:0, xsCtl:0, loupeBtn:1, injectBtn:0, recBtn:0, recWrap:0, roPpure:0, roDp:0, roX:1, roT:1 },
+  5: { tCtl:0, xsCtl:0, loupeBtn:0, injectBtn:0, recBtn:0, recWrap:0, roPpure:1, roDp:1, roX:1, roT:1 },
+  6: { tCtl:1, xsCtl:1, loupeBtn:0, injectBtn:0, recBtn:1, recWrap:1, roPpure:1, roDp:1, roX:1, roT:0 }
 };
 /* ⚠ style.display = "" 는 .is-off 클래스를 못 이긴다 — 명시값을 쓴다(매뉴얼 §13④ · 실측) */
 const SHOWVAL = { tCtl:"block", xsCtl:"block", loupeBtn:"inline-block", injectBtn:"inline-block",
-  recBtn:"inline-block", recWrap:"block", roPpure:"block", roDp:"block", roX:"block", roSurf:"block" };
+  recBtn:"inline-block", recWrap:"block", roPpure:"block", roDp:"block", roX:"block", roSurf:"block", roT:"block", sampleBtn:"inline-block" };
 
 const TITLE = {
   1: "뚜껑을 덮은 직후 — 무슨 일이 일어나는가?",
@@ -1048,7 +1052,7 @@ const DESC = {
   1: "밀폐한 비커 속 물입니다. ▶ 를 누르면 표면에서 분자가 떠나 액면 근처에 쌓이기 시작하고, 쌓인 분자 중 일부는 되돌아옵니다. 압력계 바늘이 어떻게 움직이는지 보세요.",
   2: "떠나는 수와 되돌아오는 수가 같아지면 바늘이 멈춥니다 — 그때가 동적 평형이고, 바늘이 가리키는 값이 증기 압력입니다. 온도를 바꿔 다시 평형을 찾아보세요.",
   3: "「용질 넣기」를 누르면 비휘발성 용질(노랑)이 액체 «전체»로 퍼집니다. 표면에 뜨지도, 바닥에 가라앉지도 않습니다.",
-  4: "「분자 수준으로 확대해 보기」로 액체 «속» 한 곳과 «표면» 한 곳을 각각 세어 보세요. 뽑을 때마다 조금씩 다르지만 어느 쪽으로도 치우치지 않습니다.",
+  4: "「두 곳을 확대해 보기」로 액체 «속» 한 곳과 «표면» 한 곳을 각각 세어 보세요. 「다른 곳을 세어 보기」를 누를 때마다 새 곳을 뽑습니다 — 조금씩 다르지만 어느 쪽으로도 치우치지 않습니다.",
   5: "왼쪽은 순수한 물, 오른쪽은 용액입니다. 같은 온도에서 두 압력계를 견주세요.",
   6: "용질의 몰분율을 올려 가며 평형마다 「지금 값 기록」을 눌러 표를 채우세요. 내려간 값 ΔP 가 몰분율과 어떻게 이어지는지 찾아보세요."
 };
@@ -1056,7 +1060,7 @@ const NOTE = {
   1: "표면을 떠난 분자는 <b>액면 근처에 머무르며</b> 표면에 부딪힙니다. 이 부딪힘이 압력계를 밀어 올립니다.",
   2: "<b>증기 압력</b>은 동적 평형에 이르렀을 때 기체가 나타내는 압력입니다. 액체의 양이나 그릇의 부피와는 관계가 없습니다.",
   3: "용질은 액체 <b>전체</b>에 고르게 퍼집니다. 용액 전체에서 물 분자가 차지하는 비율이 그만큼 줄어듭니다.",
-  4: "표면의 조성은 <b>전체의 조성과 같습니다.</b> 표면이 특별한 곳이 아닙니다.",
+  4: "표면의 조성은 <b>전체의 조성과 같습니다.</b> 표면이 특별한 곳이 아닙니다. 떠나는 것은 <b>물 분자뿐</b>이고, 용질은 떠나지 못한 채 표면의 <b>자리를 차지</b>합니다 — 물 분자가 차지하는 비율만큼만 떠날 수 있습니다. 「막는」 것이 아닙니다.",
   5: "용질이 있으면 용매는 그 액체를 <b>떠나기 어려워집니다.</b> 붙잡혀서가 아니라, <b>용액 전체에서</b> 용매 분자가 차지하는 비율이 줄었기 때문입니다.",
   6: "내려간 값 ΔP 는 <b>용질의 몰분율에 비례</b>합니다 — 용질의 종류나 크기가 아니라 «개수의 비율»만 봅니다."
 };
@@ -1064,8 +1068,8 @@ const SIDE = {
   1: "바늘이 올라가는 동안은 떠나는 수가 되돌아오는 수보다 많습니다.",
   2: "온도를 올리면 떠나는 분자가 늘고, 그만큼 되돌아오는 분자도 늘어 더 높은 압력에서 다시 평형이 됩니다.",
   3: "몰분율은 «용액 전체»의 조성량입니다.",
-  4: "두 돋보기는 서로 «따로» 뽑습니다. 여러 번 누적하면 두 비율이 가까워집니다.",
-  5: "두 비커는 온도·부피·뚜껑이 같습니다. 다른 것은 용질뿐입니다.",
+  4: "두 돋보기는 서로 «따로» 뽑습니다. 「다른 곳을 세어 보기」를 누를수록 두 비율이 가까워집니다.",
+  5: "두 비커는 온도·부피·뚜껑이 같습니다. 다른 것은 용질뿐입니다. 아래 «확대 눈금»은 두 값의 차이만 크게 본 것입니다.",
   6: "표의 ΔP 를 몰분율로 나눠 보세요 — 온도가 같으면 그 비가 거의 같습니다."
 };
 
@@ -1073,7 +1077,7 @@ const SIDE = {
 const st = {
   step: 1,
   t: RAOULT.T.init,
-  xs: 0.03,
+  xs: RAOULT.XS.init,
   running: false,          // 첫 진입은 «일시정지» (매뉴얼 §10)
   loupe: false,
   injected: false,         // 3단계에서 「용질 넣기」를 눌렀는가
@@ -1081,6 +1085,7 @@ const st = {
   nPure: 0, nSol: 0,       // 기체 분자 수 (결정론 · 계산부)
   eqSince: null, clock: 0,
   cumA: 0, cumB: 0, cumN: 0, cumSeed: -1,   // 4단계 두 돋보기 누적 표집
+  sampleK: 0,              // 4단계 표본 번호 — 「다른 곳을 세어 보기」를 누를 때만 바뀐다(2 s 자동 재표집은 «노랑이 깜빡인다»로 읽혔다 · 동료 검토 2)
   rec: []                  // 6단계 기록 표
 };
 /* 용질이 «들어 있는» 단계인가 — 계산부에 넘길 X용질 */
@@ -1343,7 +1348,7 @@ const VAPOR_FACTORY = REDUCED ? FALLBACK_MOTION.vapor : MOTION.vapor;
 const vapP = VAPOR_FACTORY({ seed: 7 }), vapS = VAPOR_FACTORY({ seed: 13 }), solM = MOTION.solute({ seed: 11 }), dial = MOTION.gauge();
 const GAS_MMHG = 3;                                   // 그림의 기체 분자 1개 ≈ 3 mmHg (index.html 「다루지 않는 것」과 같은 수)
 const GAS_SCALE = 1 / (GAS_MMHG * RAOULT.SCALE);      // 계산부 분자 수 → 화면 입자 수 (60 ℃ 에서 약 50개, 상한 400 안)
-const SOL_DOTS = 24;                 // X용질 0.05 에서 24개. 개수는 도식이다(정직한 «비율»은 돋보기가 센다)
+const SOL_DOTS = 30;                 // X용질 상한(0.10)에서 30개 · 기본 0.05 에서 15개. 개수는 도식이다(정직한 «비율»은 돋보기가 센다)
 function soluteDots(xs) { return Math.round(SOL_DOTS * xs / RAOULT.XS.max); }
 const MOTION_COLORS = { face: "#ffffff", rim: C["stage-line"], needle: C["d-red"], tick: C["d-gray"], text: C.t2, muted: C.t3 };
 
@@ -1353,7 +1358,9 @@ const DIAL_R = 34, DIAL_H = 84, DIAL_MAX = 200, GAP2 = 40;
 /* 3단계 「용질 넣기」 단추 자리 — 무대 «안» 비커 오른쪽 (사용자 확정 2026-09-07:
    태블릿·휴대폰에서 그림 아래 단추줄까지 손이 가야 하는 것이 불편하다).
    너비는 «넣은 뒤» 글자(「용질을 넣었습니다」)가 한 줄로 들어가는 값이다. */
-const INJ_W = 142, INJ_GAP = 12;   // 압력계 반지름 · 뚜껑 위 자리 · 눈금 끝(mmHg, 온도를 바꿔도 같은 계기) · 두 비커 사이
+const INJ_W = 142, INJ_GAP = 12;
+/* 5·6단계 「확대 눈금」 — 두 비커 아래, 두 증기 압력의 «차이»만 크게 본 가로 눈금의 높이 */
+const DIFF_H = 64;   // 압력계 반지름 · 뚜껑 위 자리 · 눈금 끝(mmHg, 온도를 바꿔도 같은 계기) · 두 비커 사이
 function layout(w) {
   const narrow = w < 520;
   const nB = twoBeakers() ? 2 : 1;
@@ -1368,7 +1375,7 @@ function layout(w) {
   const textW = (!narrow && nB === 1) ? 150 : 0;   // 비커 옆 글자 칸 (비커 하나일 때)
   const textLeft = textW > 0 && nL > 0;            // 돋보기가 켜지면 글자 칸을 «왼쪽»으로 — 연결 점선이 글자를 가로지르지 않게(육안)
   /* 비커 «아래» 글자: 비커가 둘이거나 화면이 좁으면 값 두 줄. 1단계 좁은 화면이면 범례 네 줄 더 */
-  const under = (nB === 2 || narrow) ? 34 + ((narrow && st.step === 1) ? 62 : 0) : 0;
+  const under = (nB === 2 || narrow) ? 34 + ((narrow && st.step === 1) ? 62 : 0) + (nB === 2 ? DIFF_H : 0) : 0;
   const injCol = (st.step === 3 && narrow) ? INJ_W + INJ_GAP * 2 : 0;   // 좁은 화면은 단추 칸을 따로 비운다(넓으면 글자 칸을 함께 쓴다)
   const area = { x: pad + (textLeft ? textW : 0), y: pad + dialH, w: w - pad * 2 - loupeW - textW - injCol, h: H_BASE - pad - dialH - 26 - under };
   const bw = Math.max(70, Math.min(nB === 2 ? 210 : 250, (area.w - (nB - 1) * GAP2) / nB));
@@ -1477,6 +1484,19 @@ function drawLoupe(g, L, src, kind, o) {
         const dn = (cy - R * 0.75) + ph * (surfY - (cy - R * 0.75));
         drawH2O(gg, cx + R * 0.35, dn, rO, -0.4);
         arrow(gg, cx + R * 0.35 - rO * 2.2, cy - R * 0.55, cx + R * 0.35 - rO * 2.2, surfY - 4, C.t2, 1.6);
+      } else if (o.evapSites) {
+        /* 윗줄의 «물» 자리에서만 떠난다 — 용질 자리는 결코 떠나지 않는다(비휘발성). 「막는」 그림이 아니라
+           「자리를 차지해, 떠날 수 있는 물이 그만큼 적다」는 그림(동료 검토 2 「방해되는 느낌이 안 든다」).
+           끝에서 옅어져 사라지고 시작에서 옅게 나타난다 — 툭 끊기는 깜빡임을 만들지 않는다. */
+        const free = []; for (let i = 0; i < cols; i++) if (!marks.has(i)) free.push(i);
+        if (free.length) {
+          const cyc = REDUCED ? 0 : Math.floor(st.clock / 1.8), ph = REDUCED ? 0.45 : (st.clock % 1.8) / 1.8;
+          const i = free[(cyc * 3) % free.length];
+          const x0 = gx0 + (i + 0.5) * cw, y0 = gy0 + 0.5 * ch, yTop = cy - R * 0.8;
+          gg.save(); gg.globalAlpha = ph < 0.15 ? ph / 0.15 : ph > 0.7 ? Math.max(0, (1 - ph) / 0.3) : 1;
+          drawH2O(gg, x0, y0 - ph * (y0 - yTop), rO, 0.3); gg.restore();
+          arrow(gg, x0 + rO * 2.4, y0 - rO * 1.4, x0 + rO * 2.4, yTop + rO, C.t2, 1.4);
+        }
       }
     }
   });
@@ -1511,6 +1531,7 @@ function drawStage() {
     drawValues(g, b1, L, { title: "증기 압력", pressure: pSol });
     /* ΔP — 두 비커 사이 */
     DESIGN.deltaP(g, { x: (b0.x + b0.w + b1.x) / 2, y: b0.y + 30, text: sig3(Math.max(0, pPureNow - pSol)), colors: DC });
+    drawDiffScale(g, b0, b1, pPureNow, pSol);
   } else {
     const b = L.beakers[0];
     const inj = soluteShown();
@@ -1526,13 +1547,13 @@ function drawStage() {
 
   if (st.loupe) {
     if (st.step === 4) {
-      const b1 = L.beakers[0], sy = beakerSurfaceY(b1), seedBase = Math.floor(st.clock / 2);
+      const b1 = L.beakers[0], sy = beakerSurfaceY(b1), seedBase = st.sampleK;   // 표본은 「다른 곳을 세어 보기」로만 바뀐다
       const A = sampleSolute(LOUPE_BULK, st.xs, 0, seedBase), B = sampleSolute(LOUPE_SURF, st.xs, 1, seedBase);
       if (seedBase !== st.cumSeed) { st.cumSeed = seedBase; st.cumA += A.n / LOUPE_BULK; st.cumB += B.n / LOUPE_SURF; st.cumN += 1; }
       drawLoupe(g, L.loupes[0], { x: b1.x + b1.w * 0.42, y: sy + (b1.y + b1.h - sy) * 0.55 - 7, w: 14, h: 14 }, "bulk",
         { xs: st.xs, sampleIdx: A.set, label: "액체 속 한 곳", sub: "용질 " + A.n + " / " + LOUPE_BULK });
       drawLoupe(g, L.loupes[1], { x: b1.x + b1.w * 0.42, y: sy - 7, w: 14, h: 14 }, "surface",
-        { xs: st.xs, sampleIdx: B.set, label: "표면 한 곳", evapAnim: false, sub: "용질 " + B.n + " / " + LOUPE_SURF });
+        { xs: st.xs, sampleIdx: B.set, label: "표면 한 곳", evapSites: true, sub: "용질 " + B.n + " / " + LOUPE_SURF + " · 떠나는 것은 물뿐" });
     } else {
       const b = L.beakers[0], sy = beakerSurfaceY(b);
       drawLoupe(g, L.loupes[0], { x: b.x + b.w * 0.42, y: sy - 7, w: 14, h: 14 }, "surface",
@@ -1543,6 +1564,38 @@ function drawStage() {
   positionInject(L);
   DESIGN.caption(g, { x: w / 2, y: h - 8, colors: DC,
     text: L.narrow ? "밀폐 비커 · 평면 도식 · 액면 고정" : "밀폐 비커 · 평면 도식 — 액면은 고정이고, 기체 분자를 액면 근처에 몰리게 그렸습니다" });
+}
+/* 확대 눈금 — 두 비커의 증기 압력 «차이»만 크게 본 가로 눈금 (동료 검토 3 「차이가 잘 안 보인다」).
+   고정 눈금 다이얼(0~200)에서는 ΔP 가 바늘 2~3° 라 보이지 않는다. 양 끝에 실제 값을 적어 «확대»임을 숨기지 않는다
+   (P5 M4 스케일 왜곡 · M7). 눈금 폭은 «상한 몰분율의 ΔP» 가 87 % 를 차지하도록 온도에 따라 잡는다.
+   두 표식의 라벨은 서로 반대쪽으로 뻗어 ΔP 가 작아도 겹치지 않는다. */
+function drawDiffScale(g, b0, b1, pPure, pSol) {
+  const bot = b0.y + b0.h, xL = b0.x + 8, xR = b1.x + b1.w - 8, W = xR - xL;
+  const span = Math.max(4, pPure * RAOULT.XS.max * 1.15);   // 상한 몰분율의 ΔP 가 눈금 «왼쪽 부분»의 87 %
+  const lo = pPure - span, hi = pPure + span * 0.38;          // 순수한 물은 눈금의 72 % 자리 — 오른쪽에 라벨 자리를 남긴다(좁은 화면 실측)
+  const X = v => xL + (v - lo) / (hi - lo) * W;
+  const yT = bot + 50, yL = bot + 63, yB = bot + 70, yE = bot + 94;   // ΔP 글자는 괄호 «아래»(겹치지 않게)
+  g.fillStyle = C.t3; g.font = "10px system-ui,sans-serif";
+  g.textAlign = "center"; g.fillText("확대 눈금 — 두 값의 차이만 크게 본 것 (mmHg)", (xL + xR) / 2, yT);
+  g.textAlign = "left"; g.fillText(sig3(lo), xL, yT); g.textAlign = "right"; g.fillText(sig3(hi), xR, yT);
+  g.strokeStyle = C.t3; g.lineWidth = 1.2; g.beginPath(); g.moveTo(xL, yB); g.lineTo(xR, yB); g.stroke();
+  const clampedS = Math.max(lo, pSol), xP = X(pPure), xS = X(clampedS);
+  g.strokeStyle = C["d-blue"]; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(xP, yB - 6); g.lineTo(xP, yB + 4); g.stroke();
+  g.beginPath(); g.moveTo(xS, yB - 6); g.lineTo(xS, yB + 4); g.stroke();
+  const labP = "순수한 물 " + sig3(pPure), labS = "용액 " + sig3(pSol);
+  g.fillStyle = C["d-blue"]; g.font = "600 10.5px system-ui,sans-serif";
+  const wP = g.measureText(labP).width, wS = g.measureText(labS).width;
+  const pRight = xP + 4 + wP <= xR + 10;                       // 오른쪽에 자리가 있으면 오른쪽(보통), 좁은 화면이면 왼쪽으로
+  g.textAlign = pRight ? "left" : "right"; g.fillText(labP, pRight ? xP + 4 : xP - 4, yL);
+  const limit = pRight ? xP - 4 : xP - 4 - wP - 6;             // 용액 라벨의 오른쪽 한계 — 순수한 물 라벨과 겹치지 않게
+  if (xS - xL >= 60 && xS - 4 <= limit) { g.textAlign = "right"; g.fillText(labS, xS - 4, yL); }
+  else if (xS + 4 + wS <= limit) { g.textAlign = "left"; g.fillText(labS, xS + 4, yL); }
+  else { g.textAlign = "right"; g.fillText(labS, xS - 4, yE); }   // 자리가 없으면 아래 줄(ΔP 글자 왼쪽)
+  g.strokeStyle = C["d-red"]; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(xS, yB + 6); g.lineTo(xS, yB + 10); g.lineTo(xP, yB + 10); g.lineTo(xP, yB + 6); g.stroke();
+  g.fillStyle = C["d-red"]; g.font = "600 10.5px system-ui,sans-serif"; g.textAlign = "center";
+  g.fillText("ΔP " + sig3(Math.max(0, pPure - pSol)), (xP + xS) / 2, yE);
 }
 /* 「용질 넣기」를 무대 좌표에 맞춘다. 캔버스에 «그리지» 않는다 — 진짜 button 이라야
    초점·확대·읽어주기가 그대로 된다(매뉴얼 §12 · 최소 44 px 는 .btn 이 지킨다) */
@@ -1560,6 +1613,7 @@ function updateReadouts() {
   const P0 = pPure(st.t), xs = activeXs();
   const pNow = st.nSol / RAOULT.SCALE;
   $("vAtm").textContent = "1.000";
+  $("vT").textContent = String(st.t);
   $("vP").textContent = setPress(pNow);
   $("vPpure").textContent = setPress(st.nPure / RAOULT.SCALE);
   $("vX").textContent = xSolvent(xs).toFixed(3);
@@ -1577,8 +1631,8 @@ function updateReadouts() {
   $("measuring").classList.toggle("is-off", !(st.running && !eq));
   const vd = $("verdict"); vd.classList.toggle("is-off", !settled);
   if (settled) {
-    if (st.step <= 2) vd.innerHTML = "증발하는 분자 수 = 응축하는 분자 수. <b>지금이 동적 평형</b>이고, 압력계가 가리키는 <b>" + sig3(pNow) + " mmHg</b> 가 이 온도에서 물의 증기 압력입니다.";
-    else if (st.step <= 4) vd.innerHTML = "용액도 동적 평형에 이르렀습니다. 증기 압력은 <b>" + sig3(pNow) + " mmHg</b> — 순수한 물(" + sig3(P0) + " mmHg)보다 낮습니다.";
+    if (st.step <= 2) vd.innerHTML = "증발하는 분자 수 = 응축하는 분자 수. <b>지금이 동적 평형</b>이고, 압력계가 가리키는 <b>" + sig3(pNow) + " mmHg</b> 가 " + st.t + " ℃에서 물의 증기 압력입니다.";
+    else if (st.step <= 4) vd.innerHTML = "용액도 동적 평형에 이르렀습니다. 증기 압력은 <b>" + sig3(pNow) + " mmHg</b> — 같은 " + st.t + " ℃의 순수한 물(" + sig3(P0) + " mmHg)보다 낮습니다.";
     else vd.innerHTML = "용액의 증기 압력이 순물질보다 <b>" + sig3((st.nPure - st.nSol) / RAOULT.SCALE) + " mmHg 낮습니다.</b> 용매의 몰분율 " + xSolvent(st.xs).toFixed(3) + " 을 순물질의 증기 압력에 곱한 값입니다.";
   }
   $("recBtn").disabled = !settled;
@@ -1593,6 +1647,7 @@ function applyStep() {
   const s = SHOW[st.step];
   for (const id in s) { const el = $(id); if (el) el.style.display = s[id] ? SHOWVAL[id] : "none"; }
   $("roSurf").style.display = (st.step === 4 && st.loupe) ? SHOWVAL.roSurf : "none";
+  $("sampleBtn").style.display = (st.step === 4 && st.loupe) ? SHOWVAL.sampleBtn : "none";
   $("stageTitle").textContent = TITLE[st.step];
   $("stageDesc").textContent = DESC[st.step];
   $("mainNote").innerHTML = NOTE[st.step];
@@ -1647,16 +1702,20 @@ function bind() {
   for (const b of document.querySelectorAll(".stg")) b.addEventListener("click", () => {
     const next = +b.dataset.step;
     st.step = next; st.loupe = false; st.eqSince = null;
-    if (next === 1) { st.nSol = 0; st.nPure = 0; st.clock = 0; st.injected = false; st.diffuse = 0; st.running = false; $("pauseBtn").textContent = "▶ 시작"; }
+    if (next === 1) {   // 1단계 = 「뚜껑을 덮은 직후」 — 다른 상태처럼 온도도 초기값으로(동료 검토 1)
+      st.nSol = 0; st.nPure = 0; st.clock = 0; st.injected = false; st.diffuse = 0; st.running = false; $("pauseBtn").textContent = "▶ 시작";
+      st.t = RAOULT.T.init; $("tSl").value = String(st.t); $("tVal").textContent = st.t + " ℃";
+    }
     if (next === 3) { st.injected = false; st.diffuse = 0; }
     if (next >= 4 && !st.injected) { st.injected = true; st.diffuse = 1; }   // 뒤 단계로 건너뛰면 «이미 넣은» 상태
     if (next >= 5) st.nPure = Math.max(st.nPure, st.nSol);                    // 순물질 쪽도 이미 평형 근처에서 출발
-    st.cumA = st.cumB = st.cumN = 0; st.cumSeed = -1;
+    st.cumA = st.cumB = st.cumN = 0; st.cumSeed = -1; st.sampleK = 0;
     applyStep();
   });
   $("tSl").addEventListener("input", e => { st.t = +e.target.value; $("tVal").textContent = st.t + " ℃"; st.eqSince = null; });
-  $("xsSl").addEventListener("input", e => { st.xs = +e.target.value; $("xsVal").textContent = st.xs.toFixed(3); st.eqSince = null; st.cumA = st.cumB = st.cumN = 0; st.cumSeed = -1; });
+  $("xsSl").addEventListener("input", e => { st.xs = +e.target.value; $("xsVal").textContent = st.xs.toFixed(3); st.eqSince = null; st.cumA = st.cumB = st.cumN = 0; st.cumSeed = -1; st.sampleK = 0; });
   $("loupeBtn").addEventListener("click", () => { st.loupe = !st.loupe; applyStep(); });
+  $("sampleBtn").addEventListener("click", () => { st.sampleK += 1; drawStage(); updateReadouts(); });
   $("injectBtn").addEventListener("click", () => { if (st.injected) return; st.injected = true; st.diffuse = 0; st.eqSince = null; if (!st.running) { st.running = true; $("pauseBtn").textContent = "⏸ 잠시 멈춤"; $("pauseBtn").setAttribute("aria-pressed", "false"); } applyStep(); });
   $("pauseBtn").addEventListener("click", () => {
     st.running = !st.running;
