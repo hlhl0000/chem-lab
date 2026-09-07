@@ -1306,8 +1306,8 @@ function drawMicro(st, time) {
      좁은 화면에서는 범례를 두 줄로 접고 그만큼 아래 여백을 늘린다. */
   const narrow = w < 540;
   const LEG = narrow
-    ? ["점선 = 수소 결합 · 짧은 H = 화면 앞뒤 방향", "노란 면 = 고리 안쪽 빈 공간"]
-    : ["점선 = 수소 결합 · 짧은 H = 화면 앞뒤 방향(네 번째 결합) · 노란 면 = 고리 안쪽 빈 공간"];
+    ? ["점선 = 수소 결합 · 짧은 H = 화면 앞뒤 방향", "육각 고리 안쪽은 빈 공간입니다"]
+    : ["점선 = 수소 결합 · 짧은 H = 화면 앞뒤 방향(네 번째 결합) · 육각 고리 안쪽은 빈 공간입니다"];
   /* 고스트를 그리는 구간이면 설명이 «한 줄 더» 필요하다 — 아래 여백을 그만큼 늘린다.
      융해 구간(seg 1)은 이동이 커서(최대 447 px) 고스트를 겹치면 지저분하기만 하다. */
   const useGhost = (st.seg !== 1 && st.u > 1e-4);
@@ -1402,28 +1402,14 @@ function drawMicro(st, time) {
     g.setLineDash([]);
   }
 
-  /* 빈 공간 — 얼음의 육각 고리 «안쪽»을 칠한다. 이것이 이 화면의 주인공이다. */
-  if (st.phase !== "water") {
-    RINGS.forEach(function (r) {
-      let e = 0;
-      r.sites.forEach(function (i) { e = Math.max(e, AR.phase[i]); });
-      if (e > 0.35) return;
-      const a = 0.55 * (1 - e / 0.35);
-      /* ★ 육각형을 «그대로» 칠하면 고리가 평면을 덮으므로 화면 전체가 노래진다 —
-         빈 공간이 강조되지 않는다. 무게중심 쪽으로 0.55 배 줄여 「구멍」으로 보이게 한다. */
-      let cx = 0, cy = 0;
-      r.sites.forEach(function (i) { cx += AR.pos[i].x; cy += AR.pos[i].y; });
-      cx /= 6; cy /= 6;
-      g.fillStyle = "rgba(250,204,21," + a.toFixed(3) + ")";
-      g.beginPath();
-      r.sites.forEach(function (i, q) {
-        const p = AR.pos[i];
-        const px = X(cx + (p.x - cx) * 0.55), py = Y(cy + (p.y - cy) * 0.55);
-        if (q === 0) g.moveTo(px, py); else g.lineTo(px, py);
-      });
-      g.closePath(); g.fill();
-    });
-  }
+  /* 빈 공간 — 얼음의 육각 고리 «안쪽»은 칠하지 않는다. 배경(흰색)이 그대로 비친다.
+     ⚠ 예전에는 여기를 노란색으로 칠했다. 동료 교사(김은성 선생님) 피드백(2026-09-07):
+     학생들이 「비어 있다」고 인식하지 못하고 오히려 "비어 있다면서 왜 노란색이냐"고
+     되물었다 — 색을 칠하는 것 자체가 「무언가 있다」는 신호로 읽힌 것이다.
+     고리의 모양(여섯 분자 + 그 사이 점선 결합)만으로 「그 안이 비어 있다」가 이미
+     전달되므로, 안쪽은 그대로 비워 둔다(= 흰 배경). 색이라는 신호 채널을 하나
+     줄인 것이라 접근성 규정(§9)에 걸리지 않는다 — 원래도 이 자리는 「색으로만
+     전달하던 정보」가 아니었다. */
   /* 성긴 국소 배열 — 액체 쪽. 「얼음 조각」이 아니다. */
   if (st.phase === "water" || (st.phase === "melt" && st.melt > 0.5)) {
     const kk = Math.round(AR.rings);
