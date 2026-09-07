@@ -41,6 +41,11 @@
     color:var(--accent-dark)}
   .btn[disabled]{opacity:.5; cursor:not-allowed}
 
+  /* 3단계 「용질 넣기」 — 무대 «안», 비커 오른쪽. 태블릿·휴대폰에서 그림을 보며 바로 누를 수 있게
+     (캔버스에 그린 가짜 단추가 아니라 진짜 button 이다 — 초점·확대·읽어주기가 그대로 된다) */
+  .stagebtn{position:absolute; z-index:2; white-space:nowrap; font-size:13px; padding:10px 6px;
+    text-align:center; box-sizing:border-box}
+
   .note{font-size:12.5px; color:var(--t2); line-height:1.65; margin:10px 0 0;
     background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
   .note b{color:var(--t1)}
@@ -75,11 +80,11 @@
 </div>
 
 <div class="stages" id="stages" role="group" aria-label="단계 선택">
-  <button class="stg tab" data-step="1" data-tab="1" aria-pressed="true">1. 증발이 시작된다</button>
+  <button class="stg tab" data-step="1" data-tab="1" aria-pressed="true">1. 증발 시작</button>
   <button class="stg tab" data-step="2" data-tab="2" aria-pressed="false">2. 동적 평형</button>
-  <button class="stg tab" data-step="3" data-tab="3" aria-pressed="false">3. 용질을 넣는다</button>
-  <button class="stg tab" data-step="4" data-tab="4" aria-pressed="false">4. 표면을 확대해 본다</button>
-  <button class="stg tab" data-step="5" data-tab="5" aria-pressed="false">5. 순물질과 견준다</button>
+  <button class="stg tab" data-step="3" data-tab="3" aria-pressed="false">3. 용질 첨가</button>
+  <button class="stg tab" data-step="4" data-tab="4" aria-pressed="false">4. 표면 확대</button>
+  <button class="stg tab" data-step="5" data-tab="5" aria-pressed="false">5. 용액과 순물질 비교</button>
   <button class="stg tab" data-step="6" data-tab="6" aria-pressed="false">6. 농도를 높여 본다</button>
 </div>
 <p class="stagedesc" id="stageDesc"></p>
@@ -91,11 +96,11 @@
       <h2 id="stageTitle" style="font-size:15px;margin:0 0 10px;color:var(--t1)"></h2>
       <div class="stage stage--light" id="stageWrap">
         <canvas id="stage" aria-label="밀폐한 비커를 평면 도식으로 그린 그림. 뚜껑 위 압력계가 증기 압력을 가리키고, 비커 옆에 대기압과 증기 압력 값이 글자로 적혀 있습니다. 돋보기를 켜면 액면을 분자 크기로 확대해 보입니다."></canvas>
+        <button class="btn stagebtn" id="injectBtn" style="display:none">용질 넣기</button>
       </div>
 
       <div class="btnrow">
         <button class="btn" id="pauseBtn" aria-pressed="true">▶ 시작</button>
-        <button class="btn" id="injectBtn" style="display:none">용질 넣기</button>
         <button class="btn" id="loupeBtn" aria-pressed="false">분자 수준으로 확대해 보기</button>
         <button class="btn" id="recBtn" style="display:none">지금 값 기록</button>
       </div>

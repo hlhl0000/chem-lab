@@ -1086,7 +1086,9 @@ const st = {
 /* 용질이 «들어 있는» 단계인가 — 계산부에 넘길 X용질 */
 function activeXs() { return (st.step >= 4 || (st.step === 3 && st.injected)) ? st.xs : 0; }
 function twoBeakers() { return st.step >= 5; }
-function soluteShown() { return st.step >= 3; }
+/* 그림에 용질이 «있는» 단계인가. 3단계는 「용질 넣기」를 누른 뒤부터다 — 누르기 전에 점 하나와
+   「용액」 라벨이 먼저 보이면 「누르면 퍼진다」는 이 단계의 논지가 무너진다(390 px 육안 실측) */
+function soluteShown() { return st.step === 3 ? st.injected : st.step >= 3; }
 
 /* ── 압력 표기 단일 원천 (매뉴얼 §14④ · 유효숫자 3자리 — P5 M7) ─────────── */
 function sig3(v) { return v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2); }
@@ -1347,7 +1349,11 @@ const MOTION_COLORS = { face: "#ffffff", rim: C["stage-line"], needle: C["d-red"
 
 /* ── 배치 ────────────────────────────────────────────────────── */
 const H_BASE = 440;
-const DIAL_R = 34, DIAL_H = 84, DIAL_MAX = 200, GAP2 = 40;   // 압력계 반지름 · 뚜껑 위 자리 · 눈금 끝(mmHg, 온도를 바꿔도 같은 계기) · 두 비커 사이
+const DIAL_R = 34, DIAL_H = 84, DIAL_MAX = 200, GAP2 = 40;
+/* 3단계 「용질 넣기」 단추 자리 — 무대 «안» 비커 오른쪽 (사용자 확정 2026-09-07:
+   태블릿·휴대폰에서 그림 아래 단추줄까지 손이 가야 하는 것이 불편하다).
+   너비는 «넣은 뒤» 글자(「용질을 넣었습니다」)가 한 줄로 들어가는 값이다. */
+const INJ_W = 142, INJ_GAP = 12;   // 압력계 반지름 · 뚜껑 위 자리 · 눈금 끝(mmHg, 온도를 바꿔도 같은 계기) · 두 비커 사이
 function layout(w) {
   const narrow = w < 520;
   const nB = twoBeakers() ? 2 : 1;
@@ -1363,7 +1369,8 @@ function layout(w) {
   const textLeft = textW > 0 && nL > 0;            // 돋보기가 켜지면 글자 칸을 «왼쪽»으로 — 연결 점선이 글자를 가로지르지 않게(육안)
   /* 비커 «아래» 글자: 비커가 둘이거나 화면이 좁으면 값 두 줄. 1단계 좁은 화면이면 범례 네 줄 더 */
   const under = (nB === 2 || narrow) ? 34 + ((narrow && st.step === 1) ? 62 : 0) : 0;
-  const area = { x: pad + (textLeft ? textW : 0), y: pad + dialH, w: w - pad * 2 - loupeW - textW, h: H_BASE - pad - dialH - 26 - under };
+  const injCol = (st.step === 3 && narrow) ? INJ_W + INJ_GAP * 2 : 0;   // 좁은 화면은 단추 칸을 따로 비운다(넓으면 글자 칸을 함께 쓴다)
+  const area = { x: pad + (textLeft ? textW : 0), y: pad + dialH, w: w - pad * 2 - loupeW - textW - injCol, h: H_BASE - pad - dialH - 26 - under };
   const bw = Math.max(70, Math.min(nB === 2 ? 210 : 250, (area.w - (nB - 1) * GAP2) / nB));
   const bx0 = area.x + (area.w - (bw * nB + (nB - 1) * GAP2)) / 2;
   const beakers = [];
@@ -1380,7 +1387,14 @@ function layout(w) {
       xs.forEach(cx => loupes.push({ cx, cy, R }));
     }
   }
-  return { H, narrow, beakers, loupes, R, textW, textLeft, under };
+  let inj = null;
+  if (st.step === 3) {
+    const b0 = beakers[0], sy0 = beakerSurfaceY(b0), bot0 = b0.y + b0.h;
+    inj = narrow
+      ? { x: b0.x + b0.w + INJ_GAP, y: sy0 + (bot0 - sy0) / 2 - 22, w: INJ_W }   // 액체 높이 가운데
+      : { x: b0.x + b0.w + 16, y: sy0 + 66, w: INJ_W };                          // 값 글자 다섯 줄 «아래»
+  }
+  return { H, narrow, beakers, loupes, R, textW, textLeft, under, inj };
 }
 
 /* ── 비커 (2D 도식) — 그리기는 DESIGN(계약 §3), 배치·개수·운동은 여기 ─────────── */
@@ -1526,8 +1540,16 @@ function drawStage() {
           sub: "왼쪽 ↑ 증발 · 오른쪽 ↓ 응축 — 둘 다 계속" });
     }
   }
+  positionInject(L);
   DESIGN.caption(g, { x: w / 2, y: h - 8, colors: DC,
     text: L.narrow ? "밀폐 비커 · 평면 도식 · 액면 고정" : "밀폐 비커 · 평면 도식 — 액면은 고정이고, 기체 분자를 액면 근처에 몰리게 그렸습니다" });
+}
+/* 「용질 넣기」를 무대 좌표에 맞춘다. 캔버스에 «그리지» 않는다 — 진짜 button 이라야
+   초점·확대·읽어주기가 그대로 된다(매뉴얼 §12 · 최소 44 px 는 .btn 이 지킨다) */
+function positionInject(L) {
+  if (!L.inj) return;
+  const el = $("injectBtn");
+  el.style.left = L.inj.x + "px"; el.style.top = L.inj.y + "px"; el.style.width = L.inj.w + "px";
 }
 function vapStateFor(b, n, ev, co) {
   return { rect: headspace(b), surfaceY: beakerSurfaceY(b) - 2, targetN: n * GAS_SCALE, evapPerSec: ev, condPerSec: co, reduced: REDUCED, colors: MOTION_COLORS };
