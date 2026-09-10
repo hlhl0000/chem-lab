@@ -191,6 +191,56 @@ const SIMS = [
     ready: true,
     desc: "두 실험 탭. 「산화 구리(Ⅱ) 실험」에서는 검은 가루를 가열해 붉은색 구리가 생기고 석회수가 뿌옇게 흐려지는 과정을 3D 장치로 재현하며, 분자 크기로 확대하면 산소가 구리를 떠나 탄소에게 가는 것이 보입니다 — 산소를 잃는 환원과 산소를 얻는 산화는 항상 동시에 일어납니다. 「마그네슘의 연소」에서는 밝은 빛을 내며 타는 마그네슘을 확대해, 산소와 결합하는 이면에서 마그네슘이 전자를 잃어 Mg²⁺가 되고 산소가 전자를 얻어 O²⁻가 되는 것 — 전자의 이동을 확인합니다.",
     tags: ["산화","환원","산소의 이동","전자의 이동","동시성","산화 구리(Ⅱ)","마그네슘의 연소","석회수"]
+  },
+  {
+    id: "neutralize",
+    title: "중화 반응과 남은 이온",
+    cat: "통합과학",
+    path: "neutralize/",
+    icon: "neutralize",
+    ready: true,
+    desc: "묽은 염산과 수산화 나트륨 수용액을 홈판 A~E의 비율 그대로 섞어, 남은 이온을 종류별로 셉니다. 중화 반응은 다섯 조합 «전부»에서 일어나는데 중성이 되는 것은 한 자리뿐입니다 — 갈리는 것은 반응이 일어났는가가 아니라 무엇이 남았는가입니다. 회색으로 그린 Na⁺·Cl⁻는 섞기 전과 뒤의 개수가 같아, 소금 알갱이가 생기지 않는다는 것도 함께 보입니다.",
+    tags: ["중화 반응","액성","남은 이온","BTB","중화열","입자 모형","홈판"]
+  },
+  {
+    id: "ionmove",
+    title: "이온의 이동과 전기 전도성",
+    cat: "통합과학",
+    path: "ionmove/",
+    icon: "ionmove",
+    ready: true,
+    desc: "물에 녹였을 때 이온이 생기는지를 전구로 확인하고, 전류를 흘려 어느 이온이 어느 극으로 가는지를 셉니다. 화학식에 OH가 들어 있는 에탄올은 전구를 켜지 못합니다. (−)극 쪽으로 가는 양이온 칸에는 H⁺만이 아니라 종이에 배어 있던 K⁺가 함께 들어 있습니다 — 색을 바꾸지 않을 뿐, 처음부터 계속 움직이고 있었습니다.",
+    tags: ["아레니우스 정의","이온의 이동","전기 전도성","전해질","리트머스","에탄올","질산 칼륨"]
+  },
+  {
+    id: "heatflow",
+    title: "변화와 에너지의 출입",
+    cat: "통합과학",
+    path: "heatflow/",
+    icon: "heatflow",
+    ready: true,
+    desc: "응고·기화·연소·전기 분해·광합성·세포호흡 여섯 가지를 스스로 분류합니다. 제출하기 전에는 답이 화면 어디에도 나오지 않고, 여섯 칸을 다 채우면 물리 변화 줄이 비어 있지 않다는 것이 표 자체로 드러납니다. 두 번째 탭에서는 불도 전기도 쓰지 않고 물을 70 ℃ 이상 15분 유지하는 장치를 설계하는데, 밀폐하면 압력계가 위험역에 들어가 실험이 중단됩니다.",
+    tags: ["발열","흡열","물리 변화","화학 변화","에너지 출입","발열 팩","산화 칼슘","안전"]
+  },
+  {
+    id: "bondheat",
+    title: "결합과 에너지의 흡수·방출",
+    cat: "통합과학",
+    path: "bondheat/",
+    icon: "bondheat",
+    ready: true,
+    desc: "반응을 두 단계로 나눠, 반응물의 결합을 먼저 끊고 그다음 생성물의 결합을 만듭니다. 다 끊기 전에는 「만들기」가 눌리지 않습니다 — 끊는 일에는 언제나 에너지가 든다는 뜻입니다. 저울에는 숫자가 한 자리도 없고 두 막대의 길이만 있으며, 그 차이가 주변으로 나가거나 주변에서 들어옵니다. 수소의 연소와 물의 전기 분해를 이어서 하면 같은 결합이 방향만 바뀝니다.",
+    tags: ["결합","발열 반응","흡열 반응","에너지 출입","계와 주변","메테인의 연소","전기 분해"]
+  },
+  {
+    id: "neutralgame",
+    title: "중화점 대결 게임",
+    cat: "통합과학",
+    path: "neutralgame/",
+    icon: "neutralgame",
+    ready: true,
+    desc: "눈금 없는 뷰렛 다이얼을 돌려 수산화 나트륨 수용액을 넣다가 멈추고, 그 자리의 액성을 맞히는 2~4인 대결입니다. 쓸 수 있는 정보는 천천히 따라오는 온도계와 페놀프탈레인의 색뿐이고, 넣은 양은 끝까지 숫자로 나오지 않습니다. 모두 끝나면 입자 모형으로 하나씩 열어 보는데, 분홍이 되자마자 멈춘 사람의 플라스크에도 OH⁻가 남아 있습니다.",
+    tags: ["중화점","지시약 변색점","페놀프탈레인","액성 판정","대결 게임","온도계"]
   }
 ];
 
@@ -299,5 +349,37 @@ const ICONS = {
          <path d="M44 23h7l-3-3m3 3-3 3" fill="none" stroke="currentColor" stroke-width="3"
            stroke-linecap="round" stroke-linejoin="round"/>
          <path d="M46 36v14h13V36" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/>
-         <path d="M46 44h13" stroke="currentColor" stroke-width="2.5" opacity=".5"/>`
+         <path d="M46 44h13" stroke="currentColor" stroke-width="2.5" opacity=".5"/>`,
+  neutralize:`<path d="M18 8v14L10 46a5 5 0 0 0 4.6 7h34.8A5 5 0 0 0 54 46L46 22V8" fill="none"
+           stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+           <path d="M14 8h36" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+           <path d="M12 33h40" stroke="currentColor" stroke-width="3" opacity=".5"/>
+           <circle cx="23" cy="43" r="4.6"/><rect x="33" y="38.4" width="9.2" height="9.2" rx="2.6"/>
+           <circle cx="30" cy="24" r="3"/><rect x="37" y="21" width="6" height="6" rx="1.8"/>`,
+  ionmove:`<rect x="5" y="12" width="7" height="40" rx="2"/><rect x="52" y="12" width="7" height="40" rx="2"/>
+         <rect x="17" y="17" width="30" height="30" rx="3" fill="none" stroke="currentColor" stroke-width="3"/>
+         <path d="M24 27h12m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="3"
+         stroke-linecap="round" stroke-linejoin="round"/>
+         <path d="M40 38H28m4 4-4-4 4-4" fill="none" stroke="currentColor" stroke-width="3"
+         stroke-linecap="round" stroke-linejoin="round"/>`,
+  heatflow:`<rect x="4" y="16" width="20" height="32" rx="3" fill="none" stroke="currentColor" stroke-width="3.5"/>
+          <rect x="40" y="16" width="20" height="32" rx="3" fill="none" stroke="currentColor" stroke-width="3.5"/>
+          <rect x="9" y="27" width="10" height="15" rx="2"/>
+          <path d="M50 22v17" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="50" cy="42" r="4"/>
+          <path d="M26 26h11m-3.5-3.5L37 26l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M38 38H27m3.5 3.5L27 38l3.5-3.5" fill="none" stroke="currentColor" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round"/>`,
+  bondheat:`<path d="M10 24 54 16" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+          <path d="M32 20v16" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M23 52h18l-9-16z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/>
+          <rect x="5" y="28" width="12" height="14" rx="2"/>
+          <rect x="47" y="21" width="12" height="25" rx="2"/>`,
+  neutralgame:`<rect x="27" y="4" width="10" height="24" rx="2" fill="none" stroke="currentColor" stroke-width="3.5"/>
+             <path d="M32 28v4" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+             <circle cx="32" cy="36" r="2.4"/>
+             <path d="M28 41v4L16 59h32L36 45v-4" fill="none" stroke="currentColor" stroke-width="3.5"
+             stroke-linejoin="round" stroke-linecap="round"/>
+             <path d="M20 54h24" stroke="currentColor" stroke-width="3" opacity=".5"/>`
 };
