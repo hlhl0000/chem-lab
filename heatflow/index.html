@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>변화와 에너지의 출입 | 케미랩</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색은 shared/style.css 토큰만. 요소 선택자(button{}, input{})는 쓰지 않는다 (매뉴얼 §12①) */
+  .page{padding:18px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0; line-height:1.6}
+
+  .seatrow{display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; color:var(--t2)}
+  .seatrow .seat{font-family:inherit; font-size:16px; min-height:44px; padding:6px 10px;
+    width:120px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--t1)}
+
+  .tabs{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
+  .tabb{font-family:inherit; font-size:14px; font-weight:600; padding:10px 14px; min-height:44px;
+    border-radius:10px 10px 0 0; border:1px solid var(--line); border-bottom:none;
+    background:#eef2f7; color:var(--t2); cursor:pointer}
+  .tabb[aria-pressed="true"]{background:var(--panel); color:var(--accent-dark);
+    box-shadow:inset 0 3px 0 var(--accent)}
+  .tabdesc{font-size:12.5px; color:var(--t2); line-height:1.65; margin:8px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .tabdesc b{color:var(--t1)}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1.4fr) minmax(300px,1fr); gap:14px; margin-top:12px}
+  @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+  .stage canvas{display:block; width:100%}
+  .stagecap{font-size:12px; color:var(--t2); margin:9px 0 0; line-height:1.6; min-height:34px}
+
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0}
+  .btn{font-family:inherit; font-size:14px; font-weight:600; padding:10px 13px; min-height:44px;
+    border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; box-shadow:var(--shadow)}
+  .btn--primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .btn[disabled]{opacity:.42; cursor:default; box-shadow:none}
+
+  .segrow{display:flex; gap:7px; flex-wrap:wrap; margin:2px 0 10px}
+  .seg{font-family:inherit; font-size:12.5px; font-weight:600; padding:9px 8px; min-height:44px;
+    border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; flex:1 1 30%; line-height:1.35}
+  .seg[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .seg.is-done{border-color:var(--d-green)}
+  .seg[disabled]{opacity:.45; cursor:default}
+  .pickrow{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:8px}
+  .pickb{font-family:inherit; font-size:13px; font-weight:600; padding:9px 10px; min-height:44px;
+    border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; flex:1 1 auto}
+  .pickb[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .pickb[disabled]{opacity:.45; cursor:default}
+  .picklbl{font-size:12px; color:var(--t3); font-weight:600; margin:2px 0 4px}
+
+  .ctl{margin-bottom:12px}
+  .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
+    font-size:13px; margin-bottom:4px; color:var(--t2); gap:8px}
+  .ctl .row .val{font-variant-numeric:tabular-nums; font-weight:600; color:var(--t1)}
+  .rangeends{display:flex; justify-content:space-between; font-size:11.5px; color:var(--t3); margin-top:4px}
+
+  .ros{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px}
+  .ros .readout{padding:9px 10px}
+  .ros .wide{grid-column:1 / -1}
+
+  .optrow{display:flex; align-items:center; gap:9px; min-height:44px; font-size:13px;
+    color:var(--t2); cursor:pointer; margin-top:4px}
+
+  .note{font-size:12.5px; color:var(--t2); line-height:1.65; margin:10px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .note b{color:var(--t1)}
+  .note--warn{border-color:var(--d-amber); background:#fffbf5}
+  .note--ok{border-color:var(--d-green); background:#f4fbf6}
+  .note--key{border-color:var(--d-blue); background:#f5f8ff}
+  .note--danger{border-color:var(--d-red); background:#fef4f3}
+
+  .grid2{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px}
+  .grid2 th,.grid2 td{padding:8px; border:1px solid var(--line); text-align:center}
+  .grid2 th{color:var(--t3); font-weight:600; background:#f8fafc}
+  .grid2 td{color:var(--t1); font-weight:600}
+
+  .jump{margin:8px 0 0}
+  .jump a{display:inline-flex; align-items:center; min-height:44px; padding:0 13px;
+    font-size:13px; font-weight:600; color:var(--accent-dark); text-decoration:none;
+    border:1px solid var(--line); border-radius:10px; background:var(--panel)}
+  .sheet{margin-top:16px}
+  .sheet ol{margin:0; padding-left:20px; font-size:13.5px; color:var(--t2); line-height:1.9}
+  .sheet .tag{display:inline-block; font-size:10.5px; font-weight:700; color:#fff; background:var(--d-gray);
+    border-radius:5px; padding:1px 6px; margin-right:6px; vertical-align:1px}
+  .sheet .tag.pre{background:var(--d-amber)} .sheet .tag.obs{background:var(--d-cyan)}
+  .sheet .tag.rel{background:var(--d-blue)}  .sheet .tag.exp{background:var(--d-green)}
+  .sheet .tag.des{background:var(--d-violet)} .sheet .tag.lim{background:var(--d-amber)}
+  .limits{margin-top:14px; font-size:12px; color:var(--t3); line-height:1.75}
+  .limits h3{margin:0 0 5px; font-size:13px; color:var(--t2)}
+  .limits ol{margin:0; padding-left:19px}
+  .legend2{margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap page">
+
+<div class="head">
+  <h1>변화와 에너지의 출입</h1>
+  <p class="sub">먼저 여섯 가지 변화를 스스로 <b>분류</b>합니다 &mdash; 물질 자체가 바뀌었는가,
+     에너지를 내놓았는가. 그다음 <b>불도 전기도 쓰지 않고</b> 물을 데우는 장치를 설계합니다.
+     밀폐하면 어떻게 되는지도 여기서 확인합니다.</p>
+</div>
+
+<div class="seatrow">
+  <label for="seat">좌석번호</label>
+  <input class="seat" id="seat" type="text" inputmode="numeric" placeholder="예) 1-07">
+  <span style="font-size:12px;color:var(--t3)">기록용입니다. 저장되지 않습니다.</span>
+</div>
+
+<div class="tabs" role="group" aria-label="탐구 선택">
+  <button class="tabb" data-tab="six"  aria-pressed="true">① 여섯 가지 변화</button>
+  <button class="tabb" data-tab="cook" aria-pressed="false">② 불 없이 조리하기</button>
+</div>
+<p class="tabdesc only-six"><b>교과서 46쪽 단어 찾기의 여섯 낱말</b>입니다.
+  하나씩 골라 <b>두 가지</b>를 판단하세요 &mdash; 물질의 종류가 바뀌었는가,
+  그리고 에너지를 <b>내놓았는가 받아들였는가</b>.
+  <b>제출하기 전에는 답이 화면 어디에도 나오지 않습니다.</b></p>
+<p class="tabdesc only-cook" style="display:none"><b>산에서 컵라면을 먹고 싶은데 불도 전기도 없습니다.</b>
+  발열 팩(산화 칼슘)과 물로 <b>70 ℃ 이상을 15분</b> 유지하는 장치를 설계하세요.
+  &mdash; 실제 실험(9~10차시) 전에 <b>미리</b> 해 보는 설계입니다.</p>
+
+<div class="cols">
+  <!-- 왼쪽: 무대 -->
+  <div>
+    <div class="card">
+      <div class="stage stage--light">
+        <canvas id="stageCv" aria-label="탭 ①에서는 왼쪽에 「계(변화하는 물질)」 상자와 그 안의 저장 에너지 막대가, 오른쪽에 「주변」 상자와 온도계가 있고, 두 상자 사이에 에너지가 오가는 화살표가 그려집니다. 탭 ②에서는 보온 용기 단면에 발열 팩과 물그릇, 온도계, 그리고 밀폐했을 때의 압력계가 그려집니다."></canvas>
+      </div>
+      <p class="stagecap" id="stageCap"></p>
+      <p class="jump"><a href="#sheet">확인해 볼 것으로 이동 &darr;</a></p>
+
+      <p class="note only-six" id="resultBox" style="display:none"></p>
+
+      <div class="btnrow only-cook" style="display:none">
+        <button class="btn btn--primary" id="runBtn">실험 시작</button>
+      </div>
+      <p class="note note--danger only-cook" style="display:none">
+        <b>실물 실험에서 지켜야 할 것.</b> 반응은 급격한 발열과 함께 많은 <b>수증기</b>를 내고,
+        남는 물질은 <b>강한 염기</b>입니다. 반드시 <b>내열 장갑·보안경·실험복</b>을 쓰고,
+        <b>밀폐 용기를 쓰지 마세요.</b> 물은 한꺼번에 붓지 말고 조금씩 넣습니다.
+        반응 후 남은 물질은 싱크대에 그냥 버리지 않습니다.</p>
+
+      <p class="note" id="rmNote" style="display:none">
+        (&ldquo;동작 줄이기&rdquo;가 켜져 있어 화살표와 시간 진행 애니메이션을 생략했습니다.
+        <b>「실험 시작」을 누르면 바로 결과 상태가 됩니다</b> &mdash; 값은 같습니다.)</p>
+    </div>
+  </div>
+
+  <!-- 오른쪽: 조작과 측정값 -->
+  <div>
+    <!-- 탭 ① -->
+    <div class="card only-six">
+      <div class="segrow" role="group" aria-label="변화 고르기">
+        <button class="seg cardb" data-card="freeze"  aria-pressed="true">응고</button>
+        <button class="seg cardb" data-card="vapor"   aria-pressed="false">기화</button>
+        <button class="seg cardb" data-card="burn"    aria-pressed="false">연소</button>
+        <button class="seg cardb" data-card="electro" aria-pressed="false">전기 분해</button>
+        <button class="seg cardb" data-card="photo"   aria-pressed="false">광합성</button>
+        <button class="seg cardb" data-card="resp"    aria-pressed="false">세포호흡</button>
+      </div>
+
+      <p class="picklbl">① 물질의 종류가 바뀌는가?</p>
+      <div class="pickrow" role="group" aria-label="물리 변화인가 화학 변화인가">
+        <button class="pickb" data-grp="phys" data-val="phys" aria-pressed="false">물리 변화<br>
+          <span style="font-weight:500;font-size:11px">모양·상태만 바뀜</span></button>
+        <button class="pickb" data-grp="phys" data-val="chem" aria-pressed="false">화학 변화<br>
+          <span style="font-weight:500;font-size:11px">다른 물질이 됨</span></button>
+      </div>
+      <p class="picklbl">② 물질이 에너지를 내놓는가, 받아들이는가?</p>
+      <div class="pickrow" role="group" aria-label="방출인가 흡수인가">
+        <button class="pickb" data-grp="rel" data-val="rel" aria-pressed="false">방출<br>
+          <span style="font-weight:500;font-size:11px">내놓는다</span></button>
+        <button class="pickb" data-grp="rel" data-val="abs" aria-pressed="false">흡수<br>
+          <span style="font-weight:500;font-size:11px">받아들인다</span></button>
+      </div>
+
+      <div class="btnrow">
+        <button class="btn btn--primary" id="okBtn">제출</button>
+        <button class="btn" id="clrBtn">전부 지우기</button>
+      </div>
+      <p class="note" style="font-size:11.5px">분류한 것 <b id="doneCount">0</b> / 6</p>
+
+      <table class="grid2">
+        <tr><th></th><th>방출</th><th>흡수</th></tr>
+        <tr><th>물리 변화</th><td id="cell_pr">&mdash;</td><td id="cell_pa">&mdash;</td></tr>
+        <tr><th>화학 변화</th><td id="cell_cr">&mdash;</td><td id="cell_ca">&mdash;</td></tr>
+      </table>
+      <p class="note note--key" style="font-size:12px">여섯 칸을 다 채운 뒤 <b>표의 첫 줄</b>을
+        보세요. 물리 변화 칸이 <b>비어 있는지</b> 확인하세요.</p>
+    </div>
+
+    <!-- 탭 ② -->
+    <div class="card only-cook" style="display:none">
+      <div class="ctl">
+        <div class="row"><label for="packs">발열 팩</label><span class="val" id="sPacks">1개</span></div>
+        <input type="range" id="packs" class="rng-count" min="1" max="3" step="1" value="1">
+        <div class="rangeends"><span>1개</span><span>3개</span></div>
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="water">물의 양</label><span class="val" id="sWater">200 mL</span></div>
+        <input type="range" id="water" class="rng-vol" min="100" max="400" step="50" value="200">
+        <div class="rangeends"><span>100 mL</span><span>400 mL</span></div>
+      </div>
+
+      <p class="picklbl">바깥을 무엇으로 감쌀까?</p>
+      <div class="segrow" role="group" aria-label="보온">
+        <button class="seg insb" data-ins="none"  aria-pressed="true">감싸지 않음</button>
+        <button class="seg insb" data-ins="paper" aria-pressed="false">종이 상자</button>
+        <button class="seg insb" data-ins="foam"  aria-pressed="false">스타이로폼</button>
+      </div>
+
+      <label class="optrow">
+        <input type="checkbox" id="sealChk">
+        <span><b>뚜껑을 밀폐한다</b> (김 빠짐 구멍 없음)</span>
+      </label>
+
+      <div class="ros">
+        <div class="readout"><div class="label">최고 온도</div>
+          <div><span class="value" id="kPeak">94.5</span><span class="unit">℃</span></div></div>
+        <div class="readout"><div class="label">70 ℃ 이상 유지</div>
+          <div><span class="value" id="kHold">15.0</span><span class="unit">분</span></div></div>
+        <div class="readout"><div class="label">용기 안 압력</div>
+          <div><span class="value" id="kPress">1.00</span><span class="unit">기압</span></div></div>
+        <div class="readout"><div class="label">목표</div>
+          <div><span class="value" style="font-size:15px">70 ℃ · 15분</span></div></div>
+        <div class="readout wide" id="verdictBox"><div class="label">판정</div>
+          <div><span class="value" id="kVerdict" style="font-size:16px">&mdash;</span></div>
+          <div style="font-size:11.5px;color:var(--t3);margin-top:4px" id="kWhy"></div></div>
+      </div>
+
+      <p class="note" style="font-size:11.5px">화면에 <b>반응열의 크기(kJ)를 쓰지 않았습니다.</b>
+        이 과목에서 읽을 것은 <b>온도·시간·압력</b>뿐입니다.
+        &ldquo;얼마나 많은 열이 나오는가&rdquo;를 계산하는 것은 2학년 『물질과 에너지』의 몫입니다.</p>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:14px">
+  <h2 style="font-size:15px;margin:0 0 8px;color:var(--t1)">그림 읽는 법</h2>
+  <div class="legend legend2">
+    <span class="item"><span class="swatch" style="background:var(--d-red)"></span>주변으로 <b>나가는</b> 에너지 (방출)</span>
+    <span class="item"><span class="swatch" style="background:var(--d-blue)"></span>주변에서 <b>들어오는</b> 에너지 (흡수)</span>
+    <span class="item"><span class="swatch sq" style="background:var(--d-violet)"></span>물질 안에 저장된 에너지</span>
+    <span class="item"><span class="swatch sq" style="background:var(--d-amber)"></span>70 ℃ 기준선</span>
+  </div>
+  <p class="note" style="font-size:11.5px"><b>주어를 나눠서 읽으세요.</b>
+    &ldquo;뜨겁다&rdquo;는 <b>주변</b>의 이야기이고, &ldquo;에너지를 내놓았다&rdquo;는
+    <b>물질</b>의 이야기입니다. 왼쪽 상자와 오른쪽 상자를 각각 보세요.</p>
+</div>
+
+<!-- 활동지 -->
+<div class="card sheet" id="sheet">
+  <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">확인해 볼 것</h2>
+  <ol>
+    <li><span class="tag pre">예측</span> 탭 ①에서 <b>응고</b>를 골라, 제출하기 전에 답하자.
+        물이 얼 때 에너지는 방출될까 흡수될까? 그렇게 판단한 이유는?</li>
+    <li><span class="tag obs">관찰</span> 여섯 가지를 모두 분류해 표를 채우자.
+        <b>물리 변화 줄</b>에 들어간 것은 무엇인가? 그 칸이 비어 있는가?</li>
+    <li><span class="tag exp">설명</span> &ldquo;물리 변화에는 에너지 출입이 없다&rdquo;는 말이
+        왜 틀렸는지, 표에서 근거를 하나 찾아 쓰자.</li>
+    <li><span class="tag rel">관계</span> <b>세포호흡</b>을 골라 화면을 보자.
+        에너지를 <b>내놓은 것</b>은 무엇이고, <b>뜨거워진 것</b>은 무엇인가?
+        두 답이 같은가, 다른가?</li>
+    <li><span class="tag exp">설명</span> <b>기화</b>와 <b>광합성</b>에서 왼쪽 막대(물질 안에 저장된
+        에너지)가 <b>늘어난다.</b> &ldquo;흡열 반응은 에너지가 없어지는 반응이다&rdquo;는 말을
+        이 막대로 반박해 보자.</li>
+    <li><span class="tag des">설계</span> 탭 ②로 넘어가자. 기본값(발열 팩 1개 · 물 200 mL ·
+        감싸지 않음)으로 실험해 보고, 판정이 무엇인지 적자. 그다음
+        <b>더 오래 유지되게</b> 하려면 무엇을 바꿔야 할지 하나씩 시험하자.</li>
+    <li><span class="tag des">설계</span> 물의 양을 <b>400 mL</b>로 늘려 보자.
+        왜 실패하는가? 발열 팩을 늘리면 해결되는가?</li>
+    <li><span class="tag exp">설명</span> <b>밀폐한다</b>를 켜 보자. 70 ℃ 이상을 만들면서
+        동시에 안전한 조합을 <b>하나라도</b> 찾을 수 있는가? 못 찾았다면 그 까닭을 쓰자.</li>
+    <li><span class="tag lim">한계</span> 이 화면은 발열 팩 1개 + 물 200 mL 에서 최고
+        <b>약 94.5 ℃</b>가 나온다. 지도서는 <b>약 98 ℃</b>라고 적었다.
+        왜 다를 수 있는지 「가정과 한계」에서 찾아 쓰자.</li>
+  </ol>
+
+  <div class="limits">
+    <h3>이 모형의 가정과 한계</h3>
+    <ol>
+      <li><b>열이 물을 데우는 데만 쓰인다고 보았습니다.</b> 실제로는 발열 팩 자체·그릇·용기도
+          함께 데워지고, 반응이 100 % 진행되지도 않습니다. 그래서 이 화면의 최고 온도는
+          <b>약 94.5 ℃</b>이고 지도서는 <b>약 98 ℃</b>로 적었습니다. <b>제품마다 산화 칼슘 양이
+          다르다</b>는 것은 지도서도 유의점으로 적어 둔 사실입니다.</li>
+      <li>계산에 쓴 값: 산화 칼슘과 물의 반응열 <b>65.2 kJ/mol</b>(표준 생성 엔탈피에서 구함),
+          발열 팩 1개당 산화 칼슘 <b>50 g</b>, 물의 비열 <b>4.18 J/(g·K)</b>, 실온 <b>25 ℃</b>.
+          <b>이 수치들은 화면에 나오지 않습니다</b> &mdash; 이 과목에서 다루는 것은
+          온도·시간·압력이기 때문입니다.</li>
+      <li><b>「70 ℃ 이상 유지 시간」은 최고 온도에 이른 «뒤»부터 잰 것입니다.</b>
+          온도가 올라가는 1~2분은 세지 않았습니다.</li>
+      <li><b>보온재의 냉각 상수 셋 중 「감싸지 않음」은 지도서의 「70 ℃ 이상 약 15분」에 맞춰
+          역산한 값</b>이고, 나머지 둘(종이 상자·스타이로폼)은 그것을 기준으로 잡은
+          <b>가정</b>입니다. 세 값의 «순서»는 믿을 수 있지만 «절댓값»은 제품에 따라 달라집니다.</li>
+      <li><b>밀폐 용기는 «단단하고 완전히 새지 않는다»고 보았습니다.</b> 가장 나쁜 경우입니다.
+          압력은 갇힌 공기(온도에 비례)와 물의 포화 증기 압력을 더해 구했고,
+          <b>게이지 압력 0.35 기압</b>에서 위험으로 판정합니다 &mdash; 이 값은 가정이며,
+          실제 용기가 견디는 압력은 제품마다 다릅니다.</li>
+      <li>물의 포화 증기 압력은 <b>Antoine 식</b>(1~100 ℃)으로 구했고, 밀폐일 때는 그 식을
+          100 ℃ 조금 위까지 <b>외삽</b>해 썼습니다. 밀폐 상태의 최고 온도는
+          <b>130 ℃ 에서 끊었습니다</b> &mdash; 모형의 상한이지 물리적 한계가 아닙니다.</li>
+      <li><b>파열 장면을 그리지 않았습니다.</b> 압력계가 위험 구역에 들어가면 실험이 중단됩니다.
+          실제로 밀폐 용기가 파열되면 뜨거운 물과 강한 염기가 튑니다 &mdash;
+          <b>절대 시도하지 마세요.</b></li>
+      <li>탭 ①의 화살표는 <b>에너지가 오가는 방향</b>만 나타냅니다. 화살표의 굵기나 점의 빠르기는
+          에너지의 «양»과 관계가 없습니다.</li>
+      <li>탭 ①의 「물질 안에 저장된 에너지」 막대의 <b>높이는 도식</b>입니다.
+          늘었는지 줄었는지만 읽으세요. <b>얼마나</b> 늘고 줄었는지는 이 과목에서 다루지 않습니다.</li>
+      <li>시간은 <b>압축</b>돼 있습니다. 화면에서 1초가 약 4.5분입니다.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="site-foot">케미랩</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="heatflow"></script>
+<script src="../shared/qr.js" data-base=".." data-current="heatflow"></script>
+<script src="sim.js"></script>
+</body>
+</html>

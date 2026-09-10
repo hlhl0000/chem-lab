@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>중화 반응과 남은 이온 | 케미랩</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색은 shared/style.css 토큰만. 요소 선택자(button{}, input{})는 쓰지 않는다 (매뉴얼 §12①) */
+  .page{padding:18px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0; line-height:1.6}
+
+  .seatrow{display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; color:var(--t2)}
+  .seatrow .seat{font-family:inherit; font-size:16px; min-height:44px; padding:6px 10px;
+    width:120px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--t1)}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr); gap:14px; margin-top:14px}
+  @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+  .stage canvas{display:block; width:100%}
+  .stagecap{font-size:12px; color:var(--t2); margin:9px 0 0; line-height:1.6; min-height:34px}
+
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0}
+  .btn{font-family:inherit; font-size:14px; font-weight:600; padding:10px 13px; min-height:44px;
+    border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; box-shadow:var(--shadow)}
+  .btn[aria-pressed="true"]{border-color:var(--accent); box-shadow:inset 0 0 0 2px var(--accent);
+    color:var(--accent-dark)}
+  .btn--primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .btn[disabled]{opacity:.42; cursor:default; box-shadow:none}
+
+  .ctl{margin-bottom:12px}
+  .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
+    font-size:13px; margin-bottom:4px; color:var(--t2); gap:8px}
+  .ctl .row .val{font-variant-numeric:tabular-nums; font-weight:600; color:var(--t1); white-space:nowrap}
+  .rangeends{display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    font-size:11.5px; color:var(--t3); margin-top:4px}
+
+  .segrow{display:flex; gap:7px; flex-wrap:wrap; margin:2px 0 10px}
+  .seg{font-family:inherit; font-size:12.5px; font-weight:600; padding:8px 6px; min-height:44px;
+    border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; flex:1 1 auto; line-height:1.35}
+  .seg[disabled]{opacity:.42; cursor:default}
+
+  .ros{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px}
+  .ros .readout{padding:9px 10px}
+  .ros .wide{grid-column:1 / -1}
+
+  .ctab{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px}
+  .ctab th,.ctab td{padding:7px 8px; border-bottom:1px solid var(--line); text-align:left}
+  .ctab th{color:var(--t3); font-weight:600; background:#f8fafc}
+  .ctab td{color:var(--t1); font-weight:700; text-align:right; font-variant-numeric:tabular-nums}
+  .ctab .dot{display:inline-block; width:11px; height:11px; border-radius:50%;
+    vertical-align:-1px; margin-right:7px; border:1px solid rgba(0,0,0,.25)}
+  .ctab .dot.sq{border-radius:3px}
+  .ctab tr.spec th, .ctab tr.spec td{color:var(--t3); font-weight:600}
+
+  .note{font-size:12.5px; color:var(--t2); line-height:1.65; margin:10px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .note b{color:var(--t1)}
+  .note--warn{border-color:var(--d-amber); background:#fffbf5}
+  .note--ok{border-color:var(--d-green); background:#f4fbf6}
+  .note--key{border-color:var(--d-blue); background:#f5f8ff}
+
+  .guessrow{display:flex; gap:7px; flex-wrap:wrap; margin-top:7px}
+  .gbtn{font-family:inherit; font-size:13px; font-weight:600; padding:9px 10px; min-height:44px;
+    border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; flex:1 1 auto}
+  .gbtn[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .gbtn[disabled]{opacity:.42; cursor:default}
+
+  .graphcard{margin-top:14px}
+  .jump{margin:8px 0 0}
+  .jump a{display:inline-flex; align-items:center; min-height:44px; padding:0 13px;
+    font-size:13px; font-weight:600; color:var(--accent-dark); text-decoration:none;
+    border:1px solid var(--line); border-radius:10px; background:var(--panel)}
+  .sheet{margin-top:16px}
+  .sheet ol{margin:0; padding-left:20px; font-size:13.5px; color:var(--t2); line-height:1.9}
+  .sheet .tag{display:inline-block; font-size:10.5px; font-weight:700; color:#fff; background:var(--d-gray);
+    border-radius:5px; padding:1px 6px; margin-right:6px; vertical-align:1px}
+  .sheet .tag.pre{background:var(--d-amber)} .sheet .tag.obs{background:var(--d-cyan)}
+  .sheet .tag.rel{background:var(--d-blue)}  .sheet .tag.exp{background:var(--d-green)}
+  .sheet .tag.mdl{background:var(--d-violet)} .sheet .tag.lim{background:var(--d-amber)}
+  .limits{margin-top:14px; font-size:12px; color:var(--t3); line-height:1.75}
+  .limits h3{margin:0 0 5px; font-size:13px; color:var(--t2)}
+  .limits ol{margin:0; padding-left:19px}
+  .legend2{margin-top:9px}
+</style>
+</head>
+<body>
+<div class="wrap page">
+
+<div class="head">
+  <h1>중화 반응과 남은 이온</h1>
+  <p class="sub">묽은 염산과 수산화 나트륨 수용액을 <b>여러 비율로</b> 섞어 봅니다.
+     섞는 순간 H<sup>+</sup>와 OH<sup>−</sup>가 만나 물이 되는데, <b>남는 것이 있으면</b>
+     그쪽 성질이 그대로 나타납니다. 온도계와 BTB 용액, 그리고 <b>남은 이온의 개수</b>를 함께 봅니다.</p>
+</div>
+
+<div class="seatrow">
+  <label for="seat">좌석번호</label>
+  <input class="seat" id="seat" type="text" inputmode="numeric" placeholder="예) 1-07">
+  <span style="font-size:12px;color:var(--t3)">기록용입니다. 저장되지 않습니다.</span>
+</div>
+
+<div class="cols">
+  <!-- 왼쪽: 무대 -->
+  <div>
+    <div class="card">
+      <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">홈판 한 칸을 크게 본 것</h2>
+      <div class="stage stage--light">
+        <canvas id="stageCv" aria-label="위쪽에는 혼합 용액이 담긴 비커와 온도계가 있고, 아래쪽 상자에는 그 용액 속 이온이 그려져 있습니다. 섞기 전에는 상자가 좌우로 나뉘어 왼쪽이 묽은 염산, 오른쪽이 수산화 나트륨 수용액입니다."></canvas>
+      </div>
+      <p class="stagecap" id="stageCap"></p>
+      <p class="jump"><a href="#sheet">확인해 볼 것으로 이동 &darr;</a></p>
+
+      <div class="btnrow">
+        <button class="btn btn--primary" id="mixBtn">섞기</button>
+        <button class="btn" id="btbBtn">BTB 넣기</button>
+        <button class="btn" id="zoomBtn" aria-pressed="true">입자 화면 접기</button>
+        <button class="btn" id="resetBtn">다시</button>
+      </div>
+
+      <div id="guessRow" style="display:none">
+        <p class="note note--key" style="margin-bottom:0">
+          <b>BTB 를 넣기 전에 예측해 보세요.</b> 아래 상자에 남아 있는 이온만 보고 정합니다.</p>
+        <div class="guessrow" role="group" aria-label="액성 예측">
+          <button class="gbtn" data-g="acid"    aria-pressed="false">산성</button>
+          <button class="gbtn" data-g="neutral" aria-pressed="false">중성</button>
+          <button class="gbtn" data-g="base"    aria-pressed="false">염기성</button>
+        </div>
+      </div>
+      <p class="note" id="guessResult" style="display:none"></p>
+
+      <p class="note" id="rmNote" style="display:none">
+        (&ldquo;동작 줄이기&rdquo;가 켜져 있어 섞이는 애니메이션과 입자의 움직임을 생략했습니다.
+        <b>실제 용액 속 이온은 멈추지 않습니다.</b>)</p>
+    </div>
+  </div>
+
+  <!-- 오른쪽: 조작과 측정값 -->
+  <div>
+    <div class="card">
+      <div class="segrow" role="group" aria-label="홈판 A~E 조합">
+        <button class="seg pv" data-va="2"  data-vb="10">A<br>2+10</button>
+        <button class="seg pv" data-va="4"  data-vb="8">B<br>4+8</button>
+        <button class="seg pv" data-va="6"  data-vb="6">C<br>6+6</button>
+        <button class="seg pv" data-va="8"  data-vb="4">D<br>8+4</button>
+        <button class="seg pv" data-va="10" data-vb="2">E<br>10+2</button>
+      </div>
+
+      <div class="ctl">
+        <div class="row"><label for="va">묽은 염산 (HCl)</label><span class="val" id="sVa">6 mL</span></div>
+        <input type="range" id="va" class="rng-vol" min="0" max="12" step="1" value="6">
+        <div class="rangeends"><span>0 mL</span><span>12 mL</span></div>
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="vb">수산화 나트륨 수용액 (NaOH)</label><span class="val" id="sVb">6 mL</span></div>
+        <input type="range" id="vb" class="rng-vol" min="0" max="12" step="1" value="6">
+        <div class="rangeends"><span>0 mL</span><span>12 mL</span></div>
+      </div>
+      <p class="note" style="font-size:11.5px">두 용액은 <b>농도가 같습니다.</b>
+        농도가 다르거나 산의 종류가 달라지면 이 화면의 결과는 그대로 쓸 수 없습니다.</p>
+
+      <div class="ros">
+        <div class="readout"><div class="label">온도</div>
+          <div><span class="value" id="vT">20.0</span><span class="unit">℃</span></div></div>
+        <div class="readout"><div class="label">올라간 온도</div>
+          <div><span class="value" id="vRise">&mdash;</span><span class="unit">℃</span></div></div>
+        <div class="readout wide" id="natBox"><div class="label">BTB 로 확인한 액성</div>
+          <div><span class="value" id="vNat" style="font-size:18px">&mdash;</span></div></div>
+      </div>
+
+      <table class="ctab">
+        <tr><th colspan="2" style="text-align:left">
+          이온 개수 (<span id="cntWhen">섞기 전</span>)</th></tr>
+        <tr><th><span class="dot" style="background:var(--d-amber)"></span>H<sup>+</sup> 수소 이온</th>
+            <td id="cH">6</td></tr>
+        <tr><th><span class="dot sq" style="background:var(--d-blue)"></span>OH<sup>&minus;</sup> 수산화 이온</th>
+            <td id="cOH">6</td></tr>
+        <tr class="spec"><th><span class="dot" style="background:var(--d-gray)"></span>Na<sup>+</sup> 나트륨 이온</th>
+            <td id="cNa">6</td></tr>
+        <tr class="spec"><th><span class="dot sq" style="background:var(--d-gray)"></span>Cl<sup>&minus;</sup> 염화 이온</th>
+            <td id="cCl">6</td></tr>
+        <tr><th><span class="dot" style="background:#c8d4e0"></span>물 분자 H<sub>2</sub>O</th>
+            <td id="cW">0</td></tr>
+      </table>
+      <p class="note" style="font-size:11.5px">
+        <b>회색 두 가지(Na<sup>+</sup>·Cl<sup>&minus;</sup>)는 반응에 참여하지 않습니다.</b>
+        섞기 전에도 섞은 뒤에도 개수가 그대로입니다 &mdash; 이온인 채로 물속에 흩어져 있을 뿐,
+        <b>소금 알갱이가 생기지는 않습니다.</b></p>
+
+      <div class="btnrow">
+        <button class="btn" id="recBtn">이 조합 기록</button>
+        <button class="btn" id="clrBtn">기록 지우기</button>
+      </div>
+      <p class="note" style="font-size:11.5px"><span id="recHint"></span>
+        (기록한 조합 <b id="recCount">0</b>개)</p>
+    </div>
+  </div>
+</div>
+
+<!-- 그래프 (전체 폭) -->
+<div class="card graphcard">
+  <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">기록한 조합의 최고 온도</h2>
+  <div class="stage stage--light">
+    <canvas id="graphCv" aria-label="가로축이 묽은 염산의 부피, 세로축이 최고 온도인 그래프입니다. 기록한 조합만 점으로 나타나고, 점의 색은 그 조합의 BTB 색입니다."></canvas>
+  </div>
+  <div class="legend legend2">
+    <span class="item"><span class="swatch" style="background:#e8cc16"></span>BTB 노란색 &mdash; 산성</span>
+    <span class="item"><span class="swatch" style="background:#46a03a"></span>BTB 초록색 &mdash; 중성</span>
+    <span class="item"><span class="swatch" style="background:#17509e"></span>BTB 파란색 &mdash; 염기성</span>
+  </div>
+  <p class="note"><b>두 가지를 같이 보세요.</b> 온도가 가장 높이 올라간 조합과, BTB 가 초록색이 된
+    조합이 <b>같은 자리</b>인지 다른 자리인지. 서로 다른 두 관찰이 같은 곳을 가리킨다면 그것이
+    무엇을 뜻하는지 모둠에서 이야기해 보세요.</p>
+</div>
+
+<!-- 활동지 -->
+<div class="card sheet" id="sheet">
+  <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">확인해 볼 것</h2>
+  <ol>
+    <li><span class="tag pre">예측</span> C(6+6)를 골라 놓고 <b>섞기 전에</b> 답해 보자.
+        섞으면 어떤 이온이 몇 개 남을까? 그때 액성은?</li>
+    <li><span class="tag obs">관찰</span> A부터 E까지 하나씩 해 보며 <b>남은 이온의 종류와 개수</b>,
+        <b>최고 온도</b>, <b>BTB 색</b>을 표에 적어 보자. (6차시 홈판 결과표와 같은 순서다)</li>
+    <li><span class="tag rel">관계</span> 온도가 가장 높이 올라간 조합은 어디인가?
+        BTB 가 초록색이 된 조합은 어디인가? <b>두 지점이 같은가, 다른가?</b></li>
+    <li><span class="tag exp">설명</span> E(10+2)에서도 <b>중화 반응은 일어났다.</b>
+        그런데 액성은 중성이 아니다. 왜 그런지 <b>이온</b>이라는 낱말을 써서 한 문장으로 쓰자.</li>
+    <li><span class="tag exp">설명</span> 묽은 염산 10 mL 에 같은 농도의 수산화 나트륨 수용액을
+        <b>20 mL</b> 넣으면 어떻게 될까? 슬라이더로 확인하기 <b>전에</b> 먼저 답하고,
+        그다음 확인해 보자.</li>
+    <li><span class="tag mdl">모형</span> 회색으로 그린 Na<sup>+</sup>와 Cl<sup>&minus;</sup>는
+        섞기 전과 뒤의 개수가 같다. 이것으로 &ldquo;중화 반응이 일어나면 <b>소금이 생긴다</b>&rdquo;는
+        생각의 어디가 맞고 어디가 틀렸는지 말해 보자.</li>
+    <li><span class="tag mdl">모형</span> 슬라이더를 0 mL 로 내려 <b>한쪽만</b> 넣어 보자.
+        온도는 어떻게 되는가? 그 이유는?</li>
+    <li><span class="tag lim">한계</span> 이 화면은 1 mL 를 입자 <b>1개</b>로 그렸다.
+        실제 용액 1 mL 안에는 이온이 몇 개쯤 있을까? 그 차이 때문에 이 화면이
+        <b>실제와 달라지는 점</b>을 하나 써 보자.</li>
+  </ol>
+
+  <div class="limits">
+    <h3>이 모형의 가정과 한계</h3>
+    <ol>
+      <li><b>1 mL 를 입자 1개로 그렸습니다.</b> 실제 1 M 용액 1 mL 에는 이온이 약
+          6&times;10<sup>20</sup>개 들어 있습니다. 화면의 개수는 <b>세어 보라고 만든 도식</b>이지
+          실제 개수가 아닙니다.</li>
+      <li><b>완전히 해리한다고 보았습니다.</b> 묽은 염산과 수산화 나트륨 수용액은 실제로도
+          거의 완전히 해리하지만, 100 %는 아닙니다.</li>
+      <li><b>물 자체가 아주 조금 H<sup>+</sup>와 OH<sup>&minus;</sup>로 나뉘어 있는 것은
+          그리지 않았습니다.</b> 그래서 화면의 「중성」은 남은 이온이 <b>0개</b>로 나오지만,
+          실제 중성 용액에도 아주 적은 수의 H<sup>+</sup>와 OH<sup>&minus;</sup>가 있습니다.</li>
+      <li><b>열이 밖으로 빠져나가지 않는다고 보았습니다.</b> 그래서 화면의 온도는 올라간 뒤
+          그대로 있습니다. 실제 홈판에서는 잰 직후부터 다시 내려갑니다 &mdash;
+          그래서 &ldquo;<b>최고</b> 온도를 즉시 읽어라&rdquo;고 하는 것입니다.</li>
+      <li>온도 계산에 쓴 값: 중화열 <b>57.3 kJ/mol</b>, 물의 비열 <b>4.18 J/(g·K)</b>,
+          용액의 밀도 <b>1.0 g/mL</b>, 실온 <b>20 ℃</b>. 용액의 비열을 물과 같다고 보았고,
+          섞을 때 부피가 그대로 더해진다고 보았습니다.</li>
+      <li><b>이 화면의 결과는 「같은 농도의 묽은 염산과 수산화 나트륨 수용액」에서만
+          그대로입니다.</b> 농도가 다르거나 묽은 황산처럼 산의 종류가 달라지면
+          부피비가 달라집니다.</li>
+      <li>입자는 <b>2차원 상자</b> 안에서 움직입니다. 실제 용액은 3차원이고, 이온 주위에는
+          물 분자가 둘러싸고 있습니다(수화). 그 물 분자는 그리지 않았습니다.</li>
+      <li>이 화면은 <b>온도 변화와 지시약의 색 변화</b>만 다룹니다. pH 값이나 전기 전도도가
+          어떻게 변하는지는 <b>이 과목의 범위 밖</b>이라 넣지 않았습니다.
+          &ldquo;몇 mL 를 넣어야 정확히 중화되는가&rdquo;를 계산하는 양적 관계도 마찬가지입니다.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="site-foot">케미랩</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="neutralize"></script>
+<script src="../shared/qr.js" data-base=".." data-current="neutralize"></script>
+<script src="sim.js"></script>
+</body>
+</html>

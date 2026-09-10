@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>결합과 에너지의 흡수·방출 | 케미랩</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색은 shared/style.css 토큰만. 요소 선택자(button{}, input{})는 쓰지 않는다 (매뉴얼 §12①) */
+  .page{padding:18px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0; line-height:1.6}
+
+  .seatrow{display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; color:var(--t2)}
+  .seatrow .seat{font-family:inherit; font-size:16px; min-height:44px; padding:6px 10px;
+    width:120px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--t1)}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1.4fr) minmax(310px,1fr); gap:14px; margin-top:14px}
+  @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+  .stage canvas{display:block; width:100%}
+  .stagecap{font-size:12px; color:var(--t2); margin:9px 0 0; line-height:1.6; min-height:34px}
+
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0}
+  .btn{font-family:inherit; font-size:14px; font-weight:600; padding:10px 13px; min-height:44px;
+    border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; box-shadow:var(--shadow)}
+  .btn--primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .btn--sm{font-size:12.5px; padding:8px 10px}
+  .btn[disabled]{opacity:.40; cursor:default; box-shadow:none}
+
+  .segrow{display:flex; gap:7px; flex-wrap:wrap; margin:2px 0 12px}
+  .seg{font-family:inherit; font-size:12.5px; font-weight:600; padding:9px 8px; min-height:44px;
+    border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; flex:1 1 44%; line-height:1.35; text-align:left}
+  .seg[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+
+  .blk{border:1px solid var(--line); border-radius:10px; padding:10px 11px; margin-top:10px;
+    background:var(--panel)}
+  .blk h3{margin:0 0 7px; font-size:12.5px; font-weight:700; color:var(--t2);
+    display:flex; justify-content:space-between; align-items:baseline}
+  .blk h3 .cnt{font-size:11.5px; font-weight:600; color:var(--t3); font-variant-numeric:tabular-nums}
+  .blk.brk{border-left:4px solid var(--d-blue)}
+  .blk.form{border-left:4px solid var(--d-red)}
+  .bchips{display:flex; flex-wrap:wrap; gap:6px; min-height:30px}
+  .bchip{display:inline-flex; align-items:center; gap:3px; font-size:11.5px; font-weight:600;
+    border:1px solid var(--line); border-radius:8px; padding:2px 7px 2px 3px; background:#fbfdff}
+  .bchip.is-dim{opacity:.45; border-style:dashed}
+  .bchip.is-on{border-color:var(--t3)}
+  .bchip b{color:var(--t1); font-size:11.5px}
+
+  .note{font-size:12.5px; color:var(--t2); line-height:1.65; margin:10px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .note b{color:var(--t1)}
+  .note--warn{border-color:var(--d-amber); background:#fffbf5}
+  .note--key{border-color:var(--d-blue); background:#f5f8ff}
+  .note--gate{border-color:var(--d-violet); background:#f8f6ff}
+  .note--order{border-color:var(--d-cyan); background:#f4f9fc}
+
+  .jump{margin:8px 0 0}
+  .jump a{display:inline-flex; align-items:center; min-height:44px; padding:0 13px;
+    font-size:13px; font-weight:600; color:var(--accent-dark); text-decoration:none;
+    border:1px solid var(--line); border-radius:10px; background:var(--panel)}
+  .sheet{margin-top:16px}
+  .sheet ol{margin:0; padding-left:20px; font-size:13.5px; color:var(--t2); line-height:1.9}
+  .sheet .tag{display:inline-block; font-size:10.5px; font-weight:700; color:#fff; background:var(--d-gray);
+    border-radius:5px; padding:1px 6px; margin-right:6px; vertical-align:1px}
+  .sheet .tag.pre{background:var(--d-amber)} .sheet .tag.obs{background:var(--d-cyan)}
+  .sheet .tag.rel{background:var(--d-blue)}  .sheet .tag.exp{background:var(--d-green)}
+  .sheet .tag.mdl{background:var(--d-violet)} .sheet .tag.lim{background:var(--d-amber)}
+  .limits{margin-top:14px; font-size:12px; color:var(--t3); line-height:1.75}
+  .limits h3{margin:0 0 5px; font-size:13px; color:var(--t2)}
+  .limits ol{margin:0; padding-left:19px}
+  .legend2{margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap page">
+
+<div class="head">
+  <h1>결합과 에너지의 흡수·방출</h1>
+  <p class="sub">반응을 <b>두 단계로 나누어</b> 봅니다. 먼저 반응물의 결합을 <b>끊고</b>,
+     그다음 생성물의 결합을 <b>만듭니다.</b> 어느 쪽에서 에너지가 들고 어느 쪽에서 나오는지,
+     그리고 그 <b>차이</b>가 주변을 어떻게 바꾸는지를 저울로 견줍니다.</p>
+</div>
+
+<div class="seatrow">
+  <label for="seat">좌석번호</label>
+  <input class="seat" id="seat" type="text" inputmode="numeric" placeholder="예) 1-07">
+  <span style="font-size:12px;color:var(--t3)">기록용입니다. 저장되지 않습니다.</span>
+</div>
+
+<div class="cols">
+  <!-- 왼쪽: 무대 -->
+  <div>
+    <div class="card">
+      <div class="stage stage--light">
+        <canvas id="stageCv" aria-label="가운데에 양팔 저울이 있습니다. 왼쪽 막대는 결합을 끊는 데 든 에너지, 오른쪽 막대는 새 결합에서 나온 에너지입니다. 오른쪽에는 주변의 온도계가, 왼쪽 아래에는 물질 안에 저장된 에너지 막대가 있습니다."></canvas>
+      </div>
+      <p class="stagecap" id="stageCap"></p>
+      <p class="jump"><a href="#sheet">확인해 볼 것으로 이동 &darr;</a></p>
+
+      <p class="note note--order"><b>이것은 「계산을 위한 순서」입니다.</b>
+        실제 반응에서는 결합이 끊어지는 일과 만들어지는 일이 <b>여러 단계에서 함께</b> 일어납니다
+        &mdash; 먼저 전부 끊고 나중에 만드는 것이 아닙니다. 이 화면이 보여 주는 것은
+        <b>반응 전체의 에너지를 「합계로 따지는 방법」</b>입니다.</p>
+
+      <p class="note" id="resultBox" style="display:none"></p>
+
+      <p class="note note--key" style="font-size:12px">
+        <b>이 화면에는 에너지의 «크기»가 숫자로 나오지 않습니다.</b> 읽을 것은 두 막대 중
+        <b>어느 쪽이 더 긴가</b>뿐입니다. 얼마나 큰지를 계산하는 것은
+        2학년 『물질과 에너지』의 몫입니다.</p>
+
+      <p class="note" id="rmNote" style="display:none">
+        (&ldquo;동작 줄이기&rdquo;가 켜져 있어 흐르는 점 애니메이션을 생략했습니다.
+        <b>막대·저울·온도계는 그대로 움직입니다.</b>)</p>
+    </div>
+  </div>
+
+  <!-- 오른쪽: 조작 -->
+  <div>
+    <div class="card">
+      <div class="segrow" role="group" aria-label="반응 고르기">
+        <button class="seg rxnb" data-rxn="ch4"     aria-pressed="true">메테인의 연소</button>
+        <button class="seg rxnb" data-rxn="h2burn"  aria-pressed="false">수소의 연소</button>
+        <button class="seg rxnb" data-rxn="split"   aria-pressed="false">물의 전기 분해</button>
+        <button class="seg rxnb" data-rxn="no"      aria-pressed="false">질소 + 산소</button>
+      </div>
+      <p class="note note--key" style="font-size:11.5px;margin-top:0">
+        <b>「수소의 연소」와 「물의 전기 분해」는 서로 반대 방향입니다.</b>
+        끊는 결합과 만드는 결합이 정확히 뒤바뀌어 있습니다 &mdash; 두 개를 이어서 해 보세요.</p>
+
+      <div class="blk brk">
+        <h3><span>① 끊어야 할 결합</span><span class="cnt" id="brkCount">0 / 0</span></h3>
+        <div class="bchips" id="brkList"></div>
+        <div class="btnrow">
+          <button class="btn btn--primary btn--sm" id="brkBtn">결합 하나 끊기 &mdash; 에너지 넣기</button>
+          <button class="btn btn--sm" id="brkAll">남은 것 한꺼번에</button>
+        </div>
+      </div>
+
+      <div class="blk form">
+        <h3><span>② 새로 만들어지는 결합</span><span class="cnt" id="formCount">0 / 0</span></h3>
+        <div class="bchips" id="formList"></div>
+        <div class="btnrow">
+          <button class="btn btn--sm" id="formBtn">결합 하나 만들기</button>
+          <button class="btn btn--sm" id="formAll">남은 것 한꺼번에</button>
+        </div>
+      </div>
+
+      <p class="note note--gate" id="gateNote" style="font-size:12px">
+        <b>아직 새 결합을 만들 수 없습니다.</b> 먼저 반응물의 결합을 <b>모두 끊어야</b> 합니다
+        &mdash; 그리고 그것은 <b>에너지를 넣는 일</b>입니다.</p>
+
+      <div class="btnrow">
+        <button class="btn" id="againBtn">처음부터 다시</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:14px">
+  <h2 style="font-size:15px;margin:0 0 8px;color:var(--t1)">그림 읽는 법</h2>
+  <div class="legend legend2">
+    <span class="item"><span class="swatch sq" style="background:var(--d-blue)"></span><b>흡수</b> &mdash; 결합을 끊는 데 «든» 에너지</span>
+    <span class="item"><span class="swatch sq" style="background:var(--d-red)"></span><b>방출</b> &mdash; 새 결합에서 «나온» 에너지</span>
+    <span class="item"><span class="swatch sq" style="background:var(--d-violet)"></span>물질(계) 안에 저장된 에너지</span>
+  </div>
+  <p class="note" style="font-size:11.5px">
+    결합 그림의 공 색은 <b>CPK 국제 표준</b>입니다 &mdash; 흰색 H, 짙은 회색 C,
+    빨간색 O, 파란색 N. 공 사이의 선 <b>개수</b>가 결합의 종류를 나타냅니다(1·2·3).</p>
+</div>
+
+<!-- 활동지 -->
+<div class="card sheet" id="sheet">
+  <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">확인해 볼 것</h2>
+  <ol>
+    <li><span class="tag pre">예측</span> 시작하기 전에 답하자. 메테인이 탈 때 열이 난다.
+        이 열은 ① 결합이 끊어질 때 나온다 ② 새 결합이 만들어질 때 나온다 ③ 둘 다에서 나온다
+        &mdash; 고르고 이유를 한 줄로 쓰자.</li>
+    <li><span class="tag obs">관찰</span> <b>메테인의 연소</b>에서 「결합 하나 끊기」를
+        한 번씩 눌러 보자. 결합을 끊을 때 막대는 <b>어느 쪽</b>에 쌓이는가?
+        그 막대의 이름은 무엇인가?</li>
+    <li><span class="tag rel">관계</span> 결합을 다 끊기 전에는 「결합 하나 만들기」가
+        눌리지 않는다. 이 순서가 뜻하는 것을 한 문장으로 쓰자.</li>
+    <li><span class="tag exp">설명</span> 끝까지 진행한 뒤 두 막대를 보자.
+        메테인이 탈 때 열이 나는 까닭을 <b>「끊는 데 든 것」과 「나온 것」</b>이라는 말을 써서
+        설명하자. 그리고 1번의 예측과 견주어 보자.</li>
+    <li><span class="tag obs">관찰</span> <b>수소의 연소</b>를 끝까지 한 뒤,
+        곧바로 <b>물의 전기 분해</b>를 골라 끝까지 해 보자. 두 화면에서
+        <b>끊는 결합과 만드는 결합</b>이 어떻게 바뀌었는가?</li>
+    <li><span class="tag exp">설명</span> 물의 전기 분해에서 왼쪽 아래의
+        <b>저장 에너지 막대</b>가 늘어난다. &ldquo;흡열 반응은 에너지가 없어지는 반응&rdquo;이라는
+        말을 이 막대로 반박해 보자.</li>
+    <li><span class="tag exp">설명</span> 메테인의 연소에서 <b>에너지를 내놓은 것</b>은
+        무엇이고, <b>뜨거워진 것</b>은 무엇인가? 두 답의 <b>주어</b>가 다르다는 것을
+        화면의 어디에서 확인할 수 있는가?</li>
+    <li><span class="tag mdl">모형</span> 이 저울은 &ldquo;먼저 전부 끊고, 그다음 새로 만든다&rdquo;는
+        <b>계산 순서</b>로 그린다. 실제 반응도 그 순서로 일어날까?
+        무대 아래 파란 상자와 「가정과 한계」를 읽고, <b>이 순서를 그대로 「반응이 지나가는 길」로
+        읽으면 무엇이 틀리게 되는지</b> 한 문장으로 쓰자.</li>
+    <li><span class="tag lim">한계</span> 생물 시간에 &ldquo;ATP의 결합이 끊어지며 에너지가
+        나온다&rdquo;고 배웠을 수 있다. 이 화면을 근거로, 그 표현을 <b>더 정확하게</b>
+        고쳐 써 보자.</li>
+  </ol>
+
+  <div class="limits">
+    <h3>이 모형의 가정과 한계</h3>
+    <ol>
+      <li>★ <b>이 저울은 「먼저 전부 끊고, 그다음 새로 만든다」는 순서로 그립니다.
+          실제 반응은 그렇게 진행하지 않습니다.</b> 실제로는 결합이 끊어지는 일과
+          만들어지는 일이 거의 동시에, 여러 단계로 일어납니다. 이 화면은
+          <b>반응 전체의 에너지를 「합계로 계산하는 방법」</b>을 보여 주는 것이지
+          <b>반응이 지나가는 길</b>을 보여 주는 것이 아닙니다.</li>
+      <li><b>반응이 시작되려면 필요한 「문턱」은 이 화면이 다루지 않습니다.</b>
+          도시가스가 저절로 타지 않고 불을 붙여야 타는 까닭이 여기에 있는데,
+          그 이야기는 이 과목의 범위 밖입니다.</li>
+      <li><b>에너지의 크기를 숫자로 쓰지 않았습니다.</b> 계산은 문헌의
+          <b>평균 결합 에너지</b>로 정확히 했지만, 화면에는 막대의 «길이»만 나옵니다.
+          이 과목에서는 <b>어느 쪽이 더 큰가</b>까지만 다룹니다.</li>
+      <li><b>두 막대는 그 반응 «안에서만» 견줄 수 있습니다.</b> 반응마다 따로 눈금을
+          맞추었기 때문에, 다른 반응의 막대와 길이를 견주면 안 됩니다.</li>
+      <li><b>「평균」 결합 에너지를 썼습니다.</b> 같은 C&ndash;H 결합이라도 어떤 분자에 있느냐에
+          따라 실제 값이 조금씩 다릅니다.</li>
+      <li><b>네 반응 모두 「기체 상태」에서 계산했습니다.</b> 예를 들어 메테인이 탈 때 생기는
+          물을 <b>수증기 H₂O(g)</b>로 두었습니다. 이 물이 식어 <b>액체</b>가 되면 에너지가
+          더 나오므로 실제 발열량은 이 화면보다 큽니다. &mdash; 상태를 밝히지 않고
+          에너지를 말하면 안 됩니다.</li>
+      <li><b>주변의 온도계와 저장 에너지 막대의 «움직인 정도»는 도식</b>입니다.
+          올라갔는지 내려갔는지만 읽으세요.</li>
+      <li>「질소 + 산소」 반응은 자동차 엔진처럼 <b>아주 높은 온도</b>에서만 뜻있게 일어납니다.
+          상온에서 공기가 저절로 이렇게 되지는 않습니다.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="site-foot">케미랩</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="bondheat"></script>
+<script src="../shared/qr.js" data-base=".." data-current="bondheat"></script>
+<script src="sim.js"></script>
+</body>
+</html>

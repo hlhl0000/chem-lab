@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>중화점 대결 게임 | 케미랩</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색은 shared/style.css 토큰만. 요소 선택자(button{}, input{})는 쓰지 않는다 (매뉴얼 §12①) */
+  .page{padding:18px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0; line-height:1.6}
+
+  .seatrow{display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; color:var(--t2)}
+  .seatrow .seat{font-family:inherit; font-size:16px; min-height:44px; padding:6px 10px;
+    width:150px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--t1)}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1.4fr) minmax(300px,1fr); gap:14px; margin-top:14px}
+  @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+  /* 다이얼을 손가락으로 돌릴 때 화면이 같이 스크롤되지 않게 한다 */
+  .stage canvas{display:block; width:100%; touch-action:none}
+  .stagecap{font-size:12px; color:var(--t2); margin:9px 0 0; line-height:1.6; min-height:20px}
+
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0}
+  .btn{font-family:inherit; font-size:14px; font-weight:600; padding:10px 13px; min-height:44px;
+    border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; box-shadow:var(--shadow)}
+  .btn--primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .btn[disabled]{opacity:.42; cursor:default; box-shadow:none}
+
+  .segrow{display:flex; gap:7px; flex-wrap:wrap; margin:2px 0 10px}
+  .seg{font-family:inherit; font-size:13px; font-weight:600; padding:9px 10px; min-height:44px;
+    border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; flex:1 1 auto}
+  .seg[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+
+  .gbtn{font-family:inherit; font-size:13.5px; font-weight:600; padding:10px 10px; min-height:44px;
+    border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; flex:1 1 auto}
+  .gbtn[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+
+  .who{font-size:15px; font-weight:700; color:var(--t1); margin:0 0 8px}
+
+  .note{font-size:12.5px; color:var(--t2); line-height:1.65; margin:10px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .note b{color:var(--t1)}
+  .note--warn{border-color:var(--d-amber); background:#fffbf5}
+  .note--ok{border-color:var(--d-green); background:#f4fbf6}
+  .note--key{border-color:var(--d-blue); background:#f5f8ff}
+
+  .board{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px}
+  .board th,.board td{padding:7px 8px; border-bottom:1px solid var(--line); text-align:center}
+  .board thead th{color:var(--t3); font-weight:600; background:#f8fafc}
+  .board tbody th{color:var(--t2); font-weight:700; text-align:left}
+  .board td{color:var(--t1); font-weight:600}
+
+  .jump{margin:8px 0 0}
+  .jump a{display:inline-flex; align-items:center; min-height:44px; padding:0 13px;
+    font-size:13px; font-weight:600; color:var(--accent-dark); text-decoration:none;
+    border:1px solid var(--line); border-radius:10px; background:var(--panel)}
+  .sheet{margin-top:16px}
+  .sheet ol{margin:0; padding-left:20px; font-size:13.5px; color:var(--t2); line-height:1.9}
+  .sheet .tag{display:inline-block; font-size:10.5px; font-weight:700; color:#fff; background:var(--d-gray);
+    border-radius:5px; padding:1px 6px; margin-right:6px; vertical-align:1px}
+  .sheet .tag.pre{background:var(--d-amber)} .sheet .tag.obs{background:var(--d-cyan)}
+  .sheet .tag.rel{background:var(--d-blue)}  .sheet .tag.exp{background:var(--d-green)}
+  .sheet .tag.mdl{background:var(--d-violet)} .sheet .tag.lim{background:var(--d-amber)}
+  .limits{margin-top:14px; font-size:12px; color:var(--t3); line-height:1.75}
+  .limits h3{margin:0 0 5px; font-size:13px; color:var(--t2)}
+  .limits ol{margin:0; padding-left:19px}
+  .legend2{margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap page">
+
+<div class="head">
+  <h1>중화점 대결 게임</h1>
+  <p class="sub">플라스크에 <b>양을 알 수 없는 묽은 염산</b>이 들어 있습니다. 뷰렛 다이얼을 돌려
+     수산화 나트륨 수용액을 넣다가, <b>지금이다 싶을 때 멈추세요.</b> 쓸 수 있는 정보는
+     <b>온도계와 페놀프탈레인의 색</b> 둘뿐입니다. 멈춘 뒤 <b>액성을 맞히면</b> 점수를 얻습니다
+     &mdash; 「몇 mL 를 넣었는가」는 묻지 않습니다.</p>
+</div>
+
+<div class="seatrow">
+  <label for="seat">모둠·좌석</label>
+  <input class="seat" id="seat" type="text" placeholder="예) 3모둠">
+  <span style="font-size:12px;color:var(--t3)">기록용입니다. 저장되지 않습니다.</span>
+</div>
+
+<div class="cols">
+  <!-- 왼쪽: 무대 -->
+  <div>
+    <div class="card">
+      <p class="who" id="whoTxt">1번 차례</p>
+      <div class="stage stage--light">
+        <canvas id="stageCv" aria-label="왼쪽에 눈금 없는 뷰렛과 삼각 플라스크, 가운데에 온도계, 오른쪽에 돌리는 다이얼이 있습니다. 결과를 공개할 때는 오른쪽에 용액 속 이온이 그려집니다."></canvas>
+      </div>
+      <p class="stagecap" id="stageCap">다이얼을 시계 방향으로 돌리면 용액이 조금씩 들어갑니다.</p>
+      <p class="jump"><a href="#sheet">확인해 볼 것으로 이동 &darr;</a></p>
+
+      <div class="btnrow only-turn" style="display:none">
+        <button class="btn" id="dropS">조금 넣기</button>
+        <button class="btn" id="dropL">많이 넣기</button>
+        <button class="btn btn--primary" id="stopBtn">여기서 멈춤</button>
+      </div>
+
+      <div class="only-guess" style="display:none">
+        <p class="note note--key" style="margin-bottom:0"><b>지금 이 용액은 어떤 상태일까요?</b>
+          온도계가 어떻게 움직였는지, 색이 변했는지를 떠올려 고르세요.</p>
+        <div class="btnrow">
+          <button class="gbtn" data-g="acid"    aria-pressed="false">산성</button>
+          <button class="gbtn" data-g="neutral" aria-pressed="false">중성</button>
+          <button class="gbtn" data-g="base"    aria-pressed="false">염기성</button>
+        </div>
+        <div class="btnrow"><button class="btn btn--primary" id="okBtn">제출</button></div>
+      </div>
+
+      <div class="btnrow only-pass" style="display:none">
+        <button class="btn btn--primary" id="passBtn">다음 사람 시작</button>
+      </div>
+
+      <div class="only-reveal" style="display:none">
+        <p class="note" id="revealBox"></p>
+        <div class="btnrow"><button class="btn btn--primary" id="nextBtn">다음 결과 보기</button></div>
+      </div>
+
+      <p class="note" id="rmNote" style="display:none">
+        (&ldquo;동작 줄이기&rdquo;가 켜져 있어 <b>온도계의 지연을 없앴습니다.</b>
+        실제 온도계는 이렇게 즉시 따라오지 않습니다 &mdash; 게임의 난이도가 낮아집니다.)</p>
+    </div>
+  </div>
+
+  <!-- 오른쪽 -->
+  <div>
+    <div class="card">
+      <div class="only-setup">
+        <p style="font-size:13px;color:var(--t2);margin:0 0 6px">몇 명이 겨루나요?</p>
+        <div class="segrow" role="group" aria-label="인원">
+          <button class="seg plb" data-n="2" aria-pressed="false">2명</button>
+          <button class="seg plb" data-n="3" aria-pressed="true">3명</button>
+          <button class="seg plb" data-n="4" aria-pressed="false">4명</button>
+        </div>
+        <div class="btnrow">
+          <button class="btn btn--primary" id="pracBtn">연습 1회 (점수 없음)</button>
+          <button class="btn" id="startBtn">바로 게임 시작</button>
+        </div>
+        <p class="note note--key" style="font-size:12px">
+          <b>다이얼은 되돌릴 수 없습니다.</b> 점수가 걸리기 전에
+          <b>연습 1회</b>로 한 번 겪어 보길 권합니다 &mdash; 얼마나 돌리면 얼마나 들어가는지,
+          온도계가 얼마나 늦게 따라오는지를 그때 알게 됩니다.</p>
+        <p class="note note--key" style="font-size:12px"><b>규칙</b><br>
+          ① 차례가 오면 다이얼을 돌려 용액을 넣습니다. <b>되돌릴 수 없습니다.</b><br>
+          ② 「여기서 멈춤」을 누르고, 그 자리의 <b>액성</b>을 셋 중에서 고릅니다.<br>
+          ③ 모두 끝나면 <b>입자 모형</b>으로 하나씩 열어 봅니다.<br>
+          ④ 맞히면 1점. <b>완전한 중화(중성)를 맞히면 2점</b>입니다.<br>
+          ⑤ 시작 전 <b>연습 1회</b>는 점수에 들어가지 않습니다.</p>
+      </div>
+
+      <p class="note note--warn" id="pracNote" style="display:none;margin-top:0">
+        <b>지금은 연습입니다.</b> 점수가 매겨지지 않고, 다른 사람에게 넘어가지도 않습니다.
+        결과를 확인한 뒤 본 게임이 시작됩니다.</p>
+
+      <div id="boardWrap">
+      <table class="board">
+        <thead><tr><th>사람</th><th>예측</th><th>실제</th><th>점수</th></tr></thead>
+        <tbody id="board"></tbody>
+      </table>
+      </div>
+
+      <p class="note" style="font-size:11.5px">
+        <b>부피도 농도도 화면에 나오지 않습니다.</b> 뷰렛에 눈금이 없는 것도, 다이얼에 숫자가
+        없는 것도 <b>일부러 그렇게 만든 것</b>입니다. 「몇 mL 를 넣어야 하는가」를 계산하는 것은
+        2학년 『화학』에서 배웁니다.</p>
+
+      <p class="note note--warn only-final" style="display:none">
+        <b>다 열어 보았습니다.</b> 무색이었는데 산성이었던 사람, 분홍이 되자마자 멈췄는데
+        염기성이었던 사람 &mdash; 둘 다 나왔을 것입니다.
+        <b>「색이 변한 순간 = 중성」이 아니라는 것</b>이 오늘의 결론입니다.</p>
+      <div class="btnrow only-final" style="display:none">
+        <button class="btn" id="newBtn">새 게임</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:14px">
+  <h2 style="font-size:15px;margin:0 0 8px;color:var(--t1)">그림 읽는 법</h2>
+  <div class="legend legend2">
+    <span class="item"><span class="swatch" style="background:var(--d-amber)"></span>H<sup>+</sup> 수소 이온 (원)</span>
+    <span class="item"><span class="swatch sq" style="background:var(--d-blue)"></span>OH<sup>&minus;</sup> 수산화 이온 (사각)</span>
+    <span class="item"><span class="swatch" style="background:var(--d-gray)"></span>반응하지 않는 Na<sup>+</sup>·Cl<sup>&minus;</sup></span>
+    <span class="item"><span class="swatch" style="background:#c8d4e0"></span>물 분자 (작은 원)</span>
+    <span class="item"><span class="swatch" style="background:#e8579a"></span>페놀프탈레인의 분홍색</span>
+  </div>
+</div>
+
+<!-- 활동지 -->
+<div class="card sheet" id="sheet">
+  <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">확인해 볼 것</h2>
+  <ol>
+    <li><span class="tag pre">예측</span> 시작하기 전에 답하자. <b>페놀프탈레인이 분홍색으로
+        변하는 순간</b>, 그 용액은 산성·중성·염기성 중 무엇일까?</li>
+    <li><span class="tag obs">관찰</span> 내 차례에 <b>온도계가 어떻게 움직였는지</b> 적어 두자.
+        올라가다가 어느 순간 멈췄는가? 내려가기 시작했는가?</li>
+    <li><span class="tag obs">관찰</span> 결과를 열었을 때, <b>분홍색이 된 사람</b>의
+        입자 모형에는 무엇이 몇 개 남아 있었는가?</li>
+    <li><span class="tag rel">관계</span> <b>무색이었던 사람</b>들의 실제 액성을 모아 보자.
+        전부 같았는가? &ldquo;무색 = 중성&rdquo;이라고 말할 수 있는가?</li>
+    <li><span class="tag exp">설명</span> &ldquo;지시약의 색이 변한 순간 용액은 중성이다&rdquo;는
+        말이 왜 틀렸는지, 오늘 나온 결과를 근거로 한 문장으로 쓰자.</li>
+    <li><span class="tag exp">설명</span> 그런데도 우리는 <b>지시약으로 중화점을 찾습니다.</b>
+        왜 그래도 쓸 만한지 생각해 보자. (힌트 &mdash; 색이 변하는 자리가 중화점에서
+        <b>얼마나 떨어져 있는가</b>)</li>
+    <li><span class="tag exp">설명</span> 중화 반응은 <b>모든 사람의 플라스크에서 일어났다.</b>
+        그런데 중성이 된 사람은 거의 없다. 이 두 문장이 모순이 아닌 까닭을 쓰자.</li>
+    <li><span class="tag mdl">모형</span> 온도계가 <b>천천히 따라온다.</b> 이것 때문에
+        무엇이 어려워졌는가? 실제 실험에서도 같은 일이 일어날까?
+        (<b>연습 1회</b>와 본 게임에서 다이얼을 돌린 느낌이 달랐다면 그것도 적어 보자)</li>
+    <li><span class="tag lim">한계</span> 이 화면에서 페놀프탈레인이 분홍이 되려면
+        OH<sup>&minus;</sup>가 <b>1개쯤</b> 남아야 한다. 실제로는 이보다 훨씬 적은 양에서
+        색이 변한다. 그렇게 <b>과장한 까닭</b>을 「가정과 한계」에서 찾아 쓰자.</li>
+  </ol>
+
+  <div class="limits">
+    <h3>이 모형의 가정과 한계</h3>
+    <ol>
+      <li>★ <b>페놀프탈레인의 변색점을 과장했습니다.</b> 이 화면에서는 OH<sup>&minus;</sup>가
+          입자 1개쯤 남아야 분홍이 되지만, 실제 강산&ndash;강염기 실험에서는 <b>한 방울도 안 되는
+          아주 적은 양</b>에서 색이 변합니다. 그렇게 과장하지 않으면
+          &ldquo;색이 변한 순간은 중화점을 지난 뒤&rdquo;라는 것을 눈으로 볼 수 없기 때문입니다.
+          <b>방향은 사실이고, 크기는 과장입니다.</b></li>
+      <li><b>온도계에 지연을 넣었습니다.</b> 실제 온도계도 즉시 반응하지 않습니다.
+          지도서는 이 실험이 <b>「정량적 분석보다 정성적 분석에 적합」</b>하다고 적었습니다
+          &mdash; 이 화면의 지연이 그 성격을 그대로 옮긴 것입니다.</li>
+      <li><b>부피·농도·적하량을 한 번도 숫자로 보이지 않습니다.</b> 뷰렛에 눈금이 없고,
+          다이얼에도 숫자가 없으며, 한 번 돌릴 때 들어가는 양도 조금씩 다릅니다
+          &mdash; 회전을 세어 부피를 알아낼 수 없게 한 것입니다. 이것은 결함이 아니라
+          <b>이 과목의 범위를 지키기 위한 설계</b>입니다.</li>
+      <li><b>사람마다 플라스크 속 산의 양이 다릅니다.</b> 앞 사람의 결과를 보고 따라 할 수 없게
+          한 것입니다. 그래서 사람끼리 「누가 더 정확했나」를 견주는 게임이 아닙니다.</li>
+      <li><b>열이 밖으로 빠져나가는 것을 따로 계산하지 않았습니다.</b> 온도가 내려가는 것은
+          용액이 늘어나 묽어지기 때문이고, 온도계의 지연이 그 위에 얹혀 있습니다.</li>
+      <li><b>물 자체가 아주 조금 이온으로 나뉘어 있는 것은 그리지 않았습니다.</b>
+          그래서 화면의 「중성」은 남은 이온이 0개로 나옵니다.</li>
+      <li><b>입자 개수는 도식입니다.</b> 화면이 그리는 물 분자와 구경꾼 이온의 개수는
+          자리에 맞게 줄여 그렸습니다. 세어야 할 것은 <b>남은 H<sup>+</sup>와
+          OH<sup>&minus;</sup></b>뿐입니다.</li>
+      <li>이 게임은 <b>같은 농도의 묽은 염산과 수산화 나트륨 수용액</b>에서만 성립합니다.
+          산의 종류나 농도가 달라지면 결과가 달라집니다.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="site-foot">케미랩</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="neutralgame"></script>
+<script src="../shared/qr.js" data-base=".." data-current="neutralgame"></script>
+<script src="sim.js"></script>
+</body>
+</html>
