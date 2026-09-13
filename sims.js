@@ -63,6 +63,16 @@ const SIMS = [
     tags: ["물의 밀도","얼음","육각형 배열","개방 구조","수소 결합","4 ℃","열팽창","부피 변화","비열"]
   },
   {
+    id: "colligative",
+    title: "끓는점 오름과 어는점 내림",
+    cat: "용액",
+    path: "colligative/",
+    icon: "colligative",
+    ready: true,
+    desc: "물과 소금물을 나란히 놓고 80 → 105 ℃로 가열하고, 5 → −5 ℃로 냉각합니다. 입자 모형으로 바꾸면 용질이 표면을 가로막는 그림이 보이지만, 온도와 증기 압력은 해리를 반영한 이상 용액 근사로 계산합니다 — 소금이 기계적인 벽이라는 뜻은 아닙니다. 순수한 물은 얼음이 자라는 동안 0 ℃에 머물고, 소금물은 남은 액체가 진해지며 계속 내려갑니다.",
+    tags: ["끓는점 오름","어는점 내림","총괄성","몰랄 농도","포화 증기 압력","가열 곡선","냉각 곡선","용액"]
+  },
+  {
     id: "press",
     title: "유압 프레스 도전 게임",
     cat: "물질의 상태",
@@ -341,6 +351,16 @@ const ICONS = {
            <path d="M46 14v34h14" fill="none" stroke="currentColor" stroke-width="2.6" opacity=".5"
            stroke-linecap="round" stroke-linejoin="round"/>
            <path d="M46 20c5 0 6 16 9 16s5-8 5-8" fill="none" stroke="currentColor" stroke-width="3.4"
+           stroke-linecap="round" stroke-linejoin="round"/>`,
+  colligative:`<path d="M13 8v13L7 42a5 5 0 0 0 4.6 7h21.8A5 5 0 0 0 38 42L32 21V8" fill="none"
+           stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+           <path d="M9 8h27" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+           <path d="M9 32h27" stroke="currentColor" stroke-width="3" opacity=".55"/>
+           <circle cx="16" cy="39" r="2.6"/><circle cx="25" cy="43" r="2.2"/><circle cx="31" cy="38" r="2.6"/>
+           <circle cx="21" cy="26" r="2.2" opacity=".55"/>
+           <path d="M52 9v15M47 14l5-5 5 5" fill="none" stroke="currentColor" stroke-width="3.4"
+           stroke-linecap="round" stroke-linejoin="round"/>
+           <path d="M52 40v15M47 50l5 5 5-5" fill="none" stroke="currentColor" stroke-width="3.4"
            stroke-linecap="round" stroke-linejoin="round"/>`,
   redox:`<rect x="5" y="16" width="35" height="14" rx="7" fill="none" stroke="currentColor" stroke-width="4"/>
          <circle cx="14" cy="23" r="2.4"/><circle cx="21" cy="23" r="2.4"/><circle cx="28" cy="23" r="2.4"/>

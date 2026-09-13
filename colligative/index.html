@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>끓는점 오름과 어는점 내림 | 케미랩</title>
+  <meta name="description" content="물과 소금물을 가열하고 냉각하며 입자 운동과 온도 변화를 관찰하는 탐구 실험.">
+  <style>
+:root{
+  --bg:#f5f7fa;--panel:#ffffff;--line:#e3e6ea;--t1:#1f2328;--t2:#454b52;--t3:#5b636b;
+  --d-blue:#1d4ed8;--d-amber:#b45309;--d-gray:#5f6b7a;--stage-light:#ffffff;
+  --liquid:#e8f3fb;--ice:#d6e8f5;--glass:#9eb7c6;--soft-blue:#eef3ff;--soft-amber:#fff6ec;--d-purple:#6d28d9;
+  --font:Arial,'Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+}
+.particle-legend{display:flex;align-items:center;flex-wrap:wrap;gap:10px 24px;padding-bottom:16px;margin-bottom:18px;border-bottom:1px solid var(--line);font-size:14px;color:var(--t1)}.particle-symbol{display:block;width:20px;height:20px;flex:none}.particle-symbol circle{stroke:var(--d-blue);stroke-width:1.5;fill:var(--panel)}.particle-symbol.solute circle{stroke:var(--d-amber);fill:var(--d-amber)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t1);font-family:var(--font);font-size:16px;line-height:1.6}
+a{color:var(--d-blue)}button,input,textarea,select{font:inherit}button,summary{cursor:pointer}button{min-height:44px;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:8px 13px;color:var(--t1);font-weight:600;line-height:1.4}button:hover{border-color:var(--t3)}button:disabled{cursor:default;opacity:.48}button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--d-blue);outline-offset:3px}input[type=number],input[type=text],textarea{font-size:16px;background:var(--panel);border:1px solid var(--line);border-radius:6px;min-height:44px;padding:8px 10px;color:var(--t1)}input[type=range]{width:100%;height:44px;cursor:pointer;accent-color:var(--d-gray)}input[type=range].rng-temp{accent-color:var(--d-blue)}input[type=range].rng-count{accent-color:var(--d-amber)}input[type=range].rng-temp::-webkit-slider-runnable-track{background:linear-gradient(90deg,#d2ddeb,#5f6b7a);height:5px;border-radius:4px}input[type=range].rng-count::-webkit-slider-runnable-track{background:linear-gradient(90deg,#e3e6ea,#b45309);height:5px;border-radius:4px}input[type=range]::-webkit-slider-thumb{margin-top:-5px}textarea{width:100%;resize:vertical;min-height:76px}summary{min-height:44px;display:flex;align-items:center;gap:9px;font-weight:600;padding:12px 0}summary:before{content:'+';font-size:20px;font-weight:400}details[open]>summary:before{content:'−'}summary::-webkit-details-marker{display:none}h1,h2,h3,p{margin:0}h1{font-size:22px;line-height:1.35;letter-spacing:-.6px}h2{font-size:17px}h3{font-size:16px}.site-nav{max-width:1240px;margin:auto;padding:18px 24px 10px;display:flex;align-items:center;gap:12px;font-size:14px;color:var(--t3)}.site-nav strong{color:var(--t1);font-weight:600}.site-nav .nav-sep{color:var(--line)}.wrap{max-width:1240px;margin:0 auto;padding:10px 24px 40px}.head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:8px}.subtitle{color:var(--t2);font-size:14px}.meta-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:14px 0 22px}.seat-label{display:flex;gap:9px;align-items:center;font-size:14px;color:var(--t2)}.seat-input{width:140px}.muted{color:var(--t3);font-size:14px}.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px}.tab{border:0;background:transparent;border-radius:0;min-height:50px;padding:10px 20px;color:var(--t3);border-bottom:3px solid transparent}.tab[aria-selected=true]{color:var(--t1);border-bottom-color:var(--d-blue)}.tab-index{font-size:13px;margin-right:8px;color:var(--t3)}.question{margin:0 0 18px;font-size:17px;font-weight:600;letter-spacing:-.3px}.cols{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}.stage-card{background:var(--stage-light);border:1px solid var(--line);border-radius:10px;min-width:0}.stage-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}.mode-label{font-size:14px;font-weight:600}.mode-btn{font-size:14px}.mode-btn[aria-pressed=true]{border-color:var(--t1);background:var(--bg)}.samples{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0}.sample{min-width:0;padding:16px 14px 10px}.sample+.sample{border-left:1px solid var(--line)}.sample-heading{font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px}.sample-subtitle{font-size:13px;color:var(--t3);text-align:center;margin:2px 0 3px}.sample-symbol{width:10px;height:10px;border:2px solid var(--d-blue);border-radius:50%;display:inline-block;flex:none}.sample-symbol.solution{border-color:var(--d-amber);border-radius:0}.temperature{font-size:28px;font-weight:600;font-variant-numeric:tabular-nums;text-align:center;line-height:1.35;margin:6px 0 0}.unit{font-size:14px;color:var(--t3);font-weight:400;margin-left:4px}.sample-canvas{display:block;width:100%;height:280px}.sample-status{text-align:center;font-size:14px;font-weight:600;min-height:25px}.mini-metric{display:flex;justify-content:space-between;align-items:center;gap:5px;margin:10px 0 0;font-size:13px;color:var(--t2)}.mini-metric strong{color:var(--t1);font-size:17px;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}.meter-track{height:5px;background:var(--bg);margin-top:5px}.meter-fill{height:5px;background:var(--d-blue);max-width:100%}.solution .meter-fill{background:var(--d-amber)}.molecule-note{padding:10px 18px;border-top:1px solid var(--line);font-size:13px;color:var(--t2)}.molecule-legend{display:flex;flex-wrap:wrap;gap:8px 20px;margin-bottom:5px}.legend-item{display:inline-flex;align-items:center;gap:7px}.water-key{width:11px;height:11px;border:2px solid var(--d-blue);border-radius:50%;display:inline-block}.sugar-key{width:13px;height:13px;border:2px solid var(--d-amber);transform:rotate(45deg);display:inline-block}.stage-controls{padding:14px 18px 16px;border-top:1px solid var(--line)}.control-header{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:14px;font-weight:600}.control-header input{width:89px;text-align:right;padding:6px}.range-labels{display:flex;justify-content:space-between;font-size:13px;color:var(--t3);margin-top:-5px}.action-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:13px}.primary{color:var(--panel);background:var(--d-blue);border-color:var(--d-blue)}.primary:hover{background:var(--t1)}.text-btn{background:transparent;border-color:transparent;font-size:14px;color:var(--t2)}.control-note{margin-top:8px;font-size:13px;color:var(--t3)}.side-panel{padding:18px;border:1px solid var(--line);border-radius:10px;background:var(--panel);min-width:0}.side-section+.side-section{border-top:1px solid var(--line);margin-top:19px;padding-top:18px}.side-title{font-size:14px;color:var(--t2);font-weight:600;margin-bottom:10px}.concentration-value{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}.presets{display:grid;gap:8px}.preset{text-align:left;font-size:14px;font-weight:500;display:flex;justify-content:space-between;align-items:center;gap:8px}.preset span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px;color:var(--t3)}.point-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;margin:9px 0}.point-row strong{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}.difference{background:var(--bg);padding:11px 12px;margin-top:13px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px}.difference strong{font-weight:600;font-size:20px;white-space:nowrap}.observation{grid-column:1/-1;border-left:3px solid var(--d-blue);padding:10px 15px;color:var(--t2);font-size:15px;min-height:48px}.graph-panel{margin-top:22px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0}.graph-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.graph-legend{display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 3px;font-size:13px;color:var(--t2)}.line-key{display:inline-block;width:22px;height:0;border-top:3px solid var(--d-blue);vertical-align:middle}.line-key.dashed{border-top-style:dashed;border-color:var(--d-amber)}.line-key.external{border-top:2px dashed var(--t1)}.graph-canvas{display:block;width:100%;height:290px}.chart-note{font-size:13px;color:var(--t3)}.graph-check{display:flex;align-items:center;gap:8px;min-height:44px;font-size:14px;font-weight:400}.graph-check input{height:20px;width:20px;accent-color:var(--d-blue)}.phase-strip{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:22px}.phase-card{border:1px solid var(--line);background:var(--panel);padding:16px;border-radius:8px}.phase-card h3{margin-bottom:5px}.phase-card p{font-size:14px;color:var(--t2)}.details-panel{margin-top:22px;border-top:1px solid var(--line)}.worksheet-intro{font-size:14px;color:var(--t3);margin:3px 0 18px}.worksheet{display:grid;grid-template-columns:1fr 1fr;gap:20px}.worksheet label{display:block;font-size:14px;line-height:1.6}.q-tag{font-size:12px;color:var(--t3);display:inline-block;border:1px solid var(--line);border-radius:4px;padding:1px 5px;margin-right:5px}.worksheet textarea{margin-top:8px}.assumptions{font-size:14px;color:var(--t2);padding-left:24px;display:grid;gap:8px}.footer{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;font-size:13px;color:var(--t3);border-top:1px solid var(--line);padding-top:18px;margin-top:26px}.download-link{display:inline-flex;align-items:center;min-height:44px}.readout-live{font-size:14px;min-height:24px}.qr-dialog{max-width:min(380px,calc(100% - 32px));border:1px solid var(--line);border-radius:10px;padding:24px;color:var(--t1);background:var(--panel)}.qr-dialog::backdrop{background:#0006}.qr-canvas{display:block;width:250px;height:250px;max-width:100%;margin:12px auto;image-rendering:pixelated}.qr-url{overflow-wrap:anywhere;font-size:13px}.qr-close{margin-top:16px;width:100%}[hidden]{display:none!important}
+@media(max-width:1023px){.cols{grid-template-columns:1fr}.side-panel{display:grid;grid-template-columns:1fr 1fr;gap:20px}.side-section+.side-section{margin:0;padding:0;border:0}.side-section:last-child{grid-column:1/-1;border-top:1px solid var(--line);padding-top:14px}.side-panel .presets{grid-template-columns:repeat(3,minmax(0,1fr))}.presets .preset{flex-wrap:wrap;gap:3px}.sample-canvas{height:280px}}
+@media(max-width:599px){.wrap{padding:8px 14px 28px}.site-nav{padding:14px 14px 8px;font-size:13px}h1{font-size:21px}.head{gap:8px;align-items:flex-start}.meta-row{margin:12px 0 15px}.tabs{gap:0}.tab{flex:1;padding:10px 5px;font-size:15px}.tab-index{margin-right:5px}.question{font-size:16px;margin-bottom:13px}.stage-top{padding:10px 12px;gap:6px}.mode-label{font-size:13px}.mode-btn{font-size:13px;padding:8px}.sample{padding:12px 7px 9px}.sample-heading{font-size:14px;gap:5px}.sample-subtitle{font-size:12px}.temperature{font-size:23px}.unit{font-size:12px}.sample-canvas{height:260px}.sample-status{font-size:13px}.mini-metric{flex-direction:column;gap:0;margin-top:7px;font-size:12px}.mini-metric strong{font-size:16px}.molecule-note{padding:10px 12px;font-size:12px}.stage-controls{padding:12px}.side-panel{padding:15px;gap:16px;grid-template-columns:1fr}.side-section+.side-section{border-top:1px solid var(--line);padding-top:16px}.side-panel .presets{grid-template-columns:1fr}.presets .preset{flex-wrap:nowrap}.graph-panel{padding:13px}.graph-head h2{font-size:16px}.graph-legend{gap:8px 12px;font-size:12px}.phase-strip,.worksheet{grid-template-columns:1fr}.observation{font-size:14px}.seat-input{width:125px}.footer{gap:5px}.action-row .primary{flex:1}}
+.site-nav{padding-top:12px;padding-bottom:5px}.meta-row{margin-top:9px;margin-bottom:13px}.tab{min-height:46px}.question{margin-bottom:13px}.stage-controls{border-top:0;border-bottom:1px solid var(--line)}.sample-canvas{height:235px}.action-row{margin-top:9px}
+@media(max-width:599px){.sample-canvas{height:230px}.stage-top{padding-top:8px;padding-bottom:8px}.stage-controls{padding-top:8px;padding-bottom:10px}.control-note{font-size:12px}.question{margin-bottom:10px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+.speed-control{display:grid;grid-template-columns:auto minmax(80px,1fr) 58px;align-items:center;gap:12px;margin-top:10px;max-width:490px;font-size:14px}.speed-control input{width:100%;min-height:44px;accent-color:var(--d-blue)}.speed-control output{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}.solute-key{display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--d-amber);border:2px solid var(--d-amber)}
+@media(max-width:599px){.action-row .primary{min-width:115px}.action-row .text-btn{flex-basis:100%;text-align:left;padding-left:0}}
+.student-label{display:flex;gap:12px;align-items:center;font-weight:600}.student-label input{width:150px}.run-header{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px}.run-header span:first-child{font-weight:600}.run-header span:last-child{color:var(--t3)}progress{display:block;width:100%;height:8px;border:0;border-radius:8px;overflow:hidden;margin:12px 0;background:var(--line);accent-color:var(--d-blue)}progress::-webkit-progress-bar{background:var(--line)}progress::-webkit-progress-value{background:var(--d-blue)}.record-card{padding:8px 0 11px}.record-card+.record-card{border-top:1px solid var(--line)}.record-status{font-size:14px;color:var(--t3)}.record-status[data-locked=true]{color:var(--d-blue);font-weight:600}.solute-count{font-size:14px;color:var(--t2);margin-top:12px}.worksheet-panel{padding-top:24px;margin-top:26px;border-top:1px solid var(--line)}.worksheet-panel h2{font-size:20px}.worksheet{grid-template-columns:1fr}.worksheet textarea{min-height:95px}.worksheet label{font-size:16px}.teacher-link{display:inline-flex;align-items:center;min-height:44px}.sample-canvas{height:300px}.record-card .point-row{margin-top:0}.sample-status{min-height:28px}.side-title{font-size:16px}.worksheet-intro{margin-top:8px}.teacher-filters{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:22px 0}.teacher-filters label{display:grid;gap:5px}.teacher-filters select{min-height:44px;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}.response-list{display:grid;gap:14px}.response-card{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:16px 20px}.response-meta{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}.response-meta strong{font-size:18px}.response-card ol{padding-left:24px}.response-card li{margin:18px 0}.response-card p{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:5px;color:var(--t2)}.response-empty{padding:35px 20px;border:1px solid var(--line);border-radius:10px;text-align:center}.teacher-head{margin:20px 0}.teacher-nav{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.teacher-nav a{min-height:44px;display:inline-flex;align-items:center}.error-text{color:#a51a1a}.privacy-note{font-size:14px;color:var(--t3)}
+@media(max-width:1023px){.side-panel .side-section:last-child{grid-column:auto;border-top:0;padding-top:0}}
+@media(max-width:599px){.run-header{font-size:13px;flex-wrap:wrap;gap:3px}.sample-canvas{height:285px}.side-panel .side-section:last-child{border-top:1px solid var(--line);padding-top:16px}.worksheet label{font-size:15px}.response-card{padding:14px}.sample-heading{font-size:14px}.temperature{font-size:24px}}
+.worksheet-question{min-width:0}.question-heading{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}.hint-button{min-width:54px;min-height:44px;padding:6px 12px;font-size:14px;color:var(--d-blue);flex:none}.hint-dialog{width:360px;max-width:calc(100vw - 32px);margin:auto;padding:18px 20px 22px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--t1)}.hint-dialog::backdrop{background:#0006}.hint-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px}.hint-header h2{font-size:18px}.hint-close{width:44px;height:44px;min-height:44px;padding:0;font-size:26px;line-height:1;flex:none}.hint-dialog p{font-size:16px;line-height:1.7;overflow-wrap:anywhere}
+
+/* ── 케미랩 공통 네비게이션 (shared/nav.js가 삽입) ─────────────────
+   shared/style.css 를 통째로 불러오면 이 파일의 자체 디자인과 부딪히므로,
+   네비게이션에 필요한 규칙만 이 파일의 토큰으로 옮겨 적었다. ── */
+.site-nav{max-width:none;margin:0;padding:0;display:block;gap:0;font-size:16px;color:var(--t1);background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
+.site-nav .inner{max-width:1240px;margin:0 auto;padding:0 24px;height:54px;display:flex;align-items:center;gap:14px}
+.site-nav .brand{font-weight:700;font-size:15.5px;color:var(--t1);text-decoration:none;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.site-nav .brand .mark{width:24px;height:24px;border-radius:7px;background:var(--d-blue);color:var(--panel);display:grid;place-items:center;font-size:13px;font-weight:800}
+.site-nav .spacer{flex:1}
+.site-nav select{font-family:inherit;font-size:13px;min-height:36px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--t1);max-width:52vw}
+.site-nav .home{font-size:13px;color:var(--t2);text-decoration:none;white-space:nowrap}
+.site-nav .home:hover{color:var(--d-blue)}
+@media(max-width:599px){.site-nav .inner{padding:0 14px;gap:10px}.site-nav .home{display:none}.site-nav select{max-width:60vw;min-width:0;flex-shrink:1}.site-nav .brand{font-size:14px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="head"><h1>끓는점 오름과 어는점 내림</h1></header>
+  <div class="meta-row"><label class="student-label" for="student-number">학번 <input id="student-number" type="text" inputmode="numeric" maxlength="10" placeholder="예: 20101" autocomplete="off"></label><span class="muted">물질과 에너지 · 외부 압력 1 atm</span></div>
+  <div class="tabs" role="tablist" aria-label="탐구 주제">
+    <button class="tab" type="button" id="tab-boil" role="tab" aria-selected="true" aria-controls="experiment"><span class="tab-index">01</span>끓는점 오름</button>
+    <button class="tab" type="button" id="tab-freeze" role="tab" aria-selected="false" aria-controls="experiment" tabindex="-1"><span class="tab-index">02</span>어는점 내림</button>
+  </div>
+  <section id="experiment" role="tabpanel" aria-labelledby="tab-boil">
+    <div class="cols">
+      <section class="stage-card" aria-label="두 비커 비교">
+        <div class="stage-top"><span class="mode-label" id="view-name">비커 관찰</span><button class="mode-btn" id="molecule-toggle" type="button" aria-pressed="false">입자 모형으로 보기</button></div>
+        <div class="stage-controls">
+          <div class="run-header"><span id="run-status" role="status">가열 전</span><span id="run-range">가열 과정 · 80 → 105 ℃</span></div>
+          <progress id="run-progress" max="100" value="0" aria-label="실험 진행률"></progress>
+          <div class="action-row"><button class="primary" id="play" type="button">가열 시작</button><button id="reset" type="button">처음으로</button><button class="text-btn" id="motion" type="button" aria-pressed="false">입자 운동 멈추기</button></div>
+          <div class="speed-control"><label for="playback-speed">재생 속도</label><input id="playback-speed" type="range" min="0.25" max="4" step="0.25" value="1" aria-label="재생 속도"><output id="speed-value" for="playback-speed">1.00×</output></div>
+        </div>
+        <div class="samples">
+          <article class="sample">
+            <h3 class="sample-heading">순수한 용매</h3><p class="sample-subtitle">물</p>
+            <div class="temperature"><span id="temp-pure">80.00</span><span class="unit">℃</span></div>
+            <canvas class="sample-canvas" id="canvas-pure" aria-label="순수한 물의 입자 운동과 비커 온도계">온도와 상태는 아래 수치로 확인할 수 있습니다.</canvas>
+            <div class="mini-metric" id="metric-row-pure"><span>포화 증기 압력</span><strong><span id="metric-pure">—</span><span class="unit">atm</span></strong></div>
+          </article>
+          <article class="sample solution">
+            <h3 class="sample-heading">용액</h3><p class="sample-subtitle" id="solution-label">소금물 · 0.75 mol/kg</p>
+            <div class="temperature"><span id="temp-solution">80.00</span><span class="unit">℃</span></div>
+            <canvas class="sample-canvas" id="canvas-solution" aria-label="소금물의 입자 운동과 비커 온도계">온도와 상태는 아래 수치로 확인할 수 있습니다.</canvas>
+            <div class="mini-metric" id="metric-row-solution"><span>포화 증기 압력</span><strong><span id="metric-solution">—</span><span class="unit">atm</span></strong></div>
+          </article>
+        </div>
+        <div class="molecule-note" id="molecule-note" hidden>
+          <p>입자 수·크기와 운동 변화를 확대해 나타낸 개념 모형입니다.</p>
+        </div>
+      </section>
+      <aside class="side-panel" aria-label="농도와 온도 기록">
+        <section class="side-section">
+          <div class="control-header"><label for="concentration">소금물의 몰랄 농도</label><span><output class="concentration-value" id="concentration-value">0.75</output><span class="unit">mol/kg</span></span></div>
+          <input class="rng-count" id="concentration" type="range" min="0" max="1.25" step="0.25" value="0.75" aria-label="소금물의 몰랄 농도">
+          <div class="range-labels"><span>0</span><span>1.25 mol/kg</span></div>
+          <p class="solute-count" id="solute-count">모형 속 용질 입자 12개</p>
+          <p class="control-note">농도를 바꾸면 새 실험을 시작합니다.</p>
+        </section>
+        <section class="side-section">
+          <div class="particle-legend" role="group" aria-label="입자 모형 범례">
+            <span class="legend-item"><svg class="particle-symbol" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="3.2"/></svg><span>: 용매</span></span>
+            <span class="legend-item"><svg class="particle-symbol solute" viewBox="0 0 18 18" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="6"/></svg><span>: 용질</span></span>
+          </div>
+          <h2 class="side-title" id="record-title">끓기 시작하는 온도 기록</h2>
+          <div class="record-card"><div class="point-row"><span>순수한 물</span><strong><span id="point-pure">80.00</span><span class="unit">℃</span></strong></div><span class="record-status" id="record-status-pure">관찰 전</span></div>
+          <div class="record-card"><div class="point-row"><span>소금물</span><strong><span id="point-solution">80.00</span><span class="unit">℃</span></strong></div><span class="record-status" id="record-status-solution">관찰 전</span></div>
+          <div class="difference" id="difference" hidden><span>두 온도의 차이</span><strong><span id="difference-value"></span><span class="unit">℃</span></strong></div>
+          <p class="control-note" id="record-note">기록값은 상변화가 처음 관찰되는 온도에서 멈춥니다.</p>
+        </section>
+      </aside>
+    </div>
+    <section class="graph-panel" id="graph-panel" aria-label="관찰한 시간에 따른 온도 그래프">
+      <div class="graph-head"><h2>시간에 따른 온도 그래프</h2><label class="graph-check"><input type="checkbox" id="zoom-graph"><span id="graph-zoom-label">끓는점 온도 구간 확대</span></label></div>
+      <div class="graph-legend"><span class="legend-item"><i class="line-key"></i>순수한 물</span><span class="legend-item"><i class="line-key dashed"></i>소금물</span></div>
+      <canvas class="graph-canvas" id="graph" aria-label="가열 시간에 따라 순수한 물과 소금물의 온도 변화가 순차적으로 그려지는 그래프">관찰한 시간과 온도는 위 수치로도 확인할 수 있습니다.</canvas>
+      <p class="chart-note" id="chart-note">가열을 시작하면 관찰한 구간부터 그래프가 그려집니다.</p>
+    </section>
+  </section>
+  <section class="worksheet-panel" aria-labelledby="worksheet-title">
+    <h2 id="worksheet-title">끓는점 오름 탐구 활동지</h2>
+    <p class="worksheet-intro">학번을 입력하고 탐구 답안을 작성하세요. 작성한 답안은 저장되지 않으니 학습지에 옮겨 적으세요.</p>
+    <form id="worksheet-boil" data-topic="boil"><div class="worksheet" id="questions-boil"></div><div class="action-row" hidden><button class="primary" type="submit" disabled>끓는점 오름 답안 제출</button><span class="readout-live" id="submit-status-boil" role="status"></span></div></form>
+    <form id="worksheet-freeze" data-topic="freeze" hidden><div class="worksheet" id="questions-freeze"></div><div class="action-row" hidden><button class="primary" type="submit" disabled>어는점 내림 답안 제출</button><span class="readout-live" id="submit-status-freeze" role="status"></span></div></form>
+    <p class="control-note" id="submission-note">답안은 어디에도 저장되지 않습니다. 새로 고침하거나 창을 닫으면 입력한 내용이 사라지니, 작성한 답은 학습지에 옮겨 적으세요.</p>
+  </section>
+  <dialog class="hint-dialog" id="worksheet-hint" aria-labelledby="hint-title" aria-describedby="hint-text">
+    <div class="hint-header"><h2 id="hint-title">3번 힌트</h2><button class="hint-close" id="hint-close" type="button" aria-label="힌트 창 닫기" autofocus>×</button></div>
+    <p id="hint-text">오른쪽 위의 '소금물의 몰랄 농도'를 증가시켜보자.</p>
+  </dialog>
+  <details class="details-panel"><summary>모형 표현의 범위</summary><ul class="assumptions">
+    <li>실제 소금(NaCl)은 물에 녹으면 Na⁺와 Cl⁻로 나뉩니다. 이 모형에서는 이를 따로 표현하지 않고 한 종류의 용질 입자로 단순화했습니다. 온도·증기 압력 계산에는 해리에 따른 입자 수 증가를 반영한 이상 용액 근사를 사용합니다.</li>
+    <li>입자의 크기·개수·운동·주변 상호 작용은 관찰을 위해 과장한 도식이며, 실제 입자 수의 비나 운동 속도로 환산할 수 없습니다. 소금이 기계적인 벽이라는 뜻은 아닙니다.</li>
+    <li>비커 밖으로 이동하는 입자는 기체 상태의 물을 나타냅니다. 열린 비커 위 기체의 개수는 실제 증기 압력 측정값이 아닙니다.</li>
+    <li>순수한 물은 얼음이 만들어지는 동안 0 ℃에 머물며, 완전히 얼고 나면 얼음의 온도가 −5 ℃까지 내려갑니다. 잠열에 따른 온도 정체를 단순화했으며 실제 열량·실험 시간·과냉각을 계산하지 않습니다. 오른쪽 기록값은 처음 얼기 시작한 온도에 고정됩니다.</li>
+    <li>얼음은 물 분자만으로 표현하며 용질은 남은 액상에 머뭅니다. 소금물은 일부 물이 얼면 남은 액체가 진해져 온도가 더 낮아질 수 있습니다. −5 ℃에서 소금물 전체가 얼지는 않습니다. 규칙적인 배열은 실제 3차원 얼음 구조와 다르며, 고체의 분자도 제자리에서 진동합니다.</li>
+    <li>가열 중 물의 양과 초기 농도를 유지하는 근사입니다. 비커 밖으로 나간 물 분자를 순환시켜 지속적인 증발을 보여 줍니다.</li>
+    <li>온도와 농도의 조작 범위는 교육적 제한입니다. 수식·참고 자료·검증 범위는 교사 화면에서 확인할 수 있습니다.</li>
+  </ul></details>
+  <footer class="footer"><span>케미랩 · 물질과 에너지 · 용액의 성질</span><a href="../index.html">전체 목록으로</a></footer>
+</main>
+<script>
+var LAB_QUESTIONS = {
+  boil:[
+    '입자 모형을 통해 관찰된 사실을 자유롭게 적어 보자',
+    '용매와 용액의 끓는점을 비교해 보자.',
+    '용액의 농도를 더 진하게 만들면 끓는점은 어떻게 변화할까?',
+    '실제 일상생활에서 끓는점 오름을 활용하는 사례에는 무엇이 있을까?'
+  ],
+  freeze:[
+    '입자 모형을 통해 관찰된 사실을 자유롭게 적어 보자',
+    '용매와 용액의 어는점을 비교해 보자.',
+    '용액의 농도를 더 진하게 만들면 어는점은 어떻게 변화할까?',
+    '실제 일상생활에서 어는점 내림을 활용하는 사례에는 무엇이 있을까?'
+  ]
+};
+
+</script>
+<script>
+(function(){if(location.protocol==='file:'){var link=document.querySelector('.download-link');if(link)link.hidden=true;}}());
+
+</script>
+<script>
+/* 오프라인 자체 QR 인코더: 바이트 모드, 버전 6, 오류 정정 M, 마스크 0. */
+var PhaseQR = (function(){
+  'use strict';
+  function mul(a,b){var p=0;for(var i=0;i<8;i++){if(b&1)p^=a;b>>=1;a<<=1;if(a&256)a^=285;}return p;}
+  function matrix(message){
+    var bytes=Array.from(new TextEncoder().encode(message));if(bytes.length>106)throw new Error('주소가 QR 용량을 넘습니다.');
+    var bits=[];function add(value,len){for(var b=len-1;b>=0;b--)bits.push((value>>>b)&1);}
+    add(4,4);add(bytes.length,8);bytes.forEach(function(b){add(b,8);});add(0,Math.min(4,864-bits.length));while(bits.length%8)bits.push(0);
+    var data=[];for(var j=0;j<bits.length;j+=8){var value=0;for(var k=0;k<8;k++)value=(value<<1)|bits[j+k];data.push(value);}
+    while(data.length<108)data.push(data.length%2===Math.ceil(bits.length/8)%2?236:17);
+    var gen=[1],root=1;for(var degree=0;degree<16;degree++){var next=Array(gen.length+1).fill(0);for(var c=0;c<gen.length;c++){next[c]^=gen[c];next[c+1]^=mul(gen[c],root);}gen=next;root=mul(root,2);}
+    var blocks=[],ecc=[];for(var block=0;block<4;block++){var chunk=data.slice(block*27,(block+1)*27),rem=Array(16).fill(0);chunk.forEach(function(d){var factor=d^rem[0];rem.shift();rem.push(0);for(var r=0;r<16;r++)rem[r]^=mul(gen[r+1],factor);});blocks.push(chunk);ecc.push(rem);}
+    var stream=[];for(var a=0;a<27;a++)for(var b0=0;b0<4;b0++)stream.push(blocks[b0][a]);for(var e=0;e<16;e++)for(var b1=0;b1<4;b1++)stream.push(ecc[b1][e]);
+    var size=41,m=Array.from({length:size},function(){return Array(size).fill(false);}),locked=Array.from({length:size},function(){return Array(size).fill(false);});
+    function set(x,y,v){if(x<0||y<0||x>=size||y>=size)return;m[y][x]=!!v;locked[y][x]=true;}
+    [[0,0],[34,0],[0,34]].forEach(function(p){for(var y=-1;y<=7;y++)for(var x=-1;x<=7;x++){var inner=x>=0&&x<=6&&y>=0&&y<=6;set(p[0]+x,p[1]+y,inner&&(x===0||x===6||y===0||y===6||(x>=2&&x<=4&&y>=2&&y<=4)));}});
+    for(var t=8;t<33;t++){set(t,6,t%2===0);set(6,t,t%2===0);}
+    for(var ay=-2;ay<=2;ay++)for(var ax=-2;ax<=2;ax++)set(34+ax,34+ay,Math.max(Math.abs(ax),Math.abs(ay))!==1);
+    function format(){var value=0,rem=0;for(var i=0;i<10;i++)rem=(rem<<1)^((rem>>>9)*1335);var v=((value<<10)|rem)^21522;function bit(i){return ((v>>>i)&1)!==0;}for(var f=0;f<=5;f++)set(8,f,bit(f));set(8,7,bit(6));set(8,8,bit(7));set(7,8,bit(8));for(var h=9;h<15;h++)set(14-h,8,bit(h));for(var n=0;n<8;n++)set(size-1-n,8,bit(n));for(var q=8;q<15;q++)set(8,size-15+q,bit(q));set(8,size-8,true);}
+    format();var idx=0;for(var xx=size-1;xx>=1;xx-=2){if(xx===6)xx=5;for(var rr=0;rr<size;rr++){var yy=((xx+1)&2)===0?size-1-rr:rr;for(var cc=0;cc<2;cc++){var col=xx-cc;if(!locked[yy][col]){var v0=idx<stream.length*8?((stream[Math.floor(idx/8)]>>>(7-idx%8))&1):0;idx++;m[yy][col]=!!(v0^((col+yy)%2===0?1:0));}}}}return m;
+  }
+  return {matrix:matrix};
+}());
+PhaseQR.publishedURL='https://hlhl0000.github.io/chem-lab/colligative/';
+(function(){
+  'use strict';if(typeof document==='undefined')return;
+  var heading=document.querySelector('.head');if(!heading)return;
+  var btn=document.createElement('button');btn.type='button';btn.textContent='QR';btn.setAttribute('aria-label','시뮬레이션 주소 QR 코드');heading.appendChild(btn);
+  btn.addEventListener('click',function(){
+    var url=location.protocol==='file:'?PhaseQR.publishedURL:location.href.split('?')[0].split('#')[0];
+    var dialog=document.createElement('dialog');dialog.className='qr-dialog';var title=document.createElement('h2');title.textContent='시뮬레이션 주소';dialog.appendChild(title);
+    if(url){try{var m=PhaseQR.matrix(url),canvas=document.createElement('canvas');canvas.className='qr-canvas';canvas.width=294;canvas.height=294;canvas.setAttribute('aria-label','시뮬레이션 주소 QR 코드');var c=canvas.getContext('2d');c.fillStyle='#ffffff';c.fillRect(0,0,294,294);c.fillStyle='#000000';m.forEach(function(row,y){row.forEach(function(v,x){if(v)c.fillRect((x+4)*6,(y+4)*6,6,6);});});dialog.appendChild(canvas);}catch(e){var err=document.createElement('p');err.textContent=e.message;dialog.appendChild(err);}}
+    var address=document.createElement('p');address.className='qr-url';address.textContent=url||'오프라인 파일입니다. 배포 주소가 설정되지 않았습니다.';dialog.appendChild(address);
+    var note=document.createElement('p');note.className='muted';note.textContent='QR은 주소만 전달합니다. 접속하려면 해당 사이트의 접근 권한이 필요합니다.';dialog.appendChild(note);
+    var close=document.createElement('button');close.type='button';close.className='qr-close';close.textContent='닫기';close.addEventListener('click',function(){dialog.close();});dialog.appendChild(close);dialog.addEventListener('close',function(){dialog.remove();});document.body.appendChild(dialog);dialog.showModal();
+  });
+}());
+
+</script>
+<script>
+/* 계산부: IAPWS 포화 압력 + 이상적으로 해리한 NaCl(i=2). */
+var PhaseModel=(function(){
+  'use strict';
+  var M=.01801528,KF=1.86,I=2;
+  function clamp(x,a,b){return Math.max(a,Math.min(b,x));}
+  function rawWaterPressure(t){
+    var T=t+273.15,tau=1-T/647.096,a=[-7.85951783,1.84408259,-11.7866497,22.6807411,-15.9618719,1.80122502],n=[1,1.5,3,3.5,4,7.5],sum=0;
+    for(var j=0;j<a.length;j++)sum+=a[j]*Math.pow(tau,n[j]);
+    return 22.064e6*Math.exp(647.096/T*sum)/101325;
+  }
+  var ref=rawWaterPressure(100);
+  function waterPressure(t){return rawWaterPressure(t)/ref;}
+  function waterFraction(m){return 1/(1+I*M*Math.max(0,m));}
+  function pressure(t,m){return waterPressure(t)*waterFraction(m);}
+  function boilingPoint(m){var a=100,b=108;if(m<=0)return a;for(var j=0;j<55;j++){var mid=(a+b)/2;if(pressure(mid,m)<1)a=mid;else b=mid;}return(a+b)/2;}
+  function freezingPoint(m){return-I*KF*Math.max(0,m);}
+  function iceFraction(t,m){if(t>=freezingPoint(m))return 0;return m===0?1:clamp(1-I*KF*m/(-t),0,1);}
+  function approach(x,target,dt,rate){return target+(x-target)*Math.exp(-Math.max(0,dt)*rate);}
+  function soluteCount(m){return Math.round(clamp(m,0,1.25)*16);}
+  // 순수한 물은 100 ℃에서 온도가 멈추고, 소금물은 용매가 조금씩
+  // 증발하면서 농도가 높아져 끓는 동안에도 온도가 천천히 상승한다.
+  function solutionHeatingTemperature(driver){
+    var d=clamp(driver-80,0,25);
+    return d<=20?80+.92*d:98.4+1.32*(d-20);
+  }
+  function currentBoilingPoint(s,driver){
+    if(!s.m)return 100;
+    return Math.min(105,s.bp+.85*clamp(driver-100,0,5));
+  }
+  // Timings below are illustrative; they are not a calorimetry calculation.
+  function coolingState(elapsed,m){
+    var ramp=Math.max(-5,5-.24*elapsed);
+    if(m>0)return {t:ramp,ice:iceFraction(ramp,m)};
+    var since=elapsed-5/.24;
+    return {t:since<0?ramp:since<=10?0:-Math.min(5,(since-10)*.5),ice:clamp(since/8,0,1)};
+  }
+  function createRun(tab,m){
+    var start=tab==='boil'?80:5;
+    return {tab:tab,m:m,driver:start,running:false,started:false,done:false,elapsed:0,
+      samples:[0,m].map(function(b){return {m:b,t:start,bp:boilingPoint(b),fp:freezingPoint(b),currentBp:boilingPoint(b),p:pressure(Math.max(0,start),b),record:start,observed:false,ice:0,trace:[]};})};
+  }
+  function recordPoint(run,s,force){
+    var last=s.trace[s.trace.length-1];
+    if(last&&last.time===run.elapsed)return;
+    if(force||!last||run.elapsed-last.time>=.05)s.trace.push({time:run.elapsed,temp:s.t,t:s.t,p:s.p});
+  }
+  function advance(run,dt){
+    if(!run.running||dt<=0)return;
+    var heat=run.tab==='boil';
+    if(!run.started){run.started=true;run.samples.forEach(function(s){recordPoint(run,s,true);});}
+    run.elapsed+=dt;
+    var rate=heat?(run.driver<95?1.1:run.driver<101.5?.28:.8):.24;
+    run.driver=heat?Math.min(105,run.driver+rate*dt):Math.max(-5,run.driver-rate*dt);
+    run.samples.forEach(function(s){
+      var cooling=heat?null:coolingState(run.elapsed,s.m);
+      if(heat){
+        s.currentBp=currentBoilingPoint(s,run.driver);
+        s.t=s.m===0?Math.min(run.driver,100):Math.min(solutionHeatingTemperature(run.driver),s.observed?105:s.currentBp);
+      }else s.t=cooling.t;
+      s.ice=heat?0:cooling.ice;
+      s.p=heat&&s.observed?1:pressure(Math.max(0,s.t),s.m);
+      var reached=heat?s.t>=s.bp-1e-9:s.t<=s.fp+1e-9;
+      if(reached)s.observed=true;
+      s.record=s.observed?(heat?s.bp:s.fp):s.t;
+      recordPoint(run,s,false);
+    });
+    run.done=heat?run.driver>=105:run.driver<=-5&&run.samples.every(function(s){return s.t<=-5;});
+    if(run.done){
+      run.running=false;
+      run.samples.forEach(function(s){recordPoint(run,s,true);});
+    }
+  }
+  return {clamp:clamp,rawWaterPressure:rawWaterPressure,waterPressure:waterPressure,waterFraction:waterFraction,
+    pressure:pressure,boilingPoint:boilingPoint,freezingPoint:freezingPoint,iceFraction:iceFraction,approach:approach,soluteCount:soluteCount,coolingState:coolingState,createRun:createRun,advance:advance};
+}());
+
+/* 입자 도식: 단순화한 용질, 일시적 상호 작용, 연속 증발과 결정화. */
+var PhaseParticles=(function(){
+  'use strict';
+  var P=PhaseModel;
+  function create(m){
+    var seed=923571;
+    function random(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}
+    var water=Array.from({length:64},function(_,j){return{x:.04+random()*.92,y:.47+random()*.46,angle:random()*Math.PI*2,phase:'liquid',bind:-1,hold:0,freeFor:0,trail:[],index:j};});
+    var solutes=Array.from({length:P.soluteCount(m)},function(){return{x:.08+random()*.84,y:.49+random()*.41,angle:random()*Math.PI*2,glow:0};});
+    return {water:water,solutes:solutes,random:random,clock:0,ice:0,escaped:0,returned:0};
+  }
+  function speed(tab,t){return tab==='boil'?.09+.23*P.clamp((t-80)/22,0,1):.025+.115*P.clamp((t+5)/10,0,1);}
+  function vaporize(p,v,rand,returning){
+    p.phase='vapor';p.age=0;p.vx=(rand()-.5)*v*.7;p.vy=-v*(1.4+rand());
+    p.returning=returning;p.bind=-1;p.hold=0;p.trail=[];
+  }
+  function tick(d,s,tab,dt){
+    if(dt<=0)return;
+    var rand=d.random,heat=tab==='boil';d.clock+=dt;
+    d.ice=heat?0:s.ice;
+    var iceTop=.94-.47*d.ice,nIce=Math.floor(d.ice*d.water.length+1e-8),v=speed(tab,s.t);
+    d.solutes.forEach(function(q){
+      q.angle+=(rand()-.5)*dt*2;q.x+=Math.cos(q.angle)*v*.24*dt;q.y+=Math.sin(q.angle)*v*.2*dt;
+      if(q.x<.06||q.x>.94)q.angle=Math.PI-q.angle;
+      if(q.y<.48||q.y>iceTop-.035)q.angle=-q.angle;
+      q.x=P.clamp(q.x,.06,.94);q.y=P.clamp(q.y,.48,Math.max(.49,iceTop-.035));q.glow=Math.max(0,q.glow-dt*1.5);
+    });
+    d.water.forEach(function(p,j){
+      var freeze=!heat&&j<nIce;
+      if(freeze){
+        var gx=.055+(j%8)*.127,gy=.935-Math.floor(j/8)*.065;
+        if(p.phase!=='ice'&&p.phase!=='crystal'){p.phase='crystal';p.trail=[];}
+        p.x=P.approach(p.x,gx,dt,4);p.y=P.approach(p.y,gy,dt,4);
+        if(Math.hypot(p.x-gx,p.y-gy)<.012)p.phase='ice';
+        p.bind=-1;p.hold=0;return;
+      }
+      if(p.phase==='ice'||p.phase==='crystal')p.phase='liquid';
+      if(p.phase==='vapor'){
+        p.age+=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;
+        if(p.x<.02||p.x>.98){p.vx=-p.vx;p.x=P.clamp(p.x,.02,.98);}
+        if(p.returning&&p.age>.38)p.vy=Math.abs(p.vy);
+        // Upward particles born inside the liquid must first reach its surface.
+        if(p.y>=.455&&p.vy>0){p.phase='liquid';p.y=.47;p.angle=Math.PI*.5;p.freeFor=1;d.returned++;}
+        else if(p.y<-.15){
+          d.escaped++;p.phase='liquid';p.x=.04+rand()*.92;p.y=.84+rand()*.08;p.angle=-Math.PI*.5;p.freeFor=.9;
+        }
+        return;
+      }
+      p.freeFor=Math.max(0,p.freeFor-dt);
+      p.trail.push({x:p.x,y:p.y});if(p.trail.length>9)p.trail.shift();
+      // At each sample's own boiling point, bubbles also form within the liquid.
+      if(heat&&s.observed&&p.hold<=0&&rand()<dt*(s.m>0?.10:.22)){vaporize(p,v,rand,false);return;}
+      if(p.hold>0&&d.solutes[p.bind]){
+        var solute=d.solutes[p.bind];p.hold-=dt;p.angle+=dt*2.3;
+        var tx=solute.x+Math.cos(p.angle)*.07,ty=solute.y+Math.sin(p.angle)*.045;
+        p.x=P.approach(p.x,tx,dt,4);p.y=P.clamp(P.approach(p.y,ty,dt,4),.47,Math.max(.49,iceTop-.012));solute.glow=1;
+        if(p.hold<=0){p.bind=-1;p.freeFor=.8+rand();p.angle=heat&&rand()<.6?-Math.PI*.5:p.angle+Math.PI*.6;}
+        return;
+      }
+      p.angle+=(rand()-.5)*dt*5;
+      p.x+=Math.cos(p.angle)*v*dt;p.y+=Math.sin(p.angle)*v*.7*dt;
+      if(p.x<.02||p.x>.98){p.angle=Math.PI-p.angle;p.x=P.clamp(p.x,.02,.98);}
+      if(p.y>iceTop-.009){p.y=iceTop-.009;p.angle=-Math.abs(p.angle);}
+      if(p.y<.463){
+        // 소금물은 용질 주변의 일시적 결합 때문에 표면을 빠져나가는
+        // 확률을 낮춘다. 그래도 끓는 동안에는 계속 증발한다.
+        var progress=P.clamp((s.t-80)/25,0,1),evapChance=heat?(s.observed?(s.m>0?.28:.72):(.05+.18*progress+(s.m>0?.02:0)))*P.waterFraction(s.m):0;
+        if(heat&&rand()<evapChance){p.y=.45;vaporize(p,v,rand,!s.observed&&rand()<.6);}
+        else{p.y=.469;p.angle=Math.abs(p.angle);}
+      }
+      if(p.phase==='liquid'&&p.freeFor<=0){
+        for(var k=0;k<d.solutes.length;k++){
+          var q=d.solutes[k],dx=p.x-q.x,dy=p.y-q.y;
+          if(dx*dx+dy*dy<.008&&rand()<dt*8){p.bind=k;p.hold=.25+rand()*.4;p.angle=Math.atan2(dy,dx);q.glow=1;break;}
+        }
+      }
+    });
+  }
+  function advanceScene(run,worlds,dt,rate){
+    if(!run.running)return;
+    var remaining=Math.max(0,dt)*P.clamp(rate,.25,4);
+    while(remaining>1e-9){
+      var step=Math.min(.02,remaining);P.advance(run,step);
+      if(run.started)worlds.forEach(function(d,i){tick(d,run.samples[i],run.tab,step);});remaining-=step;
+      if(!run.running)break;
+    }
+  }
+  return {create:create,tick:tick,speed:speed,advanceScene:advanceScene};
+}());
+
+/* 화면부: 온도 기록·그래프·입자가 한 실험 상태를 공유한다. */
+(function(){
+  'use strict';if(typeof document==='undefined')return;
+  var P=PhaseModel,$=function(id){return document.getElementById(id);};
+  var reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var tab='boil',m=.75,molecular=false,moving=!reduced,playbackSpeed=1;
+  var runs={boil:P.createRun('boil',m),freeze:P.createRun('freeze',m)};
+  var worldSets={boil:[PhaseParticles.create(0),PhaseParticles.create(m)],freeze:[PhaseParticles.create(0),PhaseParticles.create(m)]};
+  var worlds=worldSets[tab];
+  var canvases=[$('canvas-pure'),$('canvas-solution'),$('graph')],views=canvases.map(function(c){return{c:c,ctx:c.getContext('2d'),w:0,h:0};});
+  var css=getComputedStyle(document.documentElement),C={};
+  ['t1','t2','t3','d-blue','d-amber','d-purple','d-gray','line','liquid','ice','glass','panel','bg'].forEach(function(k){C[k]=css.getPropertyValue('--'+k).trim();});
+  var font=css.getPropertyValue('--font').trim(),last=0,raf=null,lastUI=0;
+  function run(){return runs[tab];}
+  function fmt(n,d){return(Math.abs(n)<Math.pow(10,-d)/2?0:n).toFixed(d);}
+  function put(id,value){var e=$(id);if(e.textContent!==String(value))e.textContent=value;}
+  function resetWorlds(){worlds=worldSets[tab]=[PhaseParticles.create(0),PhaseParticles.create(m)];}
+  function updateUI(){
+    var r=run(),heat=tab==='boil';
+    put('play',r.running?'일시정지':r.done?'다시 실험하기':heat?'가열 시작':'냉각 시작');
+    put('run-status',r.done?'관찰 종료':r.running?heat?'가열 중':'냉각 중':r.started?'일시정지':heat?'가열 전':'냉각 전');
+    put('run-range',heat?'가열 과정 · 80 → 105 ℃':'냉각 과정 · 5 → −5 ℃');
+    $('run-progress').value=heat?(r.driver-80)/25*100:(5-r.driver)/10*100;
+    put('concentration-value',fmt(m,2));put('solution-label',m?'소금물 · '+fmt(m,2)+' mol/kg':'물 · 소금 없음');
+    put('solute-count','모형 속 용질 입자 '+P.soluteCount(m)+'개');
+    put('speed-value',fmt(playbackSpeed,2)+'×');
+    put('view-name',molecular?'입자 관찰 · 2차원 도식':'비커 관찰');
+    put('molecule-toggle',molecular?'비커 모습으로 보기':'입자 모형으로 보기');
+    $('molecule-toggle').setAttribute('aria-pressed',String(molecular));$('molecule-note').hidden=!molecular;
+    put('motion',r.done?'입자 운동 정지됨':moving?'입자 운동 멈추기':'입자 운동 재생');$('motion').setAttribute('aria-pressed',String(!moving));$('motion').disabled=r.done;
+    put('record-title',heat?'끓기 시작하는 온도 기록':'얼기 시작하는 온도 기록');
+    r.samples.forEach(function(s,i){
+      var key=i?'solution':'pure';put('temp-'+key,fmt(s.t,2));put('point-'+key,fmt(s.record,2));put('metric-'+key,fmt(s.p,3));
+      $('metric-row-'+key).hidden=!heat;
+      put('record-status-'+key,s.observed?(heat?'끓음 관찰 · 기록 고정':'얼음 관찰 · 기록 고정'):r.started?'관찰 중':'관찰 전');
+      $('record-status-'+key).dataset.locked=String(s.observed);
+    });
+    var both=r.samples.every(function(s){return s.observed;});$('difference').hidden=!both;
+    if(both)put('difference-value',fmt(Math.abs(r.samples[1].record-r.samples[0].record),2));
+    put('record-note',heat?'끓기 시작한 온도에서 기록이 멈춥니다. 물은 100 ℃에서, 소금물은 그보다 늦게 끓기 시작합니다.':'어는점은 얼음이 처음 생기는 온도입니다. 소금물은 −5 ℃에서도 일부 액체로 남을 수 있습니다.');
+    put('chart-note',!r.started?(heat?'가열':'냉각')+'을 시작하면 시간에 따른 온도 기록이 그려집니다.':$('zoom-graph').checked?'확대된 온도 구간입니다. 지금까지 기록된 구간만 표시합니다.':heat?'물은 끓는 동안 100 ℃에 머물고, 소금물은 용매가 증발하며 온도가 조금씩 상승합니다.':'실선과 파선은 지금까지 측정한 물과 소금물의 온도 기록입니다.');
+  }
+  function applyTab(next){
+    runs[tab].running=false;tab=next;worlds=worldSets[tab];
+    ['boil','freeze'].forEach(function(t){$('tab-'+t).setAttribute('aria-selected',String(t===tab));$('tab-'+t).tabIndex=t===tab?0:-1;$('worksheet-'+t).hidden=t!==tab;});
+    $('experiment').setAttribute('aria-labelledby','tab-'+tab);
+    $('graph-panel').setAttribute('aria-label',(tab==='boil'?'가열':'냉각')+' 중 시간에 따른 온도 그래프');
+    $('graph').setAttribute('aria-label',(tab==='boil'?'가열':'냉각')+' 시간에 따라 순수한 물과 소금물의 온도 변화가 순차적으로 그려지는 그래프');
+    put('graph-zoom-label',tab==='boil'?'끓는점 온도 구간 확대':'어는점 온도 구간 확대');
+    put('worksheet-title',tab==='boil'?'끓는점 오름 탐구 활동지':'어는점 내림 탐구 활동지');
+    updateUI();resize();
+  }
+  function resize(){
+    views.forEach(function(v){var b=v.c.getBoundingClientRect();if(b.width<10)return;var dpr=Math.min(devicePixelRatio||1,2);v.w=b.width;v.h=b.height;v.c.width=Math.round(b.width*dpr);v.c.height=Math.round(b.height*dpr);if(v.ctx)v.ctx.setTransform(dpr,0,0,dpr,0,0);});draw();
+  }
+  function line(ctx,x1,y1,x2,y2,color,width,dash){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.strokeStyle=color;ctx.lineWidth=width||1;ctx.setLineDash(dash||[]);ctx.stroke();ctx.setLineDash([]);}
+  function circle(ctx,x,y,r,color,fill){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.strokeStyle=color;ctx.lineWidth=1.5;if(fill){ctx.fillStyle=fill;ctx.fill();}ctx.stroke();}
+  function text(ctx,str,x,y,size,color,align){ctx.fillStyle=color||C.t2;ctx.font=(size||12)+'px '+font;ctx.textAlign=align||'left';ctx.fillText(str,x,y);}
+  function sample(i){
+    var v=views[i],ctx=v.ctx,w=v.w,h=v.h;if(!ctx||!w)return;
+    var s=run().samples[i],d=worlds[i],narrow=w<220,rad=narrow?2.2:3.2;
+    ctx.clearRect(0,0,w,h);ctx.fillStyle=C.panel;ctx.fillRect(0,0,w,h);
+    var x=w*.075,bw=w*.77,top=43,bottom=h-22,span=bottom-top,lt=top+span*.46,lh=bottom-lt;
+    var tx=x+bw*.88,py=function(y){return top+y*span;},px=function(t){return x+7+t*Math.max(20,tx-x-18);};
+    ctx.fillStyle=C.liquid;ctx.beginPath();ctx.roundRect(x+2,lt,bw-4,lh-2,[0,0,10,10]);ctx.fill();
+    if(d.ice>.001){ctx.fillStyle=C.ice;ctx.fillRect(x+3,bottom-lh*d.ice,bw-6,Math.max(0,lh*d.ice-3));}
+    line(ctx,x+3,lt,x+bw-3,lt,C.glass,1);
+    if(molecular){
+      // Crystal guide lines make the regular solvent array visible in both beakers.
+      d.water.forEach(function(p,j){
+        if(p.phase!=='ice')return;
+        [j%8<7?j+1:-1,j+8].forEach(function(k){
+          var q=d.water[k];if(q&&q.phase==='ice')line(ctx,px(p.x),py(p.y),px(q.x),py(q.y),C.glass,1.2);
+        });
+      });
+      d.water.forEach(function(p,j){
+        var xx=px(p.x),yy=py(p.y);
+        if(p.phase==='ice'){xx+=Math.sin(d.clock*9+j)*.55;yy+=Math.cos(d.clock*8+j)*.55;}
+        if(p.hold>0&&p.trail.length>1){ctx.globalAlpha=.38;ctx.beginPath();p.trail.forEach(function(a,k){if(k===0)ctx.moveTo(px(a.x),py(a.y));else ctx.lineTo(px(a.x),py(a.y));});ctx.strokeStyle=C['d-blue'];ctx.lineWidth=1;ctx.stroke();ctx.globalAlpha=1;}
+        if(p.phase==='vapor'){line(ctx,xx,yy,xx-p.vx*18,yy-p.vy*18,C.glass,1);ctx.globalAlpha=P.clamp((p.y+.15)*8,.15,1);}
+        circle(ctx,xx,yy,rad,C['d-blue'],C.panel);ctx.globalAlpha=1;
+      });
+      d.solutes.forEach(function(q){
+        var xx=px(q.x),yy=py(q.y),rr=narrow?4.3:6,col=C['d-amber'];
+        if(q.glow>.05){ctx.globalAlpha=q.glow*.35;circle(ctx,xx,yy,rr+5,col);ctx.globalAlpha=1;}
+        circle(ctx,xx,yy,rr,col,col);
+      });
+    }else{
+      if(tab==='boil'&&s.observed){for(var j=0;j<16;j++){var p=(d.clock*(.27+j%3*.03)+j*.137)%1;circle(ctx,x+bw*(.12+((j*.37)%1)*.62),bottom-12-p*(lh-16),2+p*3,C.glass,C.panel);}}
+      if(d.ice>.01){ctx.save();ctx.beginPath();ctx.rect(x+3,bottom-lh*d.ice,bw-6,lh*d.ice-3);ctx.clip();for(var z=0;z<10;z++){var xx=x+bw*(.1+((z*.37)%1)*.8),yy=bottom-lh*d.ice*((z*.61)%1);line(ctx,xx-8,yy+9,xx+8,yy-9,C.glass,1);}ctx.restore();}
+    }
+    ctx.beginPath();ctx.moveTo(x-3,top-4);ctx.lineTo(x,top+4);ctx.lineTo(x,bottom-10);ctx.quadraticCurveTo(x,bottom,x+10,bottom);ctx.lineTo(x+bw-10,bottom);ctx.quadraticCurveTo(x+bw,bottom,x+bw,bottom-10);ctx.lineTo(x+bw,top+4);ctx.lineTo(x+bw+4,top-3);ctx.strokeStyle=C.glass;ctx.lineWidth=2;ctx.stroke();
+    var thermTop=24,thermBottom=bottom-15,tw=narrow?7:9,lo=tab==='boil'?80:-5,hi=tab==='boil'?105:5,ratio=P.clamp((s.t-lo)/(hi-lo),0,1),y=thermBottom-8-ratio*(thermBottom-thermTop-12);
+    ctx.beginPath();ctx.roundRect(tx-tw/2,thermTop,tw,thermBottom-thermTop,5);ctx.fillStyle=C.panel;ctx.fill();ctx.strokeStyle=C['d-gray'];ctx.lineWidth=1;ctx.stroke();
+    circle(ctx,tx,thermBottom,tw*.75,C['d-gray'],C.panel);line(ctx,tx,thermBottom,tx,y,C.t1,tw*.43);circle(ctx,tx,thermBottom,tw*.42,C.t1,C.t1);
+    for(var u=0;u<5;u++){var y2=thermBottom-8-u/4*(thermBottom-thermTop-12);line(ctx,tx+tw/2+2,y2,tx+tw/2+6,y2,C['d-gray'],1);}
+    text(ctx,fmt(s.t,1),Math.min(w-3,tx+28),Math.max(17,y-6),narrow?10:12,C.t1,'right');
+  }
+  function graph(){
+    var heat=tab==='boil',v=views[2],ctx=v.ctx,w=v.w,h=v.h;if(!ctx||w<30)return;
+    ctx.clearRect(0,0,w,h);ctx.fillStyle=C.panel;ctx.fillRect(0,0,w,h);
+    var zoom=$('zoom-graph').checked,small=w<500,xmin=0,xmax=42,ymin=heat?(zoom?98:78):-6,ymax=heat?106:(zoom?1:6);
+    var ticks=heat?(zoom?[98,100,102,104,106]:[80,85,90,95,100,105]):(zoom?[-5,-4,-3,-2,-1,0]:[-5,0,5]);
+    var l=small?46:64,r=w-18,t=33,b=h-52,X=function(x){return l+(x-xmin)/(xmax-xmin)*(r-l);},Y=function(y){return b-(y-ymin)/(ymax-ymin)*(b-t);};
+    text(ctx,'온도 (℃)',l,17,12);
+    ticks.forEach(function(y){line(ctx,l,Y(y),r,Y(y),C.line);text(ctx,String(y),l-7,Y(y)+4,11,C.t3,'right');});
+    [0,10,20,30,40].forEach(function(x){line(ctx,X(x),t,X(x),b,C.line);text(ctx,String(x),X(x),b+20,11,C.t3,'center');});
+    line(ctx,l,b,r,b,C['d-gray']);line(ctx,l,t,l,b,C['d-gray']);
+    if(heat||run().samples[0].observed){
+      var reference=heat?100:0;
+      line(ctx,l,Y(reference),r,Y(reference),C.t1,1.3,[5,4]);text(ctx,heat?'물의 끓는점 100 ℃':'물의 어는점 0 ℃',l+7,Y(reference)-9,12,C.t1);
+    }
+    text(ctx,'시간 (s)',r,b+44,12,C.t2,'right');
+    ctx.save();ctx.beginPath();ctx.rect(l,t,r-l,b-t);ctx.clip();
+    run().samples.forEach(function(s,i){
+      if(!s.trace.length)return;ctx.beginPath();s.trace.forEach(function(a,j){if(j===0)ctx.moveTo(X(a.time),Y(a.temp));else ctx.lineTo(X(a.time),Y(a.temp));});ctx.strokeStyle=i?C['d-amber']:C['d-blue'];ctx.lineWidth=2.5;ctx.setLineDash(i?[7,4]:[]);ctx.stroke();ctx.setLineDash([]);
+      var a=s.trace[s.trace.length-1];circle(ctx,X(a.time),Y(a.temp),3.5,i?C['d-amber']:C['d-blue'],C.panel);
+    });ctx.restore();
+    run().samples.forEach(function(s,i){if(s.observed&&s.trace.length){var a=s.trace[s.trace.length-1];circle(ctx,X(a.time),Y(a.temp),4,i?C['d-amber']:C['d-blue'],C.panel);}});
+    if(!run().started)text(ctx,(heat?'가열':'냉각')+'을 시작해 보세요.',(l+r)/2,(t+b)/2,14,C.t3,'center');
+    else if(zoom&&run().samples.every(function(s){return!s.trace.some(function(a){return a.temp>=ymin&&a.temp<=ymax;});}))text(ctx,'아직 확대 범위에 도달하지 않았습니다.',(l+r)/2,(t+b)/2,small?11:14,C.t3,'center');
+  }
+  function draw(){sample(0);sample(1);graph();}
+  function loop(ts){
+    raf=null;var dt=last?Math.min(.05,(ts-last)/1000):0;last=ts;
+    if(moving){PhaseParticles.advanceScene(run(),worlds,dt,playbackSpeed);if(run().done)moving=false;}
+    if(ts-lastUI>120){updateUI();lastUI=ts;}draw();if(!document.hidden)raf=requestAnimationFrame(loop);
+  }
+  ['boil','freeze'].forEach(function(t){
+    $('tab-'+t).addEventListener('click',function(){applyTab(t);});
+    $('tab-'+t).addEventListener('keydown',function(e){if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();applyTab(e.key==='Home'?'boil':e.key==='End'?'freeze':tab==='boil'?'freeze':'boil');$('tab-'+tab).focus();}});
+    LAB_QUESTIONS[t].forEach(function(q,i){
+      var item=document.createElement('div'),heading=document.createElement('div'),label=document.createElement('label'),area=document.createElement('textarea');
+      item.className='worksheet-question';heading.className='question-heading';
+      area.id='answer-'+t+'-'+i;area.maxLength=3000;
+      label.htmlFor=area.id;label.textContent=(i+1)+'. '+q;heading.appendChild(label);
+      if(i===2){
+        var hint=document.createElement('button');hint.type='button';hint.className='hint-button';hint.textContent='힌트';
+        hint.setAttribute('aria-label',(t==='boil'?'끓는점 오름':'어는점 내림')+' 3번 힌트');
+        hint.setAttribute('aria-haspopup','dialog');hint.setAttribute('aria-controls','worksheet-hint');
+        hint.addEventListener('click',function(){$('worksheet-hint').showModal();});heading.appendChild(hint);
+      }
+      item.appendChild(heading);item.appendChild(area);$('questions-'+t).appendChild(item);
+    });
+    $('worksheet-'+t).addEventListener('submit',function(e){e.preventDefault();submit(t);});
+  });
+  $('hint-close').addEventListener('click',function(){$('worksheet-hint').close();});
+  $('molecule-toggle').addEventListener('click',function(){molecular=!molecular;updateUI();resize();});
+  $('concentration').addEventListener('input',function(e){m=Number(e.target.value);runs={boil:P.createRun('boil',m),freeze:P.createRun('freeze',m)};worldSets={boil:[PhaseParticles.create(0),PhaseParticles.create(m)],freeze:[PhaseParticles.create(0),PhaseParticles.create(m)]};worlds=worldSets[tab];updateUI();draw();});
+  $('play').addEventListener('click',function(){if(run().done){runs[tab]=P.createRun(tab,m);resetWorlds();}run().running=!run().running;if(run().running)moving=true;updateUI();});
+  $('reset').addEventListener('click',function(){runs[tab]=P.createRun(tab,m);resetWorlds();moving=!reduced;updateUI();draw();});
+  $('motion').addEventListener('click',function(){moving=!moving;if(!moving)run().running=false;updateUI();});
+  $('playback-speed').addEventListener('input',function(e){playbackSpeed=Number(e.target.value);updateUI();});
+  $('zoom-graph').addEventListener('change',function(){updateUI();graph();});
+  document.addEventListener('visibilitychange',function(){if(document.hidden){if(raf!==null)cancelAnimationFrame(raf);raf=null;}else if(raf===null){last=0;raf=requestAnimationFrame(loop);}});
+  new ResizeObserver(resize).observe($('experiment'));window.addEventListener('resize',resize);
+
+  function submit(topic){
+    $('submit-status-'+topic).textContent='답안 제출은 온라인 시뮬레이션에서 가능합니다.';
+  }
+  applyTab('boil');raf=requestAnimationFrame(loop);
+}());
+
+</script>
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="colligative"></script>
+</body>
+</html>
