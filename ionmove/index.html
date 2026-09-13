@@ -31,6 +31,8 @@
   .stagecap{font-size:12px; color:var(--t2); margin:9px 0 0; line-height:1.6; min-height:34px}
 
   .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0}
+  .btnrow--stage{margin-top:8px}           /* 장치 그림 바로 아래 — 그림과 한 덩어리로 읽히게 */
+  .stage--micro{margin-top:8px}
   .btn{font-family:inherit; font-size:14px; font-weight:600; padding:10px 13px; min-height:44px;
     border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
     cursor:pointer; box-shadow:var(--shadow)}
@@ -87,10 +89,7 @@
 
 <div class="head">
   <h1>이온의 이동과 전기 전도성</h1>
-  <p class="sub">두 가지를 봅니다. 첫째, 물에 녹였을 때 <b>이온이 생기는가</b> —
-     화학식에 OH가 들어 있는 에탄올도 확인합니다. 둘째, 전류를 흘렸을 때
-     <b>어떤 이온이 어느 극으로 가는가</b> — 색을 바꾸는 이온만이 아니라
-     <b>종이에 배어 있던 이온까지 전부</b> 셉니다.</p>
+  <p class="sub">산과 염기의 전기전도성과 이온화를 확인합니다.</p>
 </div>
 
 <div class="seatrow">
@@ -100,8 +99,8 @@
 </div>
 
 <div class="tabs" role="group" aria-label="탐구 선택">
-  <button class="tabb" data-tab="cond" aria-pressed="true">① 전류가 흐르는가</button>
-  <button class="tabb" data-tab="move" aria-pressed="false">② 어느 극으로 가는가</button>
+  <button class="tabb" data-tab="cond" aria-pressed="true">① 전기전도성</button>
+  <button class="tabb" data-tab="move" aria-pressed="false">② 이온의 이동</button>
 </div>
 <p class="tabdesc only-cond"><b>전기 전도성 측정기.</b> 순수한 물(증류수)부터 먼저 넣어 보세요.
   &ldquo;물이면 다 전류가 흐른다&rdquo;가 맞는지 확인하는 것이 이 탭의 출발점입니다.</p>
@@ -114,24 +113,29 @@
   <div>
     <div class="card">
       <div class="stage stage--light">
-        <canvas id="stageCv" aria-label="탭 ①에서는 비커에 담근 두 전극과 전지·전구가, 그 아래 상자에는 용액 속 분자와 이온이 그려집니다. 탭 ②에서는 리트머스 종이와 좌우 전극판이 그려지고, 종이 위에 이온이 겹쳐 나타나 각자 자기 극 쪽으로 움직입니다."></canvas>
+        <canvas id="stageCv" aria-label="탭 ①에서는 비커에 담근 두 전극과 전지·전구가 그려집니다. 탭 ②에서는 리트머스 종이와 좌우 전극판이 그려지고, 「입자로 보기」를 누르면 종이 위에 이온이 겹쳐 나타나 각자 자기 극 쪽으로 움직입니다."></canvas>
+      </div>
+      <!-- 조작 단추는 장치 그림 «바로 아래» — 그림을 보면서 누른다 (사용자 지시 2026-09-13).
+           「입자로 보기」는 접힌 상태가 기본값이다 (같은 지시) -->
+      <div class="btnrow btnrow--stage">
+        <button class="btn btn--primary" id="powBtn" aria-pressed="false">전원 켜기</button>
+        <button class="btn" id="zoomBtn" aria-pressed="false">입자로 보기</button>
+        <button class="btn" id="againBtn">다시</button>
       </div>
       <p class="stagecap" id="stageCap"></p>
-      <p class="jump"><a href="#sheet">확인해 볼 것으로 이동 &darr;</a></p>
-
-      <div class="btnrow">
-        <button class="btn btn--primary" id="powBtn" aria-pressed="false">전원 켜기</button>
-        <button class="btn" id="zoomBtn" aria-pressed="true">입자 화면 접기</button>
-        <button class="btn" id="againBtn">다시</button>
+      <!-- 탭 ①의 입자 상자 — 단추줄 아래 별도 무대. 「입자로 보기」를 누를 때만 나타난다 -->
+      <div class="stage stage--light stage--micro" id="microBox" style="display:none">
+        <canvas id="microCv" aria-label="탭 ①의 용액 속을 분자·이온 크기로 확대한 상자입니다. 이온이 있으면 원(양이온)과 사각(음이온)이, 없으면 분자만 그려집니다."></canvas>
       </div>
       <label class="optrow">
         <input type="checkbox" id="onlyChk">
         <span>&ldquo;색을 바꾸는 이온&rdquo;만 보기 (H<sup>+</sup>·OH<sup>&minus;</sup> 외에는 숨김)</span>
       </label>
-      <p class="note only-move" style="display:none"><b>위 체크상자를 켰다 껐다 해 보세요.</b>
+      <p class="note only-move" style="display:none"><b>「입자로 보기」를 누른 뒤, 위 체크상자를 켰다 껐다 해 보세요.</b>
         켜면 눈에 보이는 색 변화를 만드는 이온만 남습니다. 끄면 <b>K<sup>+</sup>와
         NO<sub>3</sub><sup>&minus;</sup>가 다시 나타납니다</b> &mdash; 이 이온들은 처음부터
         계속 움직이고 있었습니다. 색을 바꾸지 않을 뿐입니다.</p>
+      <p class="jump"><a href="#sheet">확인해 볼 것으로 이동 &darr;</a></p>
 
       <p class="note" id="rmNote" style="display:none">
         (&ldquo;동작 줄이기&rdquo;가 켜져 있어 이온의 움직임과 번지는 애니메이션을 생략했습니다.

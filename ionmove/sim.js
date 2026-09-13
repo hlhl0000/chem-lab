@@ -129,24 +129,27 @@ var FONT = '-apple-system,BlinkMacSystemFont,"Malgun Gothic","맑은 고딕",' +
 /* 리트머스 종이의 «실물» 색 (매뉴얼 P6 예외 2 — 사이트 테마 색이 아니다) */
 var PAPER = { blue: "#8fa9d8", red: "#dd9b9b", toRed: "#b3402f", toBlue: "#2f5da8" };
 
-/* 단계×요소 가시성 — 단일 원천 (매뉴얼 §13 ①) */
+/* 단계×요소 가시성 — 단일 원천 (매뉴얼 §13 ①)
+   micro(입자 상자)는 탭만으로 정해지지 않는다(◐) — showMicro() 하나가 판정한다 */
 var SHOW = {
-  cond: { condOnly: true, moveOnly: false },
-  move: { condOnly: false, moveOnly: true }
+  cond: { condOnly: true, moveOnly: false, micro: null },
+  move: { condOnly: false, moveOnly: true, micro: false }
 };
+function showMicro() { return SHOW[st.tab].micro !== false && st.zoom; }
 
 var st = {
   tab: "cond",
   sol: "hcl",
   power: false,
-  zoom: true,
+  zoom: false,        /* 「입자로 보기」— 접힌 상태가 기본값 (사용자 지시 2026-09-13) */
   onlyColor: false,   /* 「색을 바꾸는 이온만 보기」 */
   lastR: 0,           /* 마지막으로 그린 입자 반지름 — 프로브가 판독성을 잰다 */
   p: 0,               /* 탭2 번짐 진행 0..1 */
   parts: []
 };
 
-var cv = $("stageCv"), ctx = cv.getContext("2d");
+var cv = $("stageCv"), ctx = cv.getContext("2d");       /* 장치 그림 (두 탭 공통) */
+var mcv = $("microCv"), mctx = mcv.getContext("2d");    /* 탭 ① 입자 상자 — 단추줄 아래 별도 무대 */
 var rafId = null, lastT = 0;
 
 function rnd(a, b) { return a + Math.random() * (b - a); }
@@ -212,10 +215,13 @@ function fit(canvas, context, hCss) {
 }
 function stageH() {
   var w = cv.parentNode.clientWidth || 600;
-  if (st.tab === "cond")
-    return Math.round(Math.max(200, Math.min(250, w * 0.38))) +
-           (st.zoom ? Math.round(Math.max(180, Math.min(240, w * 0.36))) : 0);
+  if (st.tab === "cond") return Math.round(Math.max(200, Math.min(250, w * 0.38)));
   return Math.round(Math.max(304, Math.min(344, w * 0.52)));
+}
+/* 탭 ① 입자 상자의 높이 — 장치 그림과 같은 폭 기준 */
+function microH() {
+  var w = cv.parentNode.clientWidth || 600;
+  return Math.round(Math.max(180, Math.min(240, w * 0.36)));
 }
 
 /* ---------- 입자 그리기 (공통) ---------- */
@@ -224,7 +230,8 @@ function stageH() {
 function partRadius(w, h, n) {
   return Math.max(11, Math.min(14, 0.34 * Math.sqrt(w * h / Math.max(1, n))));
 }
-function drawParticle(px, py, r, k) {
+/* 첫 인수 ctx 는 그릴 캔버스다 — 탭 ②는 장치 무대(ctx), 탭 ①은 입자 상자(mctx)에 그린다 */
+function drawParticle(ctx, px, py, r, k) {
   var kd = ION_KIND[k], col = kindColor(k);
   ctx.beginPath();
   if (kd.cls === "mol" && k === "EtOH") {
@@ -260,7 +267,7 @@ function hidden(k) { return st.onlyColor && !ION_KIND[k].key && ION_KIND[k].cls 
 /* ---------- 탭 1 : 전기 전도성 ---------- */
 function drawConductivity(w, h) {
   var lamp = ionLampLevel(st.sol) && st.power;
-  var top = st.zoom ? Math.round(h * 0.52) : h;
+  var top = h;   /* 장치 그림이 무대 전부다 — 입자 상자는 단추줄 아래 별도 캔버스(drawMicro) */
 
   /* 비커 */
   var bw = Math.min(158, w * 0.36), bx = w * 0.50 - bw / 2, by = 46, bh = top - 82;
@@ -317,33 +324,38 @@ function drawConductivity(w, h) {
   ctx.beginPath(); ctx.moveTo(gx - 5, gy + 3); ctx.lineTo(gx, gy - 3); ctx.lineTo(gx + 5, gy + 3);
   ctx.strokeStyle = lamp ? "#7a5c05" : "#b3bcc6"; ctx.lineWidth = 1.4; ctx.stroke();
   ctx.fillStyle = lamp ? C.t1 : C.t3; ctx.font = "600 11.5px " + FONT; ctx.textAlign = "center";
-  ctx.fillText(st.power ? (lamp ? "불이 켜졌다" : "불이 안 켜진다") : "전원 꺼짐", gx, gy + 30);
+  var lampTxt = st.power ? (lamp ? "불이 켜졌다" : "불이 안 켜진다") : "전원 꺼짐";
+  /* 좁은 화면(360 px)에서는 이 글자가 오른쪽 전극 위에 걸려 「불」이 묻힌다(2026-09-13 육안 실측)
+     — 전극과 겹치면 전극 오른쪽으로 비킨다. 넓은 화면에서는 그대로 전구 아래 가운데 */
+  var lx = gx;
+  if (gx - ctx.measureText(lampTxt).width / 2 < ex[1] + 8) { ctx.textAlign = "left"; lx = ex[1] + 8; }
+  ctx.fillText(lampTxt, lx, gy + 30);
   ctx.restore();
 
   /* 용액 이름 */
   var s = ionSolute(st.sol);
   ctx.fillStyle = C.t1; ctx.font = "600 13px " + FONT; ctx.textAlign = "center";
   ctx.fillText(s.name + " (" + s.formula + ")", w / 2, top - 22);
+}
 
-  /* 미시 상자 */
-  if (st.zoom) {
-    var by2 = top + 6, bh2 = h - by2 - 4, bx2 = 8, bw2 = w - 16;
-    ctx.save();
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(bx2, by2, bw2, bh2, 10); else ctx.rect(bx2, by2, bw2, bh2);
-    ctx.fillStyle = "#fbfdff"; ctx.fill();
-    ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.stroke(); ctx.clip();
-    ctx.fillStyle = C.t3; ctx.font = "11px " + FONT; ctx.textAlign = "left";
-    ctx.fillText("용액 속을 분자·이온 크기로 확대한 것", bx2 + 10, by2 + 15);
-    var r = partRadius(bw2 - 16, bh2 - 34, st.parts.length);
-    st.lastR = r;
-    for (var q = 0; q < st.parts.length; q++) {
-      var pt = st.parts[q];
-      if (hidden(pt.k)) continue;
-      drawParticle(bx2 + 8 + pt.x * (bw2 - 16), by2 + 22 + pt.y * (bh2 - 34), r, pt.k);
-    }
-    ctx.restore();
+/* 탭 ① 입자 상자 — 「입자로 보기」를 눌렀을 때만 (showMicro) · 별도 캔버스 mctx */
+function drawMicro(w, h) {
+  var bx2 = 8, by2 = 6, bw2 = w - 16, bh2 = h - 12;
+  mctx.save();
+  mctx.beginPath();
+  if (mctx.roundRect) mctx.roundRect(bx2, by2, bw2, bh2, 10); else mctx.rect(bx2, by2, bw2, bh2);
+  mctx.fillStyle = "#fbfdff"; mctx.fill();
+  mctx.strokeStyle = C.line; mctx.lineWidth = 1; mctx.stroke(); mctx.clip();
+  mctx.fillStyle = C.t3; mctx.font = "11px " + FONT; mctx.textAlign = "left";
+  mctx.fillText("용액 속을 분자·이온 크기로 확대한 것", bx2 + 10, by2 + 15);
+  var r = partRadius(bw2 - 16, bh2 - 34, st.parts.length);
+  st.lastR = r;
+  for (var q = 0; q < st.parts.length; q++) {
+    var pt = st.parts[q];
+    if (hidden(pt.k)) continue;
+    drawParticle(mctx, bx2 + 8 + pt.x * (bw2 - 16), by2 + 22 + pt.y * (bh2 - 34), r, pt.k);
   }
+  mctx.restore();
 }
 
 /* ---------- 탭 2 : 이온 이동 ---------- */
@@ -399,7 +411,7 @@ function drawMigration(w, h) {
     for (var q = 0; q < st.parts.length; q++) {
       var pt = st.parts[q];
       if (hidden(pt.k)) continue;
-      drawParticle(px0 + 10 + pt.x * (px1 - px0 - 20), py0 + 14 + pt.y * (py1 - py0 - 28), r, pt.k);
+      drawParticle(ctx, px0 + 10 + pt.x * (px1 - px0 - 20), py0 + 14 + pt.y * (py1 - py0 - 28), r, pt.k);
     }
   }
   ctx.restore();
@@ -413,7 +425,13 @@ function draw() {
   if (!w) return;
   var h = stageH();
   ctx.clearRect(0, 0, w, h);
-  if (st.tab === "cond") drawConductivity(w, h); else drawMigration(w, h);
+  if (st.tab === "cond") {
+    drawConductivity(w, h);
+    if (showMicro()) {
+      var mh = microH(), mw = fit(mcv, mctx, mh);
+      if (mw) { mctx.clearRect(0, 0, mw, mh); drawMicro(mw, mh); }
+    }
+  } else drawMigration(w, h);
 }
 
 /* ---------- 루프 ---------- */
@@ -510,6 +528,7 @@ function sync() {
   for (var i = 0; i < el.length; i++) el[i].style.display = vis.condOnly ? "block" : "none";
   el = document.querySelectorAll(".only-move");
   for (i = 0; i < el.length; i++) el[i].style.display = vis.moveOnly ? "block" : "none";
+  $("microBox").style.display = showMicro() ? "block" : "none";
 
   var tb = document.querySelectorAll(".tabb");
   for (i = 0; i < tb.length; i++)
@@ -540,17 +559,23 @@ function sync() {
 
   $("powBtn").textContent = st.power ? "전원 끄기" : "전원 켜기";
   $("powBtn").setAttribute("aria-pressed", st.power ? "true" : "false");
+  $("zoomBtn").textContent = st.zoom ? "입자 화면 접기" : "입자로 보기";
+  $("zoomBtn").setAttribute("aria-pressed", st.zoom ? "true" : "false");
   $("onlyChk").disabled = !st.zoom;
 
   syncMoveRead();
+  /* 캡션은 입자가 접혀 있는지 안다 — 접힌 채 「아래 상자」를 가리키면 안 된다 */
   setTxt("stageCap", st.tab === "cond"
     ? (st.power
         ? (ionLampLevel(st.sol)
-            ? "전구에 불이 켜졌습니다. 아래 상자에 «이온»이 있는지 보세요."
-            : "전구에 불이 켜지지 않습니다. 아래 상자에 이온이 하나도 없습니다 — 분자로만 녹아 있습니다.")
+            ? (st.zoom ? "전구에 불이 켜졌습니다. 아래 상자에 «이온»이 있는지 보세요."
+                       : "전구에 불이 켜졌습니다. 「입자로 보기」를 눌러 용액 속에 «이온»이 있는지 보세요.")
+            : (st.zoom ? "전구에 불이 켜지지 않습니다. 아래 상자에 이온이 하나도 없습니다 — 분자로만 녹아 있습니다."
+                       : "전구에 불이 켜지지 않습니다. 「입자로 보기」를 눌러 용액 속에 이온이 있는지 보세요."))
         : "전원을 켜면 이 용액에 전류가 흐르는지 알 수 있습니다.")
     : (st.power
-        ? "전원이 켜졌습니다. 색이 번지는 쪽과, 이온이 가는 쪽을 «따로» 보세요."
+        ? (st.zoom ? "전원이 켜졌습니다. 색이 번지는 쪽과, 이온이 가는 쪽을 «따로» 보세요."
+                   : "전원이 켜졌습니다. 색이 번지는 쪽을 본 뒤, 「입자로 보기」를 눌러 이온이 가는 쪽도 «따로» 보세요.")
         : "전원을 켜기 전입니다. 종이에는 질산 칼륨의 K⁺·NO₃⁻가 이미 배어 있습니다."));
   draw();
 }
@@ -571,12 +596,7 @@ for (var si = 0; si < sbs.length; si++) sbs[si].addEventListener("click", functi
   st.sol = this.dataset.sol; st.power = false; resetRun();
 });
 $("powBtn").addEventListener("click", function () { st.power = !st.power; sync(); });
-$("zoomBtn").addEventListener("click", function () {
-  st.zoom = !st.zoom;
-  this.setAttribute("aria-pressed", st.zoom ? "true" : "false");
-  this.textContent = st.zoom ? "입자 화면 접기" : "입자로 보기";
-  sync();
-});
+$("zoomBtn").addEventListener("click", function () { st.zoom = !st.zoom; sync(); });
 $("onlyChk").addEventListener("change", function () { st.onlyColor = this.checked; draw(); });
 $("againBtn").addEventListener("click", function () { st.power = false; resetRun(); });
 
