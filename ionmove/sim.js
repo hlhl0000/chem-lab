@@ -16,29 +16,52 @@
 var ION_ELECTROLYTE = [{ k: "K", n: 6 }, { k: "NO3", n: 6 }];
 
 var ION_KIND = {
-  H:    { sym: "H⁺",   charge:  1, key: true,  cls: "ion" },
-  OH:   { sym: "OH⁻",  charge: -1, key: true,  cls: "ion" },
-  Na:   { sym: "Na⁺",  charge:  1, key: false, cls: "ion" },
-  Cl:   { sym: "Cl⁻",  charge: -1, key: false, cls: "ion" },
-  K:    { sym: "K⁺",   charge:  1, key: false, cls: "ion" },
-  NO3:  { sym: "NO₃⁻", charge: -1, key: false, cls: "ion" },
-  EtOH: { sym: "",     charge:  0, key: false, cls: "mol" },
-  H2O:  { sym: "",     charge:  0, key: false, cls: "mol" }
+  H:      { sym: "H⁺",      charge:  1, key: true,  cls: "ion" },
+  OH:     { sym: "OH⁻",     charge: -1, key: true,  cls: "ion" },
+  Na:     { sym: "Na⁺",     charge:  1, key: false, cls: "ion" },
+  Cl:     { sym: "Cl⁻",     charge: -1, key: false, cls: "ion" },
+  K:      { sym: "K⁺",      charge:  1, key: false, cls: "ion" },
+  NO3:    { sym: "NO₃⁻",    charge: -1, key: false, cls: "ion" },
+  /* 2026-09-13 추가 — 교과서의 대표 산·염기 6종 (사용자 지시) */
+  CH3COO: { sym: "CH₃COO⁻", charge: -1, key: false, cls: "ion" },
+  SO4:    { sym: "SO₄²⁻",   charge: -2, key: false, cls: "ion" },
+  Ca:     { sym: "Ca²⁺",    charge:  2, key: false, cls: "ion" },
+  Ba:     { sym: "Ba²⁺",    charge:  2, key: false, cls: "ion" },
+  EtOH:   { sym: "",        charge:  0, key: false, cls: "mol", label: "에탄올" },
+  CH3COOH:{ sym: "",        charge:  0, key: false, cls: "mol", label: "아세트산" },
+  H2O:    { sym: "",        charge:  0, key: false, cls: "mol" }
 };
 
-/* 네 가지만 둔다 — 「전류의 세기」가 갈리는 약산·약염기를 넣으면 범위를 넘는다.
+/* 증류수·에탄올 + 산 4종·염기 4종 (교과서의 대표 산·염기 — 2026-09-13 사용자 지시로 6종 추가).
+   전구는 여전히 «켜짐/꺼짐»뿐이다 — 전류의 세기는 이 교육과정 밖이라 밝기 단계를 두지 않는다.
    src : 탐구 = 지도서 113쪽 탐구의 관찰 대상 6종에 들어 있음
          대조 = 지도서 113쪽 「좋은 수업을 위한 제안」 3의 증류수 대조
-         밖   = 홈판 탐구표에 없는 물질 (M3 반박 스크립트의 손소독제) */
+         밖   = 홈판 탐구표에 없는 물질 (에탄올 = M3 반박 스크립트의 손소독제 · 나머지는 교과서 본문의 산·염기)
+   ions: 물에 녹아 생기는 이온과 그 개수(도식). 전하 총합은 0 — ionTotalCharge 가 지킨다.
+         2:1 전해질(황산·수산화 칼슘·수산화 바륨)은 개수 비로 화학식의 비를 보인다.
+   weak: 약산 — 녹은 분자 «대부분은 이온화하지 않은 채»(mol) 있고 이온은 소수만(사용자 지정 2026-09-13).
+         이온화 정도의 차이는 『화학』의 몫이라 화면 문구로 설명하지 않고 「한계」에만 적는다 */
 var ION_SOL = [
-  { id: "water",   name: "증류수",               formula: "H₂O",    src: "대조",
+  { id: "water",   name: "증류수",               formula: "H₂O",     src: "대조",
     ions: [], mol: null,  lamp: 0, litmus: "none" },
-  { id: "ethanol", name: "에탄올",               formula: "C₂H₅OH", src: "밖",
+  { id: "ethanol", name: "에탄올",               formula: "C₂H₅OH",  src: "밖", srcNote: "(손소독제 성분)",
     ions: [], mol: "EtOH", lamp: 0, litmus: "none" },
-  { id: "hcl",     name: "묽은 염산",            formula: "HCl",    src: "탐구",
+  { id: "hcl",     name: "묽은 염산",            formula: "HCl",     src: "탐구",
     ions: [{ k: "H", n: 5 }, { k: "Cl", n: 5 }], mol: null, lamp: 1, litmus: "acid" },
-  { id: "naoh",    name: "수산화 나트륨 수용액", formula: "NaOH",   src: "탐구",
-    ions: [{ k: "Na", n: 5 }, { k: "OH", n: 5 }], mol: null, lamp: 1, litmus: "base" }
+  { id: "acetic",  name: "아세트산 수용액",      formula: "CH₃COOH", src: "밖", weak: true,
+    ions: [{ k: "H", n: 2 }, { k: "CH3COO", n: 2 }], mol: "CH3COOH", molN: 6, lamp: 1, litmus: "acid" },
+  { id: "hno3",    name: "묽은 질산",            formula: "HNO₃",    src: "밖",
+    ions: [{ k: "H", n: 5 }, { k: "NO3", n: 5 }], mol: null, lamp: 1, litmus: "acid" },
+  { id: "h2so4",   name: "묽은 황산",            formula: "H₂SO₄",   src: "밖",
+    ions: [{ k: "H", n: 6 }, { k: "SO4", n: 3 }], mol: null, lamp: 1, litmus: "acid" },
+  { id: "naoh",    name: "수산화 나트륨 수용액", formula: "NaOH",    src: "탐구",
+    ions: [{ k: "Na", n: 5 }, { k: "OH", n: 5 }], mol: null, lamp: 1, litmus: "base" },
+  { id: "caoh2",   name: "수산화 칼슘 수용액",   formula: "Ca(OH)₂", src: "밖",
+    ions: [{ k: "Ca", n: 3 }, { k: "OH", n: 6 }], mol: null, lamp: 1, litmus: "base" },
+  { id: "koh",     name: "수산화 칼륨 수용액",   formula: "KOH",     src: "밖",
+    ions: [{ k: "K", n: 5 }, { k: "OH", n: 5 }], mol: null, lamp: 1, litmus: "base" },
+  { id: "baoh2",   name: "수산화 바륨 수용액",   formula: "Ba(OH)₂", src: "밖",
+    ions: [{ k: "Ba", n: 3 }, { k: "OH", n: 6 }], mol: null, lamp: 1, litmus: "base" }
 ];
 
 function ionSolute(id) {
@@ -52,35 +75,59 @@ function ionMovesTo(k) {
   return c > 0 ? "cathode" : c < 0 ? "anode" : "none";   /* 양이온 → (−)극 · 음이온 → (+)극 */
 }
 
+/* 시약이 물에 녹아 내놓는 입자 — 이온 + (있으면) 이온화하지 않은 분자. 전부 출처 "reagent" */
+function ionSoluteParticles(id) {
+  var s = ionSolute(id), out = [];
+  for (var i = 0; i < s.ions.length; i++) out.push({ k: s.ions[i].k, n: s.ions[i].n, from: "reagent" });
+  if (s.mol) out.push({ k: s.mol, n: s.molN || 5, from: "reagent" });
+  return out;
+}
+
 /* 탭 1 (전기 전도성) — 비커 속 입자. 전해질은 없고 물이 있다 */
 function ionBeakerParticles(id) {
-  var s = ionSolute(id), out = [{ k: "H2O", n: 8 }];
-  if (s.ions.length) out = out.concat(s.ions);
-  if (s.mol) out = out.concat([{ k: s.mol, n: 5 }]);
-  return out;
+  return [{ k: "H2O", n: 8, from: "solvent" }].concat(ionSoluteParticles(id));
 }
 
-/* 탭 2 (이온 이동) — 종이 위 입자. 전해질 K⁺·NO₃⁻ 는 «시약과 무관하게 늘 있다» */
+/* 탭 2 (이온 이동) — 종이 위 입자. 전해질 K⁺·NO₃⁻ 는 «시약과 무관하게 늘 있다».
+   ★ 출처(from)를 항목마다 붙인다 — 시약이 같은 이온을 내놓아도(KOH 의 K⁺ · HNO₃ 의 NO₃⁻)
+     종이의 것과 «합쳐지지 않는다». 종류만으로 출처를 정하면 KOH 에서 「종이의 K⁺ 11개」가 된다 */
 function ionPaperParticles(id) {
-  var s = ionSolute(id), out = ION_ELECTROLYTE.slice();
-  if (s.ions.length) out = out.concat(s.ions);
-  if (s.mol) out = out.concat([{ k: s.mol, n: 5 }]);
-  return out;
+  var out = [];
+  for (var i = 0; i < ION_ELECTROLYTE.length; i++)
+    out.push({ k: ION_ELECTROLYTE[i].k, n: ION_ELECTROLYTE[i].n, from: "paper" });
+  return out.concat(ionSoluteParticles(id));
 }
 
-/* ★ M4 의 판정기 — (−)극 쪽으로 가는 양이온을 «종류별로» 센다 */
+/* ★ M4 의 판정기 — (−)극 쪽으로 가는 양이온을 «종류·출처별로» 센다. 종이 것이 먼저 온다 */
 function ionCationsToCathode(id) {
-  var ps = ionPaperParticles(id), out = {};
+  var ps = ionPaperParticles(id), out = [];
   for (var i = 0; i < ps.length; i++)
-    if (ionMovesTo(ps[i].k) === "cathode") out[ps[i].k] = (out[ps[i].k] || 0) + ps[i].n;
+    if (ionMovesTo(ps[i].k) === "cathode") out.push({ k: ps[i].k, from: ps[i].from, n: ps[i].n });
   return out;
 }
 function ionAnionsToAnode(id) {
-  var ps = ionPaperParticles(id), out = {};
+  var ps = ionPaperParticles(id), out = [];
   for (var i = 0; i < ps.length; i++)
-    if (ionMovesTo(ps[i].k) === "anode") out[ps[i].k] = (out[ps[i].k] || 0) + ps[i].n;
+    if (ionMovesTo(ps[i].k) === "anode") out.push({ k: ps[i].k, from: ps[i].from, n: ps[i].n });
   return out;
 }
+/* 목록에서 (종류, 출처)의 개수 — 검사·화면이 같은 함수로 센다. from 을 생략하면 출처를 가리지 않는다 */
+function ionCountOf(list, k, from) {
+  var n = 0;
+  for (var i = 0; i < list.length; i++)
+    if (list[i].k === k && (!from || list[i].from === from)) n += list[i].n;
+  return n;
+}
+/* 종이의 전해질과 «같은 종류»를 내놓는 시약인가 — KOH → ["K"] · HNO₃ → ["NO3"] · 그 밖 → [] */
+function ionOverlapKinds(id) {
+  var s = ionSolute(id), out = [];
+  for (var i = 0; i < s.ions.length; i++)
+    for (var j = 0; j < ION_ELECTROLYTE.length; j++)
+      if (s.ions[i].k === ION_ELECTROLYTE[j].k) out.push(s.ions[i].k);
+  return out;
+}
+/* 약산인가 — 아세트산. 화면은 「분자 대부분 + 이온 소수」로 그리고, 전구는 그래도 켜진다 */
+function ionIsWeak(id) { return !!ionSolute(id).weak; }
 
 /* 전구 — 0(꺼짐) 또는 1(켜짐) 두 값뿐이다. 세기 단계를 두지 않는다 */
 function ionLampLevel(id) { return ionSolute(id).lamp; }
@@ -164,9 +211,15 @@ function darker(hex, f) {
 function kindColor(k) {
   if (k === "H")    return C.amber;
   if (k === "OH")   return C.blue;
-  if (k === "EtOH") return "#9fc6d8";
+  if (k === "EtOH" || k === "CH3COOH") return "#9fc6d8";   /* 분자 알약 — 이름표가 구분한다 */
   if (k === "H2O")  return "#d7e2ec";
   return C.gray;
+}
+
+/* ---------- 종이 기하 (탭 ②) — drawMigration 과 buildParts 가 같은 값을 읽는다 ---------- */
+function paperGeom(w, h) {
+  var px0 = w * 0.13, px1 = w * 0.87, py0 = 60, py1 = h - 74;
+  return { px0: px0, px1: px1, py0: py0, py1: py1, innerW: px1 - px0 - 20, innerH: py1 - py0 - 28 };
 }
 
 /* ---------- 입자 배치 ---------- */
@@ -174,9 +227,9 @@ function buildParts() {
   var spec = (st.tab === "cond") ? ionBeakerParticles(st.sol) : ionPaperParticles(st.sol);
   var arr = [];
   for (var i = 0; i < spec.length; i++) for (var j = 0; j < spec[i].n; j++) {
-    var fromThread = (st.tab === "move") && (spec[i].k !== "K") && (spec[i].k !== "NO3");
+    var fromThread = (st.tab === "move") && (spec[i].from === "reagent");   /* 시약은 «실» 자리에서 시작 */
     arr.push({
-      k: spec[i].k,
+      k: spec[i].k, from: spec[i].from,                        /* 출처 — 자리 배정·프로브가 읽는다 */
       x: fromThread ? rnd(0.455, 0.545) : rnd(0.08, 0.92),   /* 시약은 «실» 자리에서 시작 */
       y: rnd(0.14, 0.86),
       x0: 0, y0: 0, stop: 0.2, lane: 0.5,   /* 전극 앞 자리 — buildParts 끝에서 격자로 배정 */
@@ -185,20 +238,42 @@ function buildParts() {
   }
   for (var q = 0; q < arr.length; q++) { arr[q].x0 = arr[q].x; arr[q].y0 = arr[q].y; }
   /* ★ 전극 앞에 «줄과 열»을 미리 배정한다. 반지름을 키우면 겹쳐 쌓여
-     「어느 이온이 어디로 갔는가」를 못 읽는다(P-검토 처방의 부작용을 여기서 막는다) */
-  var dest = { cathode: [], anode: [] };
-  for (var d = 0; d < arr.length; d++) {
-    var to = ionMovesTo(arr[d].k);
-    if (dest[to]) dest[to].push(arr[d]);
-  }
-  ["cathode", "anode"].forEach(function (key) {
-    var g = dest[key], n = g.length, cols = 3, rows = Math.ceil(n / cols);
-    for (var j = 0; j < n; j++) {
-      var col = j % cols, row = Math.floor(j / cols);
-      g[j].stop = 0.06 + 0.115 * col;                       /* 전극에서 떨어진 정도 */
-      g[j].lane = 0.09 + 0.82 * ((row + 0.5) / rows);       /* 세로 줄 */
+     「어느 이온이 어디로 갔는가」를 못 읽는다(P-검토 처방의 부작용을 여기서 막는다).
+     종류별로 묶어 차례로 줄을 채운다 — 기호가 긴 음이온(CH₃COO⁻·SO₄²⁻)은 그려질 폭만큼
+     열을 벌리고 열 수를 줄인다. 폭은 drawParticle 이 쓰는 그 함수(anionRectW)로 잰다 */
+  if (st.tab === "move") {
+    var gw = cv.parentNode.clientWidth || 600, gg = paperGeom(gw, stageH());
+    var gr = partRadius(gg.innerW, gg.innerH, arr.length);
+    var dest = { cathode: [], anode: [] };
+    for (var d = 0; d < arr.length; d++) {
+      var to = ionMovesTo(arr[d].k);
+      if (dest[to]) dest[to].push(arr[d]);
     }
-  });
+    ["cathode", "anode"].forEach(function (key) {
+      var g = dest[key], groups = [], byKind = {};
+      for (var a = 0; a < g.length; a++) {          /* 종류·출처 순서(종이 → 시약)를 지킨 채 묶는다 */
+        var kk = g[a].k + "|" + g[a].from;
+        if (!byKind[kk]) { byKind[kk] = []; groups.push(byKind[kk]); }
+        byKind[kk].push(g[a]);
+      }
+      var rowsTotal = 0, plan = [];
+      for (var b = 0; b < groups.length; b++) {
+        var k0 = groups[b][0].k;
+        var pw = ION_KIND[k0].charge < 0 ? anionRectW(gr, k0) : 2 * gr;   /* 이 종류가 그려질 폭(px) */
+        var step = Math.max(0.115, (pw + 4) / gg.innerW);          /* 열 간격 — 그려질 폭 + 4 px */
+        var cols = Math.max(1, Math.round(0.345 / step));           /* 전극 앞 약 1/3 폭에 들어가는 열 수 */
+        var stop0 = Math.max(0.06, (pw / 2 - 9) / gg.innerW);       /* 첫 열 — 넓은 사각이 종이 밖으로 안 나가게 */
+        var rows = Math.ceil(groups[b].length / cols);
+        plan.push({ g: groups[b], step: step, cols: cols, stop0: stop0, row0: rowsTotal });
+        rowsTotal += rows;
+      }
+      for (var c = 0; c < plan.length; c++) for (var j = 0; j < plan[c].g.length; j++) {
+        var col = j % plan[c].cols, row = plan[c].row0 + Math.floor(j / plan[c].cols);
+        plan[c].g[j].stop = plan[c].stop0 + plan[c].step * col;          /* 전극에서 떨어진 정도 */
+        plan[c].g[j].lane = 0.09 + 0.82 * ((row + 0.5) / rowsTotal);      /* 세로 줄 */
+      }
+    });
+  }
   st.parts = arr;
 }
 
@@ -230,21 +305,34 @@ function microH() {
 function partRadius(w, h, n) {
   return Math.max(11, Math.min(14, 0.34 * Math.sqrt(w * h / Math.max(1, n))));
 }
+/* 기호 글꼴 — drawParticle 과 자리 배정(buildParts)이 같은 글꼴로 폭을 잰다 */
+function symFont(r) { return "600 " + Math.max(9.5, r * 0.74).toFixed(1) + "px " + FONT; }
+function labelFont(r) { return "600 " + Math.max(8.5, r * 0.60).toFixed(1) + "px " + FONT; }
+/* 음이온 사각의 폭 — 기호가 한 변(1.75r)을 넘치면(CH₃COO⁻·SO₄²⁻) 그만큼 옆으로 넓힌다.
+   NO₃⁻·Cl⁻·OH⁻ 는 종전과 같은 정사각이다 — NO₃⁻ 는 360 px(r≈12.9)에서 글자가 변보다 0.4 px 넓은데,
+   그 정도는 넘침으로 치지 않는다(2 px 여유). 여기서 넓혔다가는 열이 줄고 줄이 늘어 세로로 겹친다(실측) */
+function anionRectW(r, k) {
+  var side = r * 1.75;
+  ctx.font = symFont(r);
+  var tw = ctx.measureText(ION_KIND[k].sym).width;
+  return tw <= side + 2 ? side : tw + r * 0.5;
+}
 /* 첫 인수 ctx 는 그릴 캔버스다 — 탭 ②는 장치 무대(ctx), 탭 ①은 입자 상자(mctx)에 그린다 */
 function drawParticle(ctx, px, py, r, k) {
   var kd = ION_KIND[k], col = kindColor(k);
   ctx.beginPath();
-  if (kd.cls === "mol" && k === "EtOH") {
-    var ww = r * 2.6, hh = r * 1.35;
+  if (kd.cls === "mol" && kd.label) {                       /* 분자 알약 — 이름표가 들어갈 만큼 */
+    ctx.font = labelFont(r);
+    var ww = Math.max(r * 2.6, ctx.measureText(kd.label).width + r * 0.9), hh = r * 1.35;
     if (ctx.roundRect) ctx.roundRect(px - ww / 2, py - hh / 2, ww, hh, hh / 2);
     else ctx.rect(px - ww / 2, py - hh / 2, ww, hh);
   } else if (kd.cls === "mol") {
     ctx.arc(px, py, r * 0.5, 0, Math.PI * 2);
-  } else if (kd.charge < 0) {
-    var s = r * 1.75;
-    if (ctx.roundRect) ctx.roundRect(px - s / 2, py - s / 2, s, s, r * 0.5);
-    else ctx.rect(px - s / 2, py - s / 2, s, s);
-  } else ctx.arc(px, py, r, 0, Math.PI * 2);
+  } else if (kd.charge < 0) {                               /* 음이온 — 각진 사각 (§9 두 번째 채널) */
+    var s = r * 1.75, sw = anionRectW(r, k);
+    if (ctx.roundRect) ctx.roundRect(px - sw / 2, py - s / 2, sw, s, r * 0.5);
+    else ctx.rect(px - sw / 2, py - s / 2, sw, s);
+  } else ctx.arc(px, py, r, 0, Math.PI * 2);                /* 양이온 — 원 */
   ctx.fillStyle = col; ctx.globalAlpha = kd.cls === "mol" ? 0.88 : 0.93; ctx.fill();
   ctx.globalAlpha = 1;
   ctx.lineWidth = kd.key ? 1.9 : 1;
@@ -255,11 +343,11 @@ function drawParticle(ctx, px, py, r, k) {
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(kd.sym, px, py + 0.5); ctx.textBaseline = "alphabetic";
   }
-  if (k === "EtOH") {
+  if (kd.label) {
     ctx.fillStyle = darker("#9fc6d8", 0.45);
-    ctx.font = "600 " + Math.max(8.5, r * 0.60).toFixed(1) + "px " + FONT;
+    ctx.font = labelFont(r);
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("에탄올", px, py + 0.5); ctx.textBaseline = "alphabetic";
+    ctx.fillText(kd.label, px, py + 0.5); ctx.textBaseline = "alphabetic";
   }
 }
 function hidden(k) { return st.onlyColor && !ION_KIND[k].key && ION_KIND[k].cls === "ion"; }
@@ -363,7 +451,7 @@ function drawMigration(w, h) {
   var lit = ionLitmus(st.sol);
   var base = (lit === "base") ? PAPER.red : PAPER.blue;
   var stain = (lit === "base") ? PAPER.toBlue : PAPER.toRed;
-  var px0 = w * 0.13, px1 = w * 0.87, py0 = 60, py1 = h - 74;
+  var G = paperGeom(w, h), px0 = G.px0, px1 = G.px1, py0 = G.py0, py1 = G.py1;
   var e = ease(st.p);
 
   /* 전극판 — 왼쪽 (+) · 오른쪽 (−) */
@@ -406,12 +494,12 @@ function drawMigration(w, h) {
 
   /* 이온 */
   if (st.zoom) {
-    var r = partRadius(px1 - px0 - 20, py1 - py0 - 28, st.parts.length);
+    var r = partRadius(G.innerW, G.innerH, st.parts.length);
     st.lastR = r;
     for (var q = 0; q < st.parts.length; q++) {
       var pt = st.parts[q];
       if (hidden(pt.k)) continue;
-      drawParticle(ctx, px0 + 10 + pt.x * (px1 - px0 - 20), py0 + 14 + pt.y * (py1 - py0 - 28), r, pt.k);
+      drawParticle(ctx, px0 + 10 + pt.x * G.innerW, py0 + 14 + pt.y * G.innerH, r, pt.k);
     }
   }
   ctx.restore();
@@ -493,13 +581,14 @@ function loop(ts) {
 /* ---------- 화면 동기화 ---------- */
 function setTxt(id, s) { var el = $(id); if (el) el.textContent = s; }
 /* ★ 이온마다 «어디서 왔는지»를 함께 쓴다.
-   K⁺·NO₃⁻ 는 시약이 아니라 종이에 배어 있던 질산 칼륨에서 온다 —
-   이걸 안 쓰면 「에탄올이 K⁺ 를 낸다」는 새 오개념이 생긴다(매뉴얼 P5-M1). */
-function ionFrom(k) { return (k === "K" || k === "NO3") ? "종이의 " : "시약의 "; }
-function listStr(o) {
-  var ks = Object.keys(o), out = [];
-  for (var i = 0; i < ks.length; i++)
-    out.push(ionFrom(ks[i]) + ION_KIND[ks[i]].sym + " " + o[ks[i]] + "개");
+   K⁺·NO₃⁻ 는 (보통) 시약이 아니라 종이에 배어 있던 질산 칼륨에서 온다 —
+   이걸 안 쓰면 「에탄올이 K⁺ 를 낸다」는 새 오개념이 생긴다(매뉴얼 P5-M1).
+   출처는 이온 «종류»가 아니라 항목에 붙은 from 으로 정한다 — KOH·HNO₃ 는 같은 종류를 시약에서도 낸다 */
+function fromLabel(from) { return from === "paper" ? "종이의 " : "시약의 "; }
+function listStr(list) {
+  var out = [];
+  for (var i = 0; i < list.length; i++)
+    out.push(fromLabel(list[i].from) + ION_KIND[list[i].k].sym + " " + list[i].n + "개");
   return out.length ? out.join(" · ") : "없음";
 }
 
@@ -513,8 +602,13 @@ function syncMoveRead() {
   setTxt("mProg", !st.power ? "전원을 켜세요"
                 : lit === "none" ? "종이의 이온은 움직이는데 색은 변하지 않습니다"
                 : (st.p >= 1 ? "다 번졌습니다" : Math.round(st.p * 100) + " % 번짐"));
-  /* 에탄올일 때 「그럼 움직이는 저건 뭔가」에 그 자리에서 답한다 */
-  setTxt("mWhose", ionSolute(st.sol).ions.length
+  /* 에탄올일 때 「그럼 움직이는 저건 뭔가」에 그 자리에서 답한다.
+     KOH·HNO₃ 처럼 종이와 «같은 종류»를 내놓는 시약이면 「같은 이온이라 그림으로는 구분되지 않는다」를 밝힌다 */
+  var ov = ionOverlapKinds(st.sol);
+  setTxt("mWhose", ov.length
+    ? "이 시약도 " + ION_KIND[ov[0]].sym + " 를 내놓습니다. 종이의 " + ION_KIND[ov[0]].sym +
+      " 와 시약의 " + ION_KIND[ov[0]].sym + " 는 «같은 이온»이라 그림으로는 구분되지 않습니다 — 위 칸이 출처별로 나누어 셉니다."
+    : ionSolute(st.sol).ions.length
     ? "종이에는 질산 칼륨(KNO₃)이 배어 있습니다. 그래서 K⁺·NO₃⁻ 는 «어떤 시약을 올려도» 늘 있습니다."
     : "이 시약은 이온을 내놓지 않습니다. 움직이는 K⁺·NO₃⁻ 는 «전부» 종이의 질산 칼륨에서 온 것입니다.");
 }
@@ -544,9 +638,9 @@ function sync() {
   setTxt("sForm", s.formula);
   setTxt("sSrc", s.src === "탐구" ? "홈판 탐구 6종에 있음"
                : s.src === "대조" ? "지도서가 권한 대조 물질"
-               : "홈판 탐구표에 없음 (손소독제 성분)");
+               : "홈판 탐구표에 없음" + (s.srcNote ? " " + s.srcNote : ""));
   setTxt("cLamp", !st.power ? "—" : (ionLampLevel(st.sol) ? "켜짐" : "꺼짐"));
-  setTxt("cIon", (s.ions.length ? "있음" : "없음"));
+  setTxt("cIon", (s.ions.length ? (ionIsWeak(st.sol) ? "있음 — 일부만" : "있음") : "없음"));
   var lampBox = $("lampBox");
   lampBox.className = "readout" + (!st.power ? "" : (ionLampLevel(st.sol) ? " is-ok" : " is-warn"));
 
@@ -568,7 +662,9 @@ function sync() {
   setTxt("stageCap", st.tab === "cond"
     ? (st.power
         ? (ionLampLevel(st.sol)
-            ? (st.zoom ? "전구에 불이 켜졌습니다. 아래 상자에 «이온»이 있는지 보세요."
+            ? (st.zoom ? (ionIsWeak(st.sol)
+                            ? "전구에 불이 켜졌습니다. 아래 상자에서 «이온»과 «이온화하지 않은 분자»가 각각 몇 개인지 세어 보세요."
+                            : "전구에 불이 켜졌습니다. 아래 상자에 «이온»이 있는지 보세요.")
                        : "전구에 불이 켜졌습니다. 「입자로 보기」를 눌러 용액 속에 «이온»이 있는지 보세요.")
             : (st.zoom ? "전구에 불이 켜지지 않습니다. 아래 상자에 이온이 하나도 없습니다 — 분자로만 녹아 있습니다."
                        : "전구에 불이 켜지지 않습니다. 「입자로 보기」를 눌러 용액 속에 이온이 있는지 보세요."))
@@ -610,7 +706,9 @@ document.addEventListener("visibilitychange", function () {
 if (RM) $("rmNote").style.display = "block";
 resetRun();
 rafId = requestAnimationFrame(loop);
-window.IONVIEW = { st: st, sync: sync, resetRun: resetRun };
+/* 프로브용 노출 — 겹침 검사가 그리기와 «같은» 폭·기하 함수를 읽게 한다(원칙 11) */
+window.IONVIEW = { st: st, sync: sync, resetRun: resetRun,
+                   anionRectW: anionRectW, paperGeom: paperGeom, partRadius: partRadius };
 
 })();
 
@@ -622,5 +720,6 @@ if (typeof module !== "undefined" && module.exports)
     ionMovesTo: ionMovesTo, ionLampLevel: ionLampLevel, ionLitmus: ionLitmus,
     ionIsBase: ionIsBase, ionIsAcid: ionIsAcid, ionHasOHinFormula: ionHasOHinFormula,
     ionCationsToCathode: ionCationsToCathode, ionAnionsToAnode: ionAnionsToAnode,
-    ionTotalCharge: ionTotalCharge
+    ionTotalCharge: ionTotalCharge, ionSoluteParticles: ionSoluteParticles,
+    ionCountOf: ionCountOf, ionOverlapKinds: ionOverlapKinds, ionIsWeak: ionIsWeak
   };

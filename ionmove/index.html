@@ -44,6 +44,7 @@
   .seg{font-family:inherit; font-size:12.5px; font-weight:600; padding:9px 8px; min-height:44px;
     border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
     cursor:pointer; flex:1 1 44%; line-height:1.35; text-align:left}
+  @media(min-width:480px){ .seg{flex-basis:30%} }   /* 시약 10종 — 넓으면 한 줄에 3개 */
   .seg[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
   .seg .fm{font-weight:500; opacity:.82}
 
@@ -150,11 +151,18 @@
         <b>종이에는 질산 칼륨(KNO<sub>3</sub>) 수용액이 배어 있습니다.</b>
         그래서 K<sup>+</sup>와 NO<sub>3</sub><sup>&minus;</sup>는 <b>어떤 시약을 올리든 늘 종이 안에 있습니다.</b>
         아래에서 고르는 것은 <b>실에 적실 시약</b>뿐입니다.</p>
+      <!-- 산·염기 머리말을 달지 않는다 — 어느 것이 염기인지는 오른쪽 대조표로 학생이 판정한다(정답 게이팅) -->
       <div class="segrow" role="group" aria-label="실에 적실 시약 선택">
         <button class="seg solb" data-sol="water"   aria-pressed="false">증류수<br><span class="fm">H<sub>2</sub>O</span></button>
         <button class="seg solb" data-sol="ethanol" aria-pressed="false">에탄올<br><span class="fm">C<sub>2</sub>H<sub>5</sub>OH</span></button>
         <button class="seg solb" data-sol="hcl"     aria-pressed="true">묽은 염산<br><span class="fm">HCl</span></button>
+        <button class="seg solb" data-sol="acetic"  aria-pressed="false">아세트산<br><span class="fm">CH<sub>3</sub>COOH</span></button>
+        <button class="seg solb" data-sol="hno3"    aria-pressed="false">질산<br><span class="fm">HNO<sub>3</sub></span></button>
+        <button class="seg solb" data-sol="h2so4"   aria-pressed="false">황산<br><span class="fm">H<sub>2</sub>SO<sub>4</sub></span></button>
         <button class="seg solb" data-sol="naoh"    aria-pressed="false">수산화 나트륨<br><span class="fm">NaOH</span></button>
+        <button class="seg solb" data-sol="caoh2"   aria-pressed="false">수산화 칼슘<br><span class="fm">Ca(OH)<sub>2</sub></span></button>
+        <button class="seg solb" data-sol="koh"     aria-pressed="false">수산화 칼륨<br><span class="fm">KOH</span></button>
+        <button class="seg solb" data-sol="baoh2"   aria-pressed="false">수산화 바륨<br><span class="fm">Ba(OH)<sub>2</sub></span></button>
       </div>
 
       <div class="ros">
@@ -215,8 +223,10 @@
     <span class="item"><span class="swatch" style="background:var(--d-amber)"></span>H<sup>+</sup> 수소 이온 (원 &mdash; 양이온)</span>
     <span class="item"><span class="swatch sq" style="background:var(--d-blue)"></span>OH<sup>&minus;</sup> 수산화 이온 (사각 &mdash; 음이온)</span>
     <span class="item"><span class="swatch" style="background:var(--d-gray)"></span><b>종이</b>의 전해질 K<sup>+</sup> (원) · NO<sub>3</sub><sup>&minus;</sup> (사각)</span>
-    <span class="item"><span class="swatch sq" style="background:var(--d-gray)"></span><b>시약</b>에서 온 Na<sup>+</sup> (원) · Cl<sup>&minus;</sup> (사각)</span>
-    <span class="item"><span class="swatch" style="background:#9fc6d8"></span>에탄올 <b>분자</b> (알약 모양 &mdash; 이온이 아님)</span>
+    <!-- 긴 항목은 글을 span 하나로 감싼다 — .item 이 flex 라 sup/sub 마다 조각나 360 px 에서 줄이 안 꺾이고 넘쳤다(실측 71 px) -->
+    <span class="item"><span class="swatch" style="background:var(--d-gray)"></span><span><b>시약</b>에서 온 그 밖의 양이온 Na<sup>+</sup>·K<sup>+</sup>·Ca<sup>2+</sup>·Ba<sup>2+</sup> (원)</span></span>
+    <span class="item"><span class="swatch sq" style="background:var(--d-gray)"></span><span><b>시약</b>에서 온 그 밖의 음이온 Cl<sup>&minus;</sup>·NO<sub>3</sub><sup>&minus;</sup>·SO<sub>4</sub><sup>2&minus;</sup>·CH<sub>3</sub>COO<sup>&minus;</sup> (사각)</span></span>
+    <span class="item"><span class="swatch" style="background:#9fc6d8"></span><span>에탄올·아세트산 <b>분자</b> (알약 모양, 이름표 &mdash; 이온이 아님)</span></span>
     <span class="item"><span class="swatch" style="background:#d7e2ec"></span>물 분자 (작은 원)</span>
   </div>
   <p class="note" style="font-size:11.5px"><b>모양이 곧 정보입니다.</b> 둥근 것은 양이온,
@@ -230,11 +240,12 @@
   <ol>
     <li><span class="tag pre">예측</span> 탭 ①에서 <b>증류수</b>를 고르고 전원을 켜기 전에 답하자.
         전구에 불이 켜질까? 그렇게 생각한 이유는?</li>
-    <li><span class="tag obs">관찰</span> 네 물질을 차례로 넣어 보고 <b>전구</b>와
+    <li><span class="tag obs">관찰</span> 물질을 하나씩 차례로 넣어 보고 <b>전구</b>와
         <b>이온의 유무</b>를 표에 적자. 전구가 켜지는 것과 이온이 있는 것 사이에
         어떤 규칙이 보이는가?</li>
     <li><span class="tag exp">설명</span> <b>에탄올</b>의 화학식은 C<sub>2</sub>H<sub>5</sub>OH 로
-        OH 가 들어 있다. 그런데 왜 염기가 아닌가? 오른쪽 대조표의 두 칸을 근거로 쓰자.</li>
+        OH 가 들어 있다. 그런데 왜 염기가 아닌가? 오른쪽 대조표의 두 칸을 근거로 쓰자.
+        <b>아세트산</b>(CH<sub>3</sub>COOH)의 화학식에도 OH 가 들어 있다 &mdash; 대조표는 뭐라고 하는가?</li>
     <li><span class="tag rel">관계</span> 탭 ②로 넘어가 <b>묽은 염산</b>으로 전원을 켜자.
         색이 번지는 쪽은 어느 극인가? 그 색을 바꾸는 이온은 무엇인가?</li>
     <li><span class="tag obs">관찰</span> 같은 화면에서 <b>(−)극 쪽으로 가는 양이온</b> 칸을 읽자.
@@ -269,15 +280,21 @@
           H<sup>+</sup>와 OH<sup>&minus;</sup>가 있습니다. 다만 그 수가 너무 적어
           전구를 켜지는 못합니다.</li>
       <li><b>전구는 켜짐/꺼짐 두 가지뿐입니다.</b> 실제로는 용액에 따라 밝기가 다르지만,
-          그 까닭(전류의 세기)은 이 과목에서 다루지 않습니다. 그래서 밝기가 갈리는
-          식초·제빵 소다 수용액은 이 화면에 넣지 않았습니다.</li>
+          그 까닭(전류의 세기)은 이 과목에서 다루지 않습니다. 아세트산 수용액은 실제로
+          전구가 훨씬 흐릿하지만 이 화면에서는 「켜짐」으로만 나타냅니다.</li>
+      <li><b>아세트산은 물에 녹은 분자 가운데 일부만 이온화합니다.</b> 화면의 비율(분자 6 : 이온 2쌍)은
+          도식이고, 묽은 수용액에서 실제로 이온화한 분자는 100개 중 한두 개꼴입니다. 물질에 따라
+          이온화하는 정도가 다르다는 것(강산·약산)은 『화학』에서 다룹니다 &mdash; 여기서는
+          「이온이 생기면 전류가 흐른다」까지만 봅니다.</li>
       <li><b>에탄올과 증류수는 홈판 탐구의 관찰 대상 6종에 없습니다.</b>
           에탄올은 손소독제 성분으로 이야기한 물질이고, 증류수는 지도서가 권한 대조입니다.
           탐구표에 적을 때 섞이지 않게 하세요.</li>
       <li><b>탭 ②에서 움직이는 K<sup>+</sup>·NO<sub>3</sub><sup>&minus;</sup>는 시약이 아니라
           「종이」에서 온 것입니다.</b> 질산 칼륨 수용액을 적셔 둔 종이이기 때문이고,
           에탄올처럼 이온을 내놓지 않는 시약을 올려도 그대로 있습니다.
-          화면의 이온 개수 칸에 「종이의」·「시약의」를 붙여 둔 것이 그 구분입니다.</li>
+          화면의 이온 개수 칸에 「종이의」·「시약의」를 붙여 둔 것이 그 구분입니다.
+          수산화 칼륨(KOH)과 질산(HNO<sub>3</sub>)만은 시약도 같은 K<sup>+</sup>·NO<sub>3</sub><sup>&minus;</sup>를
+          내놓는데, 같은 이온이라 그림으로는 구분되지 않고 개수 칸이 출처별로 나누어 셉니다.</li>
       <li><b>전극 앞에 이온이 줄지어 멈추는 것은 도식입니다.</b> 「어느 이온이 어느 쪽으로
           가는가」를 세어 보라고 자리를 나눠 그린 것이고, 실제 이온은 이렇게 줄을 서지 않습니다.</li>
       <li>이온은 <b>2차원</b>으로 그렸고, 이온 둘레를 물 분자가 둘러싸고 있는 모습(수화)은
