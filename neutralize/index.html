@@ -15,12 +15,23 @@
   .seatrow .seat{font-family:inherit; font-size:16px; min-height:44px; padding:6px 10px;
     width:120px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--t1)}
 
-  .cols{display:grid; grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr); gap:14px; margin-top:14px}
+  .tabs{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
+  .tabb{font-family:inherit; font-size:14px; font-weight:600; padding:10px 14px; min-height:44px;
+    border-radius:10px 10px 0 0; border:1px solid var(--line); border-bottom:none;
+    background:#eef2f7; color:var(--t2); cursor:pointer}
+  .tabb[aria-pressed="true"]{background:var(--panel); color:var(--accent-dark);
+    box-shadow:inset 0 3px 0 var(--accent)}
+  .tabdesc{font-size:12.5px; color:var(--t2); line-height:1.65; margin:8px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .tabdesc b{color:var(--t1)}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr); gap:14px; margin-top:12px}
   @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
   .stage canvas{display:block; width:100%}
   .stagecap{font-size:12px; color:var(--t2); margin:9px 0 0; line-height:1.6; min-height:34px}
 
   .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0}
+  .btnrow--stage{margin-top:8px}           /* 장치 그림 바로 아래 — 그림과 한 덩어리로 읽히게 (§3 분기) */
   .btn{font-family:inherit; font-size:14px; font-weight:600; padding:10px 13px; min-height:44px;
     border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
     cursor:pointer; box-shadow:var(--shadow)}
@@ -69,6 +80,14 @@
   .gbtn[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
   .gbtn[disabled]{opacity:.42; cursor:default}
 
+  .runs{width:100%; border-collapse:collapse; font-size:12px; margin-top:8px}
+  .runs th,.runs td{padding:5px 6px; border-bottom:1px solid var(--line); text-align:center;
+    font-variant-numeric:tabular-nums}
+  .runs th{color:var(--t3); font-weight:600; background:#f8fafc}
+  .runs td{color:var(--t1)}
+  .runs .sw{display:inline-block; width:11px; height:11px; border-radius:50%; vertical-align:-1px;
+    margin-right:5px; border:1px solid rgba(0,0,0,.25)}
+
   .graphcard{margin-top:14px}
   .jump{margin:8px 0 0}
   .jump a{display:inline-flex; align-items:center; min-height:44px; padding:0 13px;
@@ -94,7 +113,7 @@
   <h1>중화 반응과 남은 이온</h1>
   <p class="sub">묽은 염산과 수산화 나트륨 수용액을 <b>여러 비율로</b> 섞어 봅니다.
      섞는 순간 H<sup>+</sup>와 OH<sup>−</sup>가 만나 물이 되는데, <b>남는 것이 있으면</b>
-     그쪽 성질이 그대로 나타납니다. 온도계와 BTB 용액, 그리고 <b>남은 이온의 개수</b>를 함께 봅니다.</p>
+     그쪽 성질이 그대로 나타납니다. 온도계와 지시약, 그리고 <b>남은 이온의 개수</b>를 함께 봅니다.</p>
 </div>
 
 <div class="seatrow">
@@ -103,27 +122,37 @@
   <span style="font-size:12px;color:var(--t3)">기록용입니다. 저장되지 않습니다.</span>
 </div>
 
+<div class="tabs" role="group" aria-label="관찰 선택">
+  <button class="tabb" data-tab="macro" aria-pressed="true">① 중화 반응 관찰</button>
+  <button class="tabb" data-tab="micro" aria-pressed="false">② 입자 모형 관찰</button>
+</div>
+<p class="tabdesc only-macro"><b>홈판 한 칸을 크게 본 것.</b> 두 비커의 부피를 정하고 「섞기」를 누르면
+  가운데 비커에 부어 섞이고, 온도계가 최고 온도까지 오릅니다. 그다음 지시약을 골라 세 방울 떨어뜨립니다.
+  조건을 바꿔 여러 번 한 뒤 「실험 종료하기」를 누르면 부피에 따른 최고 온도 그래프가 나옵니다.</p>
+<p class="tabdesc only-micro" style="display:none"><b>같은 실험을 이온 크기로 본 것.</b> 왼쪽 반이 묽은 염산,
+  오른쪽 반이 수산화 나트륨 수용액 속 이온입니다(1 mL = 입자 1개). 「섞기」를 누르면 H<sup>+</sup>와
+  OH<sup>−</sup>가 만나 물이 되고, <b>남은 이온</b>이 액성을 정합니다. 두 탭은 같은 실험을 보고 있습니다.</p>
+
 <div class="cols">
   <!-- 왼쪽: 무대 -->
   <div>
     <div class="card">
-      <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">홈판 한 칸을 크게 본 것</h2>
       <div class="stage stage--light">
-        <canvas id="stageCv" aria-label="위쪽에는 혼합 용액이 담긴 비커와 온도계가 있고, 아래쪽 상자에는 그 용액 속 이온이 그려져 있습니다. 섞기 전에는 상자가 좌우로 나뉘어 왼쪽이 묽은 염산, 오른쪽이 수산화 나트륨 수용액입니다."></canvas>
+        <canvas id="stageCv" aria-label="탭 ①에서는 왼쪽에 묽은 염산 비커, 오른쪽에 수산화 나트륨 수용액 비커, 가운데에 빈 비커가 있고 가운데 비커 안쪽 오른쪽에 온도계가 꽂혀 있습니다. 섞기를 누르면 두 비커를 가운데에 붓고 사라지며, 지시약을 고르면 스포이트가 세 방울 떨어뜨려 색이 퍼집니다. 탭 ②에서는 같은 실험의 이온이 상자 안에 그려집니다."></canvas>
+      </div>
+      <!-- 조작 단추는 장치 그림 «바로 아래» (매뉴얼 §3 분기) — 실험 흐름: 섞기 → 지시약 → 실험 조건 변경 → 실험 종료 -->
+      <div class="btnrow btnrow--stage">
+        <button class="btn btn--primary" id="mixBtn">섞기</button>
+        <button class="btn indb only-macro" id="indBtb"  data-ind="btb"  aria-pressed="false">BTB 용액 넣기</button>
+        <button class="btn indb only-macro" id="indPhph" data-ind="phph" aria-pressed="false">페놀프탈레인 용액 넣기</button>
+        <button class="btn" id="nextBtn">실험 조건 변경하기</button>
+        <button class="btn" id="endBtn">실험 종료하기</button>
       </div>
       <p class="stagecap" id="stageCap"></p>
-      <p class="jump"><a href="#sheet">확인해 볼 것으로 이동 &darr;</a></p>
-
-      <div class="btnrow">
-        <button class="btn btn--primary" id="mixBtn">섞기</button>
-        <button class="btn" id="btbBtn">BTB 넣기</button>
-        <button class="btn" id="zoomBtn" aria-pressed="true">입자 화면 접기</button>
-        <button class="btn" id="resetBtn">다시</button>
-      </div>
 
       <div id="guessRow" style="display:none">
         <p class="note note--key" style="margin-bottom:0">
-          <b>BTB 를 넣기 전에 예측해 보세요.</b> 아래 상자에 남아 있는 이온만 보고 정합니다.</p>
+          <b>지시약을 넣기 전에 예측해 보세요.</b> 탭 ②의 상자에 남아 있는 이온만 보고 정합니다.</p>
         <div class="guessrow" role="group" aria-label="액성 예측">
           <button class="gbtn" data-g="acid"    aria-pressed="false">산성</button>
           <button class="gbtn" data-g="neutral" aria-pressed="false">중성</button>
@@ -131,10 +160,11 @@
         </div>
       </div>
       <p class="note" id="guessResult" style="display:none"></p>
+      <p class="jump"><a href="#sheet">확인해 볼 것으로 이동 &darr;</a></p>
 
       <p class="note" id="rmNote" style="display:none">
-        (&ldquo;동작 줄이기&rdquo;가 켜져 있어 섞이는 애니메이션과 입자의 움직임을 생략했습니다.
-        <b>실제 용액 속 이온은 멈추지 않습니다.</b>)</p>
+        (&ldquo;동작 줄이기&rdquo;가 켜져 있어 붓기·방울·섞임 애니메이션과 입자의 움직임을 생략했습니다.
+        <b>결과는 같습니다 &mdash; 실제 용액 속 이온은 멈추지 않습니다.</b>)</p>
     </div>
   </div>
 
@@ -167,7 +197,7 @@
           <div><span class="value" id="vT">20.0</span><span class="unit">℃</span></div></div>
         <div class="readout"><div class="label">올라간 온도</div>
           <div><span class="value" id="vRise">&mdash;</span><span class="unit">℃</span></div></div>
-        <div class="readout wide" id="natBox"><div class="label">BTB 로 확인한 액성</div>
+        <div class="readout wide" id="natBox"><div class="label" id="indWhich">지시약으로 확인한 액성</div>
           <div><span class="value" id="vNat" style="font-size:18px">&mdash;</span></div></div>
       </div>
 
@@ -190,28 +220,33 @@
         섞기 전에도 섞은 뒤에도 개수가 그대로입니다 &mdash; 이온인 채로 물속에 흩어져 있을 뿐,
         <b>소금 알갱이가 생기지는 않습니다.</b></p>
 
-      <div class="btnrow">
-        <button class="btn" id="recBtn">이 조합 기록</button>
-        <button class="btn" id="clrBtn">기록 지우기</button>
-      </div>
+      <!-- 실험 기록 — 「실험 조건 변경하기」를 누를 때마다 한 줄 -->
+      <table class="runs" id="runsTab">
+        <tr><th>#</th><th>HCl</th><th>NaOH</th><th>최고 온도</th><th>지시약</th></tr>
+      </table>
       <p class="note" style="font-size:11.5px"><span id="recHint"></span>
-        (기록한 조합 <b id="recCount">0</b>개)</p>
+        (한 실험 <b id="recCount">0</b>회)</p>
+      <div class="btnrow">
+        <button class="btn" id="clrBtn">처음부터 다시</button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- 그래프 (전체 폭) -->
-<div class="card graphcard">
-  <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">기록한 조합의 최고 온도</h2>
+<!-- 그래프 (전체 폭) — 「실험 종료하기」를 눌러야 나타난다 -->
+<div class="card graphcard" id="graphCard" style="display:none">
+  <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">실험한 조합의 최고 온도</h2>
   <div class="stage stage--light">
-    <canvas id="graphCv" aria-label="가로축이 묽은 염산의 부피, 세로축이 최고 온도인 그래프입니다. 기록한 조합만 점으로 나타나고, 점의 색은 그 조합의 BTB 색입니다."></canvas>
+    <canvas id="graphCv" aria-label="가로축이 각 실험의 묽은 염산·수산화 나트륨 수용액 부피, 세로축이 최고 온도인 그래프입니다. 실험한 조합만 점으로 나타나고, 점의 색은 그 조합에서 본 지시약 색입니다."></canvas>
   </div>
   <div class="legend legend2">
     <span class="item"><span class="swatch" style="background:#e8cc16"></span>BTB 노란색 &mdash; 산성</span>
     <span class="item"><span class="swatch" style="background:#46a03a"></span>BTB 초록색 &mdash; 중성</span>
     <span class="item"><span class="swatch" style="background:#17509e"></span>BTB 파란색 &mdash; 염기성</span>
+    <span class="item"><span class="swatch" style="background:#e0407a"></span>페놀프탈레인 붉은색 &mdash; 염기성</span>
+    <span class="item"><span class="swatch" style="background:#eaf1f7"></span>무색 &mdash; 페놀프탈레인으로는 산성·중성 구분 못 함 / 지시약 안 넣음</span>
   </div>
-  <p class="note"><b>두 가지를 같이 보세요.</b> 온도가 가장 높이 올라간 조합과, BTB 가 초록색이 된
+  <p class="note" id="graphNote"><b>두 가지를 같이 보세요.</b> 온도가 가장 높이 올라간 조합과, BTB 가 초록색이 된
     조합이 <b>같은 자리</b>인지 다른 자리인지. 서로 다른 두 관찰이 같은 곳을 가리킨다면 그것이
     무엇을 뜻하는지 모둠에서 이야기해 보세요.</p>
 </div>
@@ -222,8 +257,9 @@
   <ol>
     <li><span class="tag pre">예측</span> C(6+6)를 골라 놓고 <b>섞기 전에</b> 답해 보자.
         섞으면 어떤 이온이 몇 개 남을까? 그때 액성은?</li>
-    <li><span class="tag obs">관찰</span> A부터 E까지 하나씩 해 보며 <b>남은 이온의 종류와 개수</b>,
-        <b>최고 온도</b>, <b>BTB 색</b>을 표에 적어 보자. (6차시 홈판 결과표와 같은 순서다)</li>
+    <li><span class="tag obs">관찰</span> A부터 E까지 하나씩 하고 「실험 조건 변경하기」로 넘어가며
+        <b>남은 이온의 종류와 개수</b>, <b>최고 온도</b>, <b>BTB 색</b>을 표에 적어 보자.
+        (6차시 홈판 결과표와 같은 순서다) 다 했으면 「실험 종료하기」를 눌러 그래프를 보자.</li>
     <li><span class="tag rel">관계</span> 온도가 가장 높이 올라간 조합은 어디인가?
         BTB 가 초록색이 된 조합은 어디인가? <b>두 지점이 같은가, 다른가?</b></li>
     <li><span class="tag exp">설명</span> E(10+2)에서도 <b>중화 반응은 일어났다.</b>
@@ -231,6 +267,9 @@
     <li><span class="tag exp">설명</span> 묽은 염산 10 mL 에 같은 농도의 수산화 나트륨 수용액을
         <b>20 mL</b> 넣으면 어떻게 될까? 슬라이더로 확인하기 <b>전에</b> 먼저 답하고,
         그다음 확인해 보자.</li>
+    <li><span class="tag obs">관찰</span> C(6+6)와 D(8+4)에 BTB 대신 <b>페놀프탈레인</b>을 넣어 보자.
+        둘 다 무색이다. 페놀프탈레인만으로 알 수 <b>없는</b> 것은 무엇이고, 그래도 알 수 <b>있는</b> 것은
+        무엇인가? A(2+10)에도 넣어 보자.</li>
     <li><span class="tag mdl">모형</span> 회색으로 그린 Na<sup>+</sup>와 Cl<sup>&minus;</sup>는
         섞기 전과 뒤의 개수가 같다. 이것으로 &ldquo;중화 반응이 일어나면 <b>소금이 생긴다</b>&rdquo;는
         생각의 어디가 맞고 어디가 틀렸는지 말해 보자.</li>
@@ -261,6 +300,14 @@
       <li><b>이 화면의 결과는 「같은 농도의 묽은 염산과 수산화 나트륨 수용액」에서만
           그대로입니다.</b> 농도가 다르거나 묽은 황산처럼 산의 종류가 달라지면
           부피비가 달라집니다.</li>
+      <li><b>옆 비커가 사라지는 것은 화면 정리입니다.</b> 실제로는 빈 비커가 그대로 남습니다.
+          붓는 모습·방울 셋·색이 퍼지는 빠르기도 도식이며, 실제 홈판에서는 지시약을 1~2방울 씁니다.</li>
+      <li><b>페놀프탈레인은 산성과 중성에서 모두 무색입니다.</b> 그래서 이 지시약만으로는 둘을
+          가르지 못하고, 붉게 변해야만 염기성이라고 말할 수 있습니다. 지시약마다 색이 변하는
+          범위가 다르다는 것은 여기까지만 다루고, 그 범위의 값은 이 과목의 범위 밖입니다.</li>
+      <li><b>그래프의 최고 온도는 총 부피가 같을 때만 서로 비교할 수 있습니다.</b> 홈판처럼
+          총 12 mL 로 맞추면 가장 높은 곳이 곧 남은 이온이 없는 곳입니다. 총 부피가 다른 조합을
+          섞어 두면 높낮이의 뜻이 달라집니다 &mdash; 그래프 아래 문구가 그것을 알립니다.</li>
       <li>입자는 <b>2차원 상자</b> 안에서 움직입니다. 실제 용액은 3차원이고, 이온 주위에는
           물 분자가 둘러싸고 있습니다(수화). 그 물 분자는 그리지 않았습니다.</li>
       <li>이 화면은 <b>온도 변화와 지시약의 색 변화</b>만 다룹니다. pH 값이나 전기 전도도가
