@@ -773,7 +773,8 @@ function buildParts() {
     for (var j = 0; j < n; j++) {
       arr.push({
         kind: kind, x: rnd(x0, x1), y: rnd(0.10, 0.90),
-        vx: 0, vy: 0, sx: 0, sy: 0, mx: 0, my: 0, pair: -1, water: false
+        vx: RM ? 0 : rnd(-0.06, 0.06), vy: RM ? 0 : rnd(-0.06, 0.06),   /* 처음부터 움직인다 — 용액 속 이온은 멈춰 있지 않다 */
+        sx: 0, sy: 0, mx: 0, my: 0, pair: -1, water: false
       });
     }
   }
@@ -1496,7 +1497,7 @@ function sync() {
 
   setTxt("stageCap",
     st.tab === "micro"
-      ? (st.phase === "before" ? "아직 섞지 않았습니다. 왼쪽 반이 묽은 염산, 오른쪽 반이 수산화 나트륨 수용액 속 이온입니다."
+      ? (st.phase === "before" ? "아직 섞지 않았습니다. 왼쪽 반이 묽은 염산, 오른쪽 반이 수산화 나트륨 수용액 속 이온입니다 — 이온은 물속에서 쉬지 않고 움직입니다."
         : st.phase === "mixing" ? "섞는 중입니다 — H⁺ 와 OH⁻ 가 만나 물 분자 H₂O 가 됩니다. Na⁺·Cl⁻ 는 그대로입니다."
         : "다 섞였습니다. 무엇이 몇 개 남았는지 세어 보세요 — 남은 이온이 액성을 정합니다.")
       : st.phase === "before"
@@ -1522,6 +1523,39 @@ function sync() {
   drawGraph();
 }
 
+/* ---------- 자유 운동 — 용액 속 이온은 «늘» 움직인다 (사용자 지시 2026-09-15) ----------
+   방향이 조금씩 바뀌는 무작위 걸음(브라운 운동꼴) + 속력 상한 + 벽 튕김. 단위는 상자 폭 = 1 · 초.
+   섞기 전에는 자기 반쪽(경계선을 넘지 않는다 — 아직 섞이지 않았으니까), 섞은 뒤에는 상자 전체 */
+var WANDER = 0.32, VMAX = 0.10;
+function clampBox(q, x0, x1) {
+  if (q.x < x0) { q.x = x0; q.vx = Math.abs(q.vx); }
+  if (q.x > x1) { q.x = x1; q.vx = -Math.abs(q.vx); }
+  if (q.y < 0.09) { q.y = 0.09; q.vy = Math.abs(q.vy); }
+  if (q.y > 0.91) { q.y = 0.91; q.vy = -Math.abs(q.vy); }
+}
+function moveFree(q, dt, x0, x1) {
+  q.vx += rnd(-1, 1) * WANDER * dt; q.vy += rnd(-1, 1) * WANDER * dt;
+  var sp = Math.sqrt(q.vx * q.vx + q.vy * q.vy);
+  if (sp > VMAX) { q.vx *= VMAX / sp; q.vy *= VMAX / sp; }
+  q.x += q.vx * dt; q.y += q.vy * dt;
+  clampBox(q, x0, x1);
+}
+function leftHalf(q) { return q.kind === "H" || q.kind === "Cl"; }
+function boxOf(q) { var L = st.phase === "before" && leftHalf(q); var R = st.phase === "before" && !L; return [L ? 0.05 : R ? 0.55 : 0.05, L ? 0.45 : 0.95]; }
+/* 겹침 풀기 — 세어 보라고 그린 입자가 포개지면 안 된다(육안 실측: 무작위 걸음만으로는 H⁺ 둘이 겹쳤다).
+   buildParts 의 배치 규칙과 같은 거리 척도(세로 0.45 배)로 살짝 밀어낸다 */
+function separate(parts, minD) {
+  for (var i = 0; i < parts.length; i++) for (var j = i + 1; j < parts.length; j++) {
+    var A = parts[i], B = parts[j];
+    var dx = B.x - A.x, dy = (B.y - A.y) * 0.45, d = Math.sqrt(dx * dx + dy * dy);
+    if (d > 1e-4 && d < minD) {
+      var k = (minD - d) / d * 0.5;
+      A.x -= dx * k; A.y -= dy * k / 0.45; B.x += dx * k; B.y += dy * k / 0.45;
+    }
+  }
+  for (var m = 0; m < parts.length; m++) { var bx = boxOf(parts[m]); clampBox(parts[m], bx[0], bx[1]); }
+}
+
 /* ---------- 루프 ---------- */
 function loop(ts) {
   rafId = requestAnimationFrame(loop);
@@ -1531,18 +1565,19 @@ function loop(ts) {
   if (st.phase === "mixing") {
     st.p += dt / MIX_T;
     if (st.p >= 1) { st.p = 1; finishMix(); sync(); }
-  } else if (st.phase === "after") {
-    if (st.ind && st.indP < 1) {
+  } else {
+    if (st.phase === "after" && st.ind && st.indP < 1) {
       st.indP += dt / IND_T;
       if (st.indP >= 1) { st.indP = 1; sync(); }        /* 색이 다 퍼진 순간 판독값이 뜬다 */
     }
-    if (!RM) for (var i = 0; i < st.parts.length; i++) {
-      var q = st.parts[i];
-      q.x += q.vx * dt; q.y += q.vy * dt;
-      if (q.x < 0.05) { q.x = 0.05; q.vx = Math.abs(q.vx); }
-      if (q.x > 0.95) { q.x = 0.95; q.vx = -Math.abs(q.vx); }
-      if (q.y < 0.09) { q.y = 0.09; q.vy = Math.abs(q.vy); }
-      if (q.y > 0.91) { q.y = 0.91; q.vy = -Math.abs(q.vy); }
+    /* 섞기 전·섞은 뒤 모두 자유 운동. RM 이면 정지(안내문이 그것을 밝힌다 — 4부 ㉝) */
+    if (!RM) {
+      for (var i = 0; i < st.parts.length; i++) {
+        var q = st.parts[i];
+        if (st.phase === "before") { var L = leftHalf(q); moveFree(q, dt, L ? 0.05 : 0.55, L ? 0.45 : 0.95); }
+        else moveFree(q, dt, 0.05, 0.95);
+      }
+      separate(st.parts, 0.10);
     }
   }
   draw();
