@@ -785,17 +785,19 @@ var FONT = '-apple-system,BlinkMacSystemFont,"Malgun Gothic","맑은 고딕",' +
            '"Apple SD Gothic Neo","Noto Sans KR",sans-serif';
 
 /* 시간 상수 (초) — 붓기 → 옆 비커 사라짐 → (지시약) 방울 셋 → 색 퍼짐 */
-var MIX_T = 3.8, POUR_END = 0.76;      /* 섞기 진행 p ∈ [0,1] · 0~0.76 붓기(왼쪽 → 오른쪽 차례로) · 0.76~1 옆 비커가 서서히 사라진다 */
+var MIX_T = 5.2, POUR_END = 0.76;      /* 섞기 진행 p ∈ [0,1] · 0~0.76 붓기(왼쪽 → 오른쪽 차례로) · 0.76~1 옆 비커가 서서히 사라진다.
+                                           3.8 → 5.2 s: 이온의 이동·반응 속도를 종전의 0.4~0.5 배로 (사용자 지시 2026-09-16) */
+var PA = POUR_END * 0.5;                /* 산이 다 들어가는 p — 이온 상자에서 산의 이온은 [0, PA], 염기의 이온은 [PA, 1] 에 들어온다.
+                                           H⁺·OH⁻ 의 «반응»은 염기가 들어오는 [PA, 1] 에서만 — 붓는 시점과 반응 시점이 일치한다(사용자 지시) */
 var HEAT_T = 5.8;                       /* 온도 상승 tp ∈ [0,1] — 옆 비커가 사라진 «뒤» 시작. 종전(붓는 2.9 s 동안)의 0.5 배 속도 (사용자 지시 2026-09-16) */
 var IND_T = 1.9, N_DROPS = 3;           /* 지시약 진행 q ∈ [0,1] · 방울 셋 (사용자 지시 2~3방울 → 3) */
 /* 지시약 «원액»의 색 — 방울 색 (BTB 원액은 청록, 페놀프탈레인 원액은 무색) */
 var STOCK = { btb: "#2f7f8f", phph: "#eaf1f7" };
 
 /* 탭×요소 가시성 — 단일 원천 (매뉴얼 §13 ①) */
-var SHOW = {                /* tabMacro: 탭① 설명 · micro: 탭② 설명 · adv: 탭③ 설명·K⁺/SO₄²⁻ 줄 · macroUI: 지시약 단추 · std: Na⁺/Cl⁻ 줄 */
-  macro: { tabMacro: true,  micro: false, adv: false, macroUI: true,  std: true  },
-  micro: { tabMacro: false, micro: true,  adv: false, macroUI: false, std: true  },
-  adv:   { tabMacro: false, micro: false, adv: true,  macroUI: true,  std: false }
+var SHOW = {                /* tabMacro: 탭① 설명 · adv: 탭② 설명·K⁺/SO₄²⁻ 줄 · std: Na⁺/Cl⁻ 줄. 두 탭 모두 비커 + 이온 상자 한 화면 (2026-09-16: 입자 모형 별도 탭 폐지) */
+  macro: { tabMacro: true,  adv: false, std: true  },
+  adv:   { tabMacro: false, adv: true,  std: false }
 };
 /* 탭이 정하는 산·염기 계 — ③ 심화탐구만 황산·수산화 칼륨 */
 function sysOfTab(tab) { return tab === "adv" ? "h2so4_koh" : "hcl_naoh"; }
@@ -885,8 +887,9 @@ function startMix() {
   var n = Math.min(hs.length, os.length);
   for (i = 0; i < n; i++) {
     var a = arr[hs[i]], c = arr[os[i]];
-    var mx = (a.x + c.x) / 2, my = (a.y + c.y) / 2;
-    mx = mx * 0.55 + 0.5 * 0.45;                 /* 만나는 자리를 가운데로 조금 당긴다 */
+    /* 산이 들어올 때 H⁺ 는 임시 자리(ax,ay)로 흩어져 «기다리고», 염기가 들어올 때 OH⁻ 와 서로 다가가 만난다 */
+    a.ax = rnd(0.08, 0.92); a.ay = rnd(0.10, 0.90);
+    var mx = (a.ax + c.x) / 2, my = (a.ay + c.y) / 2;
     a.pair = os[i]; c.pair = hs[i];
     a.mx = mx; a.my = my; c.mx = mx; c.my = my;
     a.ang = rnd(0, Math.PI * 2);                 /* 생길 물 분자의 회전 */
@@ -895,6 +898,16 @@ function startMix() {
   for (i = 0; i < arr.length; i++) {
     if (arr[i].pair < 0) { arr[i].mx = rnd(0.06, 0.94); arr[i].my = rnd(0.10, 0.90); }
   }
+  /* 도착 자리끼리 겹치지 않게 미리 풀어 둔다(짝은 한 점으로) — 섞는 동안에는 separate 를 돌리지 않으므로 */
+  var pts = [];
+  for (i = 0; i < arr.length; i++) if (arr[i].pair < 0 || arr[i].kind === "H") pts.push(arr[i]);
+  for (var pass = 0; pass < 20; pass++) for (i = 0; i < pts.length; i++) for (var j = i + 1; j < pts.length; j++) {
+    var A = pts[i], B = pts[j], dx = B.mx - A.mx, dy = (B.my - A.my) * 0.45, d = Math.sqrt(dx * dx + dy * dy);
+    if (d > 0.001 && d < 0.11) { var k = (0.11 - d) / d * 0.3; A.mx -= dx * k; A.my -= dy * k / 0.45; B.mx += dx * k; B.my += dy * k / 0.45; }
+    A.mx = Math.max(0.06, Math.min(0.94, A.mx)); A.my = Math.max(0.10, Math.min(0.90, A.my));
+    B.mx = Math.max(0.06, Math.min(0.94, B.mx)); B.my = Math.max(0.10, Math.min(0.90, B.my));
+  }
+  for (i = 0; i < arr.length; i++) if (arr[i].pair >= 0 && arr[i].kind === "OH") { arr[i].mx = arr[arr[i].pair].mx; arr[i].my = arr[arr[i].pair].my; }
   st.phase = "mixing"; st.p = 0;
   if (RM) { st.p = 1; finishMix(); }
   sync();
@@ -974,6 +987,7 @@ function fit(canvas, context, hCss) {
 }
 function ease(t) { return t < 0 ? 0 : t > 1 ? 1 : 1 - Math.pow(1 - t, 3); }
 function clamp01(t) { return t < 0 ? 0 : t > 1 ? 1 : t; }
+function smooth01(t) { t = clamp01(t); return t * t * (3 - 2 * t); }
 function lerpColor(a, b, t) {
   var A = /^#?([0-9a-f]{6})$/i.exec(a), B = /^#?([0-9a-f]{6})$/i.exec(b);
   if (!A || !B) return t < 0.5 ? a : b;
@@ -1180,10 +1194,10 @@ var DC = {
    세 비커의 바닥을 맞추고, 옆 비커는 가운데 비커보다 낮다. 라벨은 각 비커 아래 */
 function macroGeom(w, h) {
   /* top: 기울인 옆 비커(뒤 모서리가 입술 위로 sbw·sin66° ≈ 0.9·sbw)와 스포이트(끝 위 64 px)가 들어갈 머리 여백 */
-  var top = Math.round(h * 0.34), lab = 58;
-  var cbw = Math.min(150, w * 0.30), cbx = w * 0.5 - cbw / 2;
+  var top = Math.round(h * 0.36), lab = 58;                        /* 머리 여백 — 기울인 옆 비커 뒤 모서리·스포이트 (기하 검산 ≥ 0) */
+  var cbw = Math.min(190, w * 0.30), cbx = w * 0.5 - cbw / 2;       /* 2026-09-16 비커 확대: 가운데 150→190 · 옆 100→120 (넓은 화면만) */
   var cby = top, cbh = h - top - lab;
-  var sbw = Math.min(100, w * 0.20), sbh = Math.round(cbh * 0.62), sby = cby + cbh - sbh;
+  var sbw = Math.min(120, w * 0.20), sbh = Math.round(cbh * 0.66), sby = cby + cbh - sbh;
   return { w: w, h: h,
            cbx: cbx, cby: cby, cbw: cbw, cbh: cbh,
            sbw: sbw, sbh: sbh, sby: sby, lx: w * 0.16 - sbw / 2, rx: w * 0.84 - sbw / 2,
@@ -1371,25 +1385,29 @@ function drawIonBox(w, h) {
   ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.stroke();
   ctx.clip();
 
-  /* 섞기 전 — 두 용액의 경계 */
-  if (st.phase === "before") {
+  /* 섞기 전 — 두 용액의 경계. 산을 붓는 동안에도 경계는 남는다: 오른쪽(염기)은 «아직 붓기 전»이라 흐리게 그린다 */
+  var baseIn = !(st.phase === "mixing" && st.p < PA);        /* 염기의 이온이 들어왔는가 */
+  if (st.phase === "before" || !baseIn) {
     ctx.beginPath(); ctx.setLineDash([5, 4]);
     ctx.moveTo(bx + bw / 2, by + 6); ctx.lineTo(bx + bw / 2, by + bh - 6);
     ctx.strokeStyle = "rgba(40,45,52,0.28)"; ctx.lineWidth = 1.4; ctx.stroke();
     ctx.setLineDash([]);
     ctx.font = "11.5px " + FONT; ctx.textAlign = "center"; ctx.fillStyle = C.t3;
-    ctx.fillText(SYS().acid.name + " " + st.va + " mL", bx + bw * 0.25, by + 15);
-    ctx.fillText(SYS().base.name + " " + st.vb + " mL", bx + bw * 0.75, by + 15);
+    ctx.fillText(st.phase === "before" ? (SYS().acid.name + " " + st.va + " mL") : (SYS().acid.name + "의 이온이 들어오는 중"), bx + bw * 0.25, by + 15);
+    ctx.fillText(st.phase === "before" ? (SYS().base.name + " " + st.vb + " mL") : (SYS().base.name + " — 아직 붓기 전"), bx + bw * 0.75, by + 15);
   } else {
     ctx.font = "11.5px " + FONT; ctx.textAlign = "center"; ctx.fillStyle = C.t3;
-    ctx.fillText(st.phase === "mixing" ? "섞는 중 — H⁺ 와 OH⁻ 가 만나 물이 됩니다" : "섞은 뒤 — 남은 이온을 세어 보세요",
+    ctx.fillText(st.phase === "mixing"
+                   ? "염기의 이온이 들어오는 중 — H⁺ 와 OH⁻ 가 만나 물이 됩니다"
+                   : "섞은 뒤 — 남은 이온을 세어 보세요",
                  bx + bw / 2, by + 15);
   }
 
   var r = Math.max(9.5, Math.min(15, bw / 30));
-  /* 이온은 «붓는 동안» 만난다 — 옆 비커가 사라지는 구간에는 이미 다 만났다 */
-  var e = ease(clamp01(st.p / POUR_END));
-  var mp = st.phase === "mixing" ? DESIGN.mergePose(e) : null;
+  /* 붓는 순서대로 들어온다 — 산의 이온은 산을 붓는 동안(p ∈ [0,PA]), 염기의 이온은 염기를 붓는 동안(p ∈ [PA,1]).
+     H⁺·OH⁻ 의 반응도 염기가 들어오는 동안에만 일어난다 — 붓는 시점과 반응 시점이 같다. smoothstep: 천천히 다가가 천천히 자리 잡는다 */
+  var eA = smooth01(clamp01(st.p / PA)), eB = smooth01(clamp01((st.p - PA) / (1 - PA)));
+  var mp = st.phase === "mixing" ? DESIGN.mergePose(eB) : null;
   var PX = function (nx) { return bx + 6 + nx * (bw - 12); }, PY = function (ny) { return by + 8 + ny * (bh - 16); };
   var drawnPair = {};
   for (var i = 0; i < st.parts.length; i++) {
@@ -1399,9 +1417,16 @@ function drawIonBox(w, h) {
       continue;
     }
     if (st.phase === "mixing" && q.pair >= 0) {                 /* 짝지어 다가가는 H⁺·OH⁻ */
-      var meetX = PX(q.mx), meetY = PY(q.my);
-      var ix = meetX + (PX(q.sx) - meetX) * mp.gap, iy = meetY + (PY(q.sy) - meetY) * mp.gap;
-      drawIonAny(ctx, { x: ix, y: iy, r: r, kind: q.kind, scale: mp.ionScale, alpha: mp.ionAlpha, label: ION[q.kind].sym, colors: DC });
+      var meetX = PX(q.mx), meetY = PY(q.my), ix, iy;
+      if (q.kind === "H") {                                     /* H⁺: 산이 들어올 때 임시 자리로 → 염기가 들어올 때 만나는 자리로 */
+        var hx = q.sx + (q.ax - q.sx) * eA, hy = q.sy + (q.ay - q.sy) * eA;
+        ix = meetX + (PX(hx) - meetX) * mp.gap; iy = meetY + (PY(hy) - meetY) * mp.gap;
+      } else {                                                  /* OH⁻: 염기가 들어올 때 출발점에서 만나는 자리로 */
+        ix = meetX + (PX(q.sx) - meetX) * mp.gap; iy = meetY + (PY(q.sy) - meetY) * mp.gap;
+      }
+      drawIonAny(ctx, { x: ix, y: iy, r: r, kind: q.kind, scale: mp.ionScale,
+                        alpha: mp.ionAlpha * ((q.kind === "OH" && !baseIn) ? 0.35 : 1),   /* 아직 붓기 전인 염기의 이온은 흐리게 */
+                        label: ION[q.kind].sym, colors: DC });
       var pk = Math.min(i, q.pair);
       if (!drawnPair[pk]) {                                     /* 짝당 한 번: 만나는 순간의 붉은 하이라이트 → 물 분자 등장 */
         drawnPair[pk] = true;
@@ -1412,31 +1437,31 @@ function drawIonBox(w, h) {
       continue;
     }
     var nx = q.x, ny = q.y;
-    if (st.phase === "mixing") { nx = q.sx + (q.mx - q.sx) * e; ny = q.sy + (q.my - q.sy) * e; }
-    drawIonAny(ctx, { x: PX(nx), y: PY(ny), r: r, kind: q.kind, scale: 1, alpha: 1, label: ION[q.kind].sym, colors: DC });
+    if (st.phase === "mixing") {                                /* 구경꾼·남는 이온 — 자기 쪽 용액을 붓는 동안 들어온다 */
+      var eS = leftHalf(q) ? eA : eB;
+      nx = q.sx + (q.mx - q.sx) * eS; ny = q.sy + (q.my - q.sy) * eS;
+    }
+    drawIonAny(ctx, { x: PX(nx), y: PY(ny), r: r, kind: q.kind, scale: 1,
+                      alpha: (!leftHalf(q) && !baseIn) ? 0.35 : 1,                       /* 아직 붓기 전인 염기의 이온은 흐리게 */
+                      label: ION[q.kind].sym, colors: DC });
   }
   ctx.restore();
 }
 
 /* ---------- 무대 ---------- */
-function macroH(w) { return Math.round(Math.max(300, Math.min(380, w * 0.58))); }
+function macroH(w) { return Math.round(Math.max(300, Math.min(420, w * 0.62))); }
 function ionH(w)   { return Math.round(Math.max(240, Math.min(300, w * 0.44))); }
 function stageH() {
   var w = cv.parentNode.clientWidth || 600;
-  return st.tab === "macro" ? macroH(w) : st.tab === "micro" ? ionH(w) : macroH(w) + ionH(w);   /* ③ 심화탐구 = 둘 다 */
+  return macroH(w) + ionH(w);                        /* 두 탭 모두 비커(위) + 이온 상자(아래) 한 화면 */
 }
 function draw() {
   var w = fit(cv, ctx, stageH());
   if (!w) return;
-  var h = stageH();
+  var h = stageH(), mh = macroH(w);
   ctx.clearRect(0, 0, w, h);
-  if (st.tab === "macro") drawMacro(w, h);
-  else if (st.tab === "micro") drawIonBox(w, h);
-  else {
-    var mh = macroH(w);
-    drawMacro(w, mh);
-    ctx.save(); ctx.translate(0, mh); drawIonBox(w, h - mh); ctx.restore();
-  }
+  drawMacro(w, mh);
+  ctx.save(); ctx.translate(0, mh); drawIonBox(w, h - mh); ctx.restore();
 }
 
 /* ---------- 그래프 — 「실험 종료하기」 뒤에만 보인다. 가로축 = 각 실험의 두 부피 ---------- */
@@ -1523,9 +1548,7 @@ function sync() {
   /* 탭 가시성 — 단일 원천 표만 display 를 쓴다 (§13 ①) */
   var vis = SHOW[st.tab];
   setDisp(".only-tab-macro", vis.tabMacro);
-  setDisp(".only-micro", vis.micro);
   setDisp(".only-adv", vis.adv);
-  setDisp(".only-macro", vis.macroUI);
   setDisp(".only-std", vis.std);
   setTxt("lblVa", S.acid.name + " (" + S.acid.formula + ")");
   setTxt("lblVb", S.base.name + " (" + S.base.formula + ")");
@@ -1621,19 +1644,16 @@ function sync() {
   setTxt("recCount", st.runs.length + "");
 
   setTxt("stageCap",
-    st.tab === "micro"
-      ? (st.phase === "before" ? "아직 섞지 않았습니다. 왼쪽 반이 " + S.acid.name + ", 오른쪽 반이 " + S.base.name + " 속 이온입니다 — 이온은 물속에서 쉬지 않고 움직입니다."
-        : st.phase === "mixing" ? "섞는 중입니다 — H⁺ 와 OH⁻ 가 만나 물 분자 H₂O 가 됩니다. 구경꾼 이온은 그대로입니다."
-        : "다 섞였습니다. 무엇이 몇 개 남았는지 세어 보세요 — 남은 이온이 액성을 정합니다.")
-      : st.phase === "before"
-        ? ("아직 섞지 않았습니다. 왼쪽 비커가 " + S.acid.name + ", 오른쪽 비커가 " + S.base.name + "입니다. 가운데 비커는 비어 있습니다." +
-           (st.tab === "adv" ? " 아래 상자는 같은 두 용액 속 이온입니다." : ""))
-        : st.phase === "mixing" ? "두 비커를 가운데 비커에 붓는 중입니다."
-        : !heatDone() ? "다 섞였습니다 — 온도계를 보세요. 반응열로 온도가 천천히 올라갑니다."
-        : !st.ind ? "최고 온도에 이르렀습니다. 지시약을 골라 떨어뜨리세요 (이온 상자에서 남은 이온을 세어 먼저 예측해도 좋습니다)."
+    st.phase === "before"
+      ? ("아직 섞지 않았습니다. 왼쪽 비커가 " + S.acid.name + ", 오른쪽 비커가 " + S.base.name + "입니다. 아래 상자는 같은 두 용액 속 이온입니다 — 물속에서 쉬지 않고 움직입니다.")
+      : st.phase === "mixing"
+        ? (st.p < PA ? (S.acid.name + "을(를) 붓는 중입니다 — 아래 상자에 그 이온이 들어옵니다.")
+                     : (S.base.name + "을(를) 붓는 중입니다 — H⁺ 와 OH⁻ 가 만나 물 분자 H₂O 가 됩니다. 구경꾼 이온은 그대로입니다."))
+        : !heatDone() ? "다 섞였습니다 — 온도계를 보세요. 반응열로 온도가 천천히 올라갑니다. 아래 상자에서 무엇이 몇 개 남았는지 세어 보세요."
+        : !st.ind ? "최고 온도에 이르렀습니다. 지시약을 골라 떨어뜨리세요 (아래 상자에서 남은 이온을 세어 먼저 예측해도 좋습니다)."
         : !rd ? (neuIndName(st.ind) + "을 떨어뜨리는 중입니다 — 세 방울.")
         : rd.determinate
-          ? (neuIndName(st.ind) + "을 넣었습니다. 이온 상자(탭 ②, 심화탐구는 아래)에서 «남아 있는» 이온을 세어 색과 맞춰 보세요.")
+          ? (neuIndName(st.ind) + "을 넣었습니다. 아래 상자에서 «남아 있는» 이온을 세어 색과 맞춰 보세요.")
           : "페놀프탈레인이 무색입니다. 무색은 산성일 수도 중성일 수도 있어 이 지시약만으로는 가르지 못합니다.");
 
   /* 그래프 카드 — 실험을 끝낸 뒤에만 */
@@ -1772,7 +1792,7 @@ window.NEUVIEW = { st: st, sync: sync, draw: draw, startMix: startMix, startInd:
                    design: function () { return DESIGN === FALLBACK_DESIGN ? "fallback" : "codex"; },
                    geom: function () { var w = cv.parentNode.clientWidth; return macroGeom(w, stageH()); },
                    pourPose: function (side, pp) { var w = cv.parentNode.clientWidth; var G = macroGeom(w, stageH()); return DESIGN.pourPose(pp, pourSpec(G, side)); },
-                   K: { MIX_T: MIX_T, POUR_END: POUR_END, HEAT_T: HEAT_T, IND_T: IND_T, N_DROPS: N_DROPS, SPREAD0: SPREAD0 } };
+                   K: { MIX_T: MIX_T, POUR_END: POUR_END, PA: PA, HEAT_T: HEAT_T, IND_T: IND_T, N_DROPS: N_DROPS, SPREAD0: SPREAD0 } };
 
 })();
 
