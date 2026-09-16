@@ -89,10 +89,6 @@
     margin-right:5px; border:1px solid rgba(0,0,0,.25)}
 
   .graphcard{margin-top:14px}
-  .jump{margin:8px 0 0}
-  .jump a{display:inline-flex; align-items:center; min-height:44px; padding:0 13px;
-    font-size:13px; font-weight:600; color:var(--accent-dark); text-decoration:none;
-    border:1px solid var(--line); border-radius:10px; background:var(--panel)}
   .sheet{margin-top:16px}
   .sheet ol{margin:0; padding-left:20px; font-size:13.5px; color:var(--t2); line-height:1.9}
   .sheet .tag{display:inline-block; font-size:10.5px; font-weight:700; color:#fff; background:var(--d-gray);
@@ -104,6 +100,43 @@
   .limits h3{margin:0 0 5px; font-size:13px; color:var(--t2)}
   .limits ol{margin:0; padding-left:19px}
   .legend2{margin-top:9px}
+
+  /* ④ 학습지 — 모둠 활동지 (redox 활동지 틀 이식 · 2026-09-16). 클래스만 쓴다(§12) · 색은 토큰만 */
+  .worksheet{margin-top:12px; padding:16px}
+  .worksheet h2{font-size:15px; margin:0 0 6px; color:var(--t1)}
+  .wteam{display:flex; gap:12px; flex-wrap:wrap; margin:12px 0 0}
+  .wteam label{flex:1 1 260px; font-size:13px; color:var(--t2); display:flex; align-items:center; gap:8px; white-space:nowrap}
+  .wteam .pin{flex:1; min-width:0; font-size:15px; min-height:44px; padding:7px 9px; border:1px solid var(--line);
+    border-radius:7px; font-family:inherit; color:var(--t1); background:var(--panel)}
+  .wsec{margin:24px 0 10px; padding:7px 12px; background:var(--panel); border-left:4px solid var(--d-cyan);
+    border-radius:0 7px 7px 0; font-weight:800; font-size:14px; color:var(--t1)}
+  .wq{margin:12px 0 0}
+  .wq p{margin:0 0 6px; font-size:13.5px; color:var(--t1); line-height:1.75}
+  .wq .qn{font-weight:700; color:var(--d-cyan); margin-right:4px}
+  .wq .ans{width:100%; box-sizing:border-box; min-height:52px; font-size:16px; line-height:1.55; padding:8px 10px;
+    border:1px solid var(--line); border-radius:7px; resize:vertical; font-family:inherit; color:var(--t1); background:var(--panel)}
+  .gap{width:118px; font-size:15px; min-height:36px; padding:2px 8px; border:none; border-bottom:2px solid var(--d-cyan);
+    border-radius:0; font-family:inherit; color:var(--t1); background:transparent; text-align:center}
+  .gap--s{width:64px}
+  .gap--l{width:260px; max-width:100%}
+  .wchoice{display:flex; gap:7px; flex-wrap:wrap; margin:6px 0 0}
+  .wopt{font-family:inherit; font-size:13.5px; font-weight:600; padding:9px 12px; min-height:44px; border-radius:9px;
+    border:1px solid var(--line); background:var(--panel); color:var(--t2); cursor:pointer; flex:1 1 auto}
+  .wopt[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .wtab{width:100%; border-collapse:collapse; margin:8px 0 0; font-size:13px; table-layout:fixed}
+  .wtab th,.wtab td{border:1px solid var(--line); padding:5px 4px; text-align:center; vertical-align:middle}
+  .wtab th{background:#f8fafc; font-weight:700; color:var(--t1)}
+  .wtab th.rh{text-align:left; width:96px; font-weight:600; color:var(--t2)}
+  .wtab td.mir{color:var(--t2); font-variant-numeric:tabular-nums; background:#f8fafc}
+  .wtab input{width:100%; box-sizing:border-box; font-size:15px; min-height:40px; padding:5px 4px; border:1px solid var(--line);
+    border-radius:5px; font-family:inherit; color:var(--t1); background:var(--panel); text-align:center}
+  .ws-btns{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:16px}
+  .ws-btns .hint{font-size:12px; color:var(--t3); line-height:1.5}
+  @media(max-width:480px){
+    .wtab{font-size:12px} .wtab th.rh{width:62px; font-size:11.5px}
+    .wtab input{padding:4px 2px}
+    .gap--l{display:block; width:100%; box-sizing:border-box; margin:2px 0 6px}   /* 긴 빈칸은 한 줄 통째로 — 「온도가」가 줄 끝에서 갈라지지 않게 */
+  }
 </style>
 </head>
 <body>
@@ -126,6 +159,7 @@
   <button class="tabb" data-tab="macro" aria-pressed="true">① 중화 반응 관찰</button>
   <button class="tabb" data-tab="micro" aria-pressed="false">② 입자 모형 관찰</button>
   <button class="tabb" data-tab="adv"   aria-pressed="false">③ 심화탐구</button>
+  <button class="tabb tabb--sheet" data-tab="sheet" aria-pressed="false">④ 학습지</button>
 </div>
 <p class="tabdesc only-tab-macro"><b>홈판 한 칸을 크게 본 것.</b> 두 비커의 부피를 정하고 「섞기」를 누르면
   가운데 비커에 부어 섞이고, 두 비커가 사라진 뒤 온도계가 천천히 최고 온도까지 오릅니다. 그다음 지시약을 골라 세 방울 떨어뜨립니다.
@@ -140,6 +174,8 @@
   탭 ①에서 중성이던 조합 C(6+6)가 여기서도 중성일지 <b>먼저 예측</b>하고 확인하세요. 이 탭의 실험 기록은
   따로 셉니다.</p>
 
+<!-- 시뮬 무대 — 탭 ④ 학습지에서는 통째로 숨는다(.only-sim · SHOW.sheet) -->
+<div class="only-sim">
 <div class="cols">
   <!-- 왼쪽: 무대 -->
   <div>
@@ -167,7 +203,6 @@
         </div>
       </div>
       <p class="note" id="guessResult" style="display:none"></p>
-      <p class="jump"><a href="#sheet">확인해 볼 것으로 이동 &darr;</a></p>
 
       <p class="note" id="rmNote" style="display:none">
         (&ldquo;동작 줄이기&rdquo;가 켜져 있어 붓기·방울·섞임 애니메이션과 입자의 움직임을 생략했습니다.
@@ -261,6 +296,162 @@
     조합이 <b>같은 자리</b>인지 다른 자리인지. 서로 다른 두 관찰이 같은 곳을 가리킨다면 그것이
     무엇을 뜻하는지 모둠에서 이야기해 보세요.</p>
 </div>
+</div><!-- /only-sim -->
+
+<!-- ④ 학습지 — 모둠 활동지. 탭 ④에서만 보인다(.only-sheet · SHOW.sheet). 열 이름은 data-csv 가 단일 원천(F-1) -->
+<section class="card worksheet only-sheet" id="worksheet" style="display:none" aria-label="모둠 학습지">
+  <h2>학습지(중화 반응)</h2>
+  <div class="wteam">
+    <label>모둠원 이름 <input class="pin" id="wsMembers" type="text" data-csv="모둠원" aria-label="모둠원 이름" placeholder="예) 김OO, 이OO, 박OO"></label>
+    <label>기록이 <input class="pin" id="wsRecorder" type="text" data-csv="기록이" aria-label="기록이 이름"></label>
+  </div>
+
+  <div class="wsec">활동1. 현상 예측하기</div>
+  <div class="wq">
+    <p><span class="qn">Q1.</span> 산과 염기가 서로 반응할 때, 용액의 온도는 어떻게 변할까? 모둠원과 토의하고 예측을 적어보자.</p>
+    <div class="wchoice" role="group" aria-label="온도 변화 예측" data-csv="활동1_Q1_예측" data-value="">
+      <button class="wopt" type="button" data-v="온도가 올라간다" aria-pressed="false">① 온도가 올라간다</button>
+      <button class="wopt" type="button" data-v="온도가 내려간다" aria-pressed="false">② 온도가 내려간다</button>
+      <button class="wopt" type="button" data-v="온도 변화가 없을 것이다" aria-pressed="false">③ 온도 변화가 없을 것이다</button>
+    </div>
+  </div>
+  <div class="wq">
+    <p><span class="qn">Q2.</span> 우리 모둠이 그렇게 생각한 이유는 무엇인가? 생활 경험이나 알고 있는 내용을 바탕으로 적어 보자.</p>
+    <p>우리 모둠은
+      <input class="gap gap--l" type="text" data-csv="활동1_Q2_이유" aria-label="그렇게 생각한 이유"> 때문에 온도가
+      <input class="gap gap--s" type="text" data-csv="활동1_Q2_예상" aria-label="온도가 어떻게 될 것이라고 예상하는가"> 것이라고 예상한다.</p>
+  </div>
+
+  <div class="wsec">활동2. 실험 설계하기</div>
+  <div class="wq">
+    <p><span class="qn">Q1.</span> 어떤 산과 어떤 염기를 혼합하는가?</p>
+    <p>산 : <input class="gap" type="text" data-csv="활동2_Q1_산" aria-label="혼합하는 산">&emsp;
+       염기 : <input class="gap" type="text" data-csv="활동2_Q1_염기" aria-label="혼합하는 염기"></p>
+  </div>
+  <div class="wq">
+    <p><span class="qn">Q2.</span> 총 5번의 혼합을 진행해보자. 각각 산 수용액 몇 mL와 염기 수용액 몇 mL를 혼합하는가?</p>
+    <table class="wtab" id="wsQ2" aria-label="다섯 용액의 산·염기 부피">
+      <tr><th class="rh">용액</th><th>용액1</th><th>용액2</th><th>용액3</th><th>용액4</th><th>용액5</th></tr>
+      <tr><th class="rh">산의 부피 (mL)</th>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q2_용액1_산mL" aria-label="용액1 산의 부피"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q2_용액2_산mL" aria-label="용액2 산의 부피"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q2_용액3_산mL" aria-label="용액3 산의 부피"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q2_용액4_산mL" aria-label="용액4 산의 부피"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q2_용액5_산mL" aria-label="용액5 산의 부피"></td></tr>
+      <tr><th class="rh">염기의 부피 (mL)</th>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q2_용액1_염기mL" aria-label="용액1 염기의 부피"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q2_용액2_염기mL" aria-label="용액2 염기의 부피"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q2_용액3_염기mL" aria-label="용액3 염기의 부피"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q2_용액4_염기mL" aria-label="용액4 염기의 부피"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q2_용액5_염기mL" aria-label="용액5 염기의 부피"></td></tr>
+    </table>
+  </div>
+  <div class="wq">
+    <p><span class="qn">Q3.</span> 혼합 용액의 온도와 BTB 지시약의 색 변화를 기록해보자.
+      <span style="color:var(--t3);font-size:12px">(위 두 줄은 Q2에 적은 부피가 그대로 옮겨집니다.)</span></p>
+    <table class="wtab" id="wsQ3" aria-label="다섯 용액의 최고 온도와 BTB 색">
+      <tr><th class="rh">용액</th><th>용액1</th><th>용액2</th><th>용액3</th><th>용액4</th><th>용액5</th></tr>
+      <tr><th class="rh">산의 부피 (mL)</th>
+        <td class="mir" data-mir="활동2_Q2_용액1_산mL">—</td><td class="mir" data-mir="활동2_Q2_용액2_산mL">—</td>
+        <td class="mir" data-mir="활동2_Q2_용액3_산mL">—</td><td class="mir" data-mir="활동2_Q2_용액4_산mL">—</td>
+        <td class="mir" data-mir="활동2_Q2_용액5_산mL">—</td></tr>
+      <tr><th class="rh">염기의 부피 (mL)</th>
+        <td class="mir" data-mir="활동2_Q2_용액1_염기mL">—</td><td class="mir" data-mir="활동2_Q2_용액2_염기mL">—</td>
+        <td class="mir" data-mir="활동2_Q2_용액3_염기mL">—</td><td class="mir" data-mir="활동2_Q2_용액4_염기mL">—</td>
+        <td class="mir" data-mir="활동2_Q2_용액5_염기mL">—</td></tr>
+      <tr><th class="rh">최고 온도 (℃)</th>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q3_용액1_최고온도" aria-label="용액1 최고 온도"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q3_용액2_최고온도" aria-label="용액2 최고 온도"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q3_용액3_최고온도" aria-label="용액3 최고 온도"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q3_용액4_최고온도" aria-label="용액4 최고 온도"></td>
+        <td><input type="text" inputmode="decimal" data-csv="활동2_Q3_용액5_최고온도" aria-label="용액5 최고 온도"></td></tr>
+      <tr><th class="rh">BTB 색</th>
+        <td><input type="text" data-csv="활동2_Q3_용액1_BTB" aria-label="용액1 BTB 색"></td>
+        <td><input type="text" data-csv="활동2_Q3_용액2_BTB" aria-label="용액2 BTB 색"></td>
+        <td><input type="text" data-csv="활동2_Q3_용액3_BTB" aria-label="용액3 BTB 색"></td>
+        <td><input type="text" data-csv="활동2_Q3_용액4_BTB" aria-label="용액4 BTB 색"></td>
+        <td><input type="text" data-csv="활동2_Q3_용액5_BTB" aria-label="용액5 BTB 색"></td></tr>
+    </table>
+  </div>
+  <div class="wq">
+    <p><span class="qn">Q4.</span> 산과 염기를 혼합하면 용액의 온도는 어떻게 되는가?</p>
+    <p>산과 염기가 반응하면 용액의 온도는
+      <input class="gap" type="text" data-csv="활동2_Q4_온도" aria-label="산과 염기가 반응하면 용액의 온도는 어떻게 되는가">.</p>
+  </div>
+  <div class="wq">
+    <p><span class="qn">Q5.</span> 최고 온도가 가장 높았던 혼합 용액은 무엇인가?</p>
+    <p>: 산 <input class="gap gap--s" type="text" inputmode="decimal" data-csv="활동2_Q5_산mL" aria-label="최고 온도가 가장 높았던 용액의 산 부피">mL와
+       염기 <input class="gap gap--s" type="text" inputmode="decimal" data-csv="활동2_Q5_염기mL" aria-label="최고 온도가 가장 높았던 용액의 염기 부피">mL를 혼합한 수용액</p>
+  </div>
+  <div class="wq">
+    <p><span class="qn">Q6.</span> 실험 내용은 가설과 일치하였는가?</p>
+    <div class="wchoice" role="group" aria-label="가설과 일치 여부" data-csv="활동2_Q6_가설일치" data-value="">
+      <button class="wopt" type="button" data-v="일치하였다" aria-pressed="false">일치하였다.</button>
+      <button class="wopt" type="button" data-v="일치하지 않았다" aria-pressed="false">일치하지 않았다.</button>
+    </div>
+  </div>
+
+  <div class="wsec">활동3. 현상 설명하기</div>
+  <div class="wq">
+    <p><span class="qn">Q1.</span> 산과 염기가 혼합될 때 입자 모형을 관찰해보자. 어떤 이온이 서로 반응하는가?</p>
+    <p>: <input class="gap" type="text" data-csv="활동3_Q1_이온1" aria-label="반응하는 첫째 이온">이온과
+         <input class="gap" type="text" data-csv="활동3_Q1_이온2" aria-label="반응하는 둘째 이온">이온이 반응한다.</p>
+  </div>
+  <div class="wq">
+    <p><span class="qn">Q2.</span> 산과 염기가 혼합될 때 만들어지는 물질은 무엇인가?</p>
+    <p>: <input class="gap" type="text" data-csv="활동3_Q2_생성물질" aria-label="산과 염기가 혼합될 때 만들어지는 물질"></p>
+  </div>
+  <div class="wq">
+    <p><span class="qn">Q3.</span> 용액1~5가 만들어질 때 각각 몇 개의 이온이 반응하였는가?</p>
+    <table class="wtab" id="wsQ3ion" aria-label="용액별 반응한 이온의 개수">
+      <tr><th class="rh">용액</th><th>수소 이온 (개)</th><th>수산화 이온 (개)</th><th>생성된 물 분자 수 (개)</th></tr>
+      <tr><th class="rh">용액1</th>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액1_수소이온" aria-label="용액1 반응한 수소 이온 개수"></td>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액1_수산화이온" aria-label="용액1 반응한 수산화 이온 개수"></td>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액1_물분자" aria-label="용액1 생성된 물 분자 수"></td></tr>
+      <tr><th class="rh">용액2</th>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액2_수소이온" aria-label="용액2 반응한 수소 이온 개수"></td>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액2_수산화이온" aria-label="용액2 반응한 수산화 이온 개수"></td>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액2_물분자" aria-label="용액2 생성된 물 분자 수"></td></tr>
+      <tr><th class="rh">용액3</th>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액3_수소이온" aria-label="용액3 반응한 수소 이온 개수"></td>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액3_수산화이온" aria-label="용액3 반응한 수산화 이온 개수"></td>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액3_물분자" aria-label="용액3 생성된 물 분자 수"></td></tr>
+      <tr><th class="rh">용액4</th>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액4_수소이온" aria-label="용액4 반응한 수소 이온 개수"></td>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액4_수산화이온" aria-label="용액4 반응한 수산화 이온 개수"></td>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액4_물분자" aria-label="용액4 생성된 물 분자 수"></td></tr>
+      <tr><th class="rh">용액5</th>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액5_수소이온" aria-label="용액5 반응한 수소 이온 개수"></td>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액5_수산화이온" aria-label="용액5 반응한 수산화 이온 개수"></td>
+        <td><input type="text" inputmode="numeric" data-csv="활동3_Q3_용액5_물분자" aria-label="용액5 생성된 물 분자 수"></td></tr>
+    </table>
+  </div>
+  <div class="wq">
+    <p><span class="qn">Q4.</span> 최고 온도가 가장 높았던 용액은 무엇인가?</p>
+    <p>: 용액 <input class="gap gap--s" type="text" inputmode="numeric" data-csv="활동3_Q4_용액" aria-label="최고 온도가 가장 높았던 용액 번호"></p>
+  </div>
+  <div class="wq">
+    <p><span class="qn">Q5.</span> 결론 : 반응한
+      <input class="gap" type="text" data-csv="활동3_Q5_이온1" aria-label="결론 — 첫째 이온">이온과
+      <input class="gap" type="text" data-csv="활동3_Q5_이온2" aria-label="결론 — 둘째 이온">이온의 수가 많을수록 열이 많이 발생한다.</p>
+  </div>
+
+  <div class="wsec">활동4. 실생활 연계하기</div>
+  <div class="wq">
+    <p><span class="qn">Q1.</span> 우리 주변의 산염기 물질은 무엇이 있을까?</p>
+    <textarea class="ans" data-csv="활동4_Q1_주변의산염기" aria-label="우리 주변의 산염기 물질"></textarea>
+  </div>
+  <div class="wq">
+    <p><span class="qn">Q2.</span> 우리 주변에서 산과 염기의 반응을 사용하는 사례는 무엇이 있을까?</p>
+    <textarea class="ans" data-csv="활동4_Q2_반응사례" aria-label="산과 염기의 반응을 사용하는 사례"></textarea>
+  </div>
+
+  <div class="ws-btns">
+    <button class="btn btn--primary" id="wsCsv" type="button">CSV로 저장</button>
+    <span class="hint">파일 이름은 「기록이 이름_중화반응_학습지.csv」입니다. 내려받은 파일을 쪽지 사이트에 올리세요.</span>
+  </div>
+</section>
 
 <!-- 활동지 -->
 <div class="card sheet" id="sheet">

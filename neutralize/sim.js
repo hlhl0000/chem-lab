@@ -802,6 +802,9 @@ var SHOW = {
   micro: { tabMacro: false, micro: true,  adv: false, std: true,  ind: false },
   adv:   { tabMacro: false, micro: false, adv: true,  std: false, ind: true  }
 };
+/* ④ 학습지 — 시뮬 무대(.only-sim)를 감추고 활동지(.only-sheet)만 보인다. sheet 키는 이 줄에만 있다.
+   계(sys)는 바꾸지 않는다(탭 배선 참조) — 탭 ③에서 적으러 갔다 와도 실험 기록이 남는다. 2026-09-16 */
+SHOW.sheet = { tabMacro: false, micro: false, adv: false, std: true, ind: false, sheet: true };
 /* 탭이 정하는 산·염기 계 — ③ 심화탐구만 황산·수산화 칼륨. 탭 ①·② 는 같은 계(같은 실험을 두 눈금으로 본다 — 탭을 오가도 실험이 이어진다) */
 function sysOfTab(tab) { return tab === "adv" ? "h2so4_koh" : "hcl_naoh"; }
 
@@ -1608,6 +1611,7 @@ function sync() {
   setDisp(".only-adv", vis.adv);
   setDisp(".only-std", vis.std);
   setDisp(".only-ind", vis.ind);
+  setDisp(".only-sim", !vis.sheet); setDisp(".only-sheet", !!vis.sheet);   /* ④ 학습지 ↔ 시뮬 무대 맞바꿈 */
   setTxt("lblVa", S.acid.name + " (" + S.acid.formula + ")");
   setTxt("lblVb", S.base.name + " (" + S.base.formula + ")");
   var tb = document.querySelectorAll(".tabb");
@@ -1638,7 +1642,9 @@ function sync() {
     ib[i].setAttribute("aria-pressed", st.ind === ib[i].dataset.ind ? "true" : "false");
   }
   $("nextBtn").disabled = !(heatDone() && !(st.ind && !indReady()) && !st.ended);
-  $("endBtn").disabled  = st.ended || !(st.runs.length || (heatDone() && !(st.ind && !indReady())));
+  /* 「실험 종료하기」는 종료 뒤 같은 자리에서 「실험 초기화하기」가 된다 — 새로 고침 없이 다시 한다 (사용자 지시 2026-09-17) */
+  setTxt("endBtn", st.ended ? "실험 초기화하기" : "실험 종료하기");
+  $("endBtn").disabled  = st.ended ? false : !(st.runs.length || (heatDone() && !(st.ind && !indReady())));
   $("va").disabled = $("vb").disabled = lockCond;
   var pv = document.querySelectorAll(".pv");
   for (i = 0; i < pv.length; i++) pv[i].disabled = lockCond;
@@ -1691,7 +1697,7 @@ function sync() {
     c4.appendChild(document.createTextNode(rr.rd ? (neuIndName(rr.ind).replace(" 용액", "") + " " + rr.rd.color + " → " + rr.rd.text) : "안 넣음"));
   }
   setTxt("recHint",
-    st.ended ? "실험을 끝냈습니다. 아래 그래프를 보세요. 다시 하려면 「처음부터 다시」."
+    st.ended ? "실험을 끝냈습니다. 아래 그래프를 보세요. 다시 하려면 「실험 초기화하기」."
     : st.phase === "before" ? (st.runs.length ? "부피를 바꾸고 「섞기」를 누르세요. 다 했으면 「실험 종료하기」." : "부피를 정하고 「섞기」를 누르세요.")
     : st.phase === "mixing" ? "붓는 중입니다."
     : !heatDone() ? "온도가 올라가는 중입니다 — 최고 온도에 이르면 지시약을 넣을 수 있습니다."
@@ -1816,7 +1822,7 @@ function loop(ts) {
 /* ---------- 배선 ---------- */
 var tbs = document.querySelectorAll(".tabb");
 for (var ti = 0; ti < tbs.length; ti++) tbs[ti].addEventListener("click", function () {
-  var tab = this.dataset.tab, sys = sysOfTab(tab);
+  var tab = this.dataset.tab, sys = tab === "sheet" ? st.sys : sysOfTab(tab);   /* ④ 학습지는 계를 바꾸지 않는다 */
   st.tab = tab;
   if (sys !== st.sys) { st.sys = sys; restartAll(); }   /* 다른 산·염기 계 — 기록·그래프를 섞지 않는다 */
   else sync();
@@ -1839,7 +1845,7 @@ for (var ii = 0; ii < ibs.length; ii++) ibs[ii].addEventListener("click", functi
   startInd(this.dataset.ind);
 });
 $("nextBtn").addEventListener("click", nextRun);
-$("endBtn").addEventListener("click", endExperiment);
+$("endBtn").addEventListener("click", function () { if (st.ended) restartAll(); else endExperiment(); });   /* 종료 ↔ 초기화 한 단추 */
 $("clrBtn").addEventListener("click", restartAll);
 var gbs = document.querySelectorAll(".gbtn");
 for (var gi = 0; gi < gbs.length; gi++) gbs[gi].addEventListener("click", function () {
@@ -1858,6 +1864,53 @@ document.addEventListener("visibilitychange", function () {
 if (RM) $("rmNote").style.display = "block";
 reset(false);
 rafId = requestAnimationFrame(loop);
+
+/* ---------- ④ 학습지 — 모둠 활동지 + CSV (redox 방식 · 2026-09-16) ----------
+   열 목록을 여기 손으로 적지 않는다 — 활동지의 data-csv 속성이 «단일 원천»이다(F-1).
+   값 읽기: input·textarea 는 value, 선택 단추 묶음(.wchoice)은 data-value.
+   Q3 표의 회색 칸(.mir)은 Q2 입력을 비추는 거울이라 CSV 열이 아니다(중복 방지).
+   시뮬 상태(st)와는 서로 건드리지 않는다 — 「처음부터 다시」가 학습지를 지우지 않고, 학습지가 실험을 되돌리지 않는다. */
+function sheetFields() { return Array.prototype.slice.call(document.querySelectorAll("#worksheet [data-csv]")); }
+function sheetVal(el) { return String(el.value !== undefined ? el.value : (el.getAttribute("data-value") || "")).trim(); }
+function sheetCsv() {
+  var esc = function (s) { return '"' + String(s).replace(/"/g, '""') + '"'; };
+  var f = sheetFields();
+  var heads = ["좌석번호"].concat(f.map(function (el) { return el.getAttribute("data-csv"); }));
+  var row = [$("seat").value.trim() || "무기명"].concat(f.map(sheetVal));
+  return "﻿" + heads.map(esc).join(",") + "\r\n" + row.map(esc).join(",");
+}
+function sheetFileName() {
+  var who = (sheetVal($("wsRecorder")) || $("seat").value.trim() || "무기명").replace(/[\\/:*?"<>|]/g, "");
+  return who + "_중화반응_학습지.csv";
+}
+function sheetMirror() {                                   /* Q3 표 위 두 줄 ← Q2 입력 (단일 원천: Q2 칸) */
+  var m = document.querySelectorAll("#worksheet [data-mir]");
+  for (var i = 0; i < m.length; i++) {
+    var src = document.querySelector('#worksheet [data-csv="' + m[i].getAttribute("data-mir") + '"]');
+    var v = src ? sheetVal(src) : "";
+    m[i].textContent = v === "" ? "—" : v;
+  }
+}
+function sheetDirty() { return sheetFields().some(function (el) { return sheetVal(el) !== ""; }); }
+
+$("wsCsv").addEventListener("click", function () {
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([sheetCsv()], { type: "text/csv;charset=utf-8;" }));
+  a.download = sheetFileName();
+  document.body.appendChild(a); a.click(); a.remove();
+});
+var wops = document.querySelectorAll("#worksheet .wopt");
+for (var wi = 0; wi < wops.length; wi++) wops[wi].addEventListener("click", function () {   /* 한 묶음에서 하나만 · 다시 누르면 해제 */
+  var g = this.parentNode, on = this.getAttribute("aria-pressed") !== "true", bs = g.querySelectorAll(".wopt");
+  for (var k = 0; k < bs.length; k++) bs[k].setAttribute("aria-pressed", "false");
+  this.setAttribute("aria-pressed", on ? "true" : "false");
+  g.setAttribute("data-value", on ? this.getAttribute("data-v") : "");
+});
+$("worksheet").addEventListener("input", sheetMirror);
+sheetMirror();
+/* 적은 것이 있으면 새로 고침·닫기 전에 브라우저가 한 번 묻는다 — 저장 안 한 활동지가 날아가는 것을 막는다 (브라우저 저장소를 쓰지 않는 사이트라 이것이 유일한 안전망) */
+window.addEventListener("beforeunload", function (e) { if (sheetDirty()) { e.preventDefault(); e.returnValue = ""; } });
+window.NEUSHEET = { csv: sheetCsv, fileName: sheetFileName, fields: sheetFields, dirty: sheetDirty, mirror: sheetMirror };
 
 /* 검증 프로브가 읽는 창구 — 기하는 그리기가 쓰는 그 함수(macroGeom·pourPose)로 낸다 */
 window.NEUVIEW = { st: st, sync: sync, draw: draw, startMix: startMix, startInd: startInd, reset: reset, sysOfTab: sysOfTab,
