@@ -204,7 +204,7 @@ const SIMS = [
   },
   {
     id: "neutralize",
-    title: "중화 반응과 남은 이온",
+    title: "중화 반응과 이온",
     cat: "통합과학",
     path: "neutralize/",
     icon: "neutralize",
