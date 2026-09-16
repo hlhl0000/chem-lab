@@ -124,12 +124,17 @@
 
 <div class="tabs" role="group" aria-label="관찰 선택">
   <button class="tabb" data-tab="macro" aria-pressed="true">① 중화 반응 관찰</button>
-  <button class="tabb" data-tab="adv"   aria-pressed="false">② 심화탐구</button>
+  <button class="tabb" data-tab="micro" aria-pressed="false">② 입자 모형 관찰</button>
+  <button class="tabb" data-tab="adv"   aria-pressed="false">③ 심화탐구</button>
 </div>
 <p class="tabdesc only-tab-macro"><b>홈판 한 칸을 크게 본 것.</b> 두 비커의 부피를 정하고 「섞기」를 누르면
   가운데 비커에 부어 섞이고, 두 비커가 사라진 뒤 온도계가 천천히 최고 온도까지 오릅니다. 그다음 지시약을 골라 세 방울 떨어뜨립니다.
-  <b>아래 상자는 같은 두 용액 속 이온</b>(1 mL = 입자 1개)입니다 — 붓는 순서대로 이온이 들어오고, H<sup>+</sup>와 OH<sup>−</sup>가
-  만나 물이 되는 것을 보세요. 조건을 바꿔 여러 번 한 뒤 「실험 종료하기」를 누르면 부피에 따른 최고 온도 그래프가 나옵니다.</p>
+  같은 실험을 <b>이온 크기로 보려면 탭 ②</b> — 탭을 오가도 실험은 이어집니다.
+  조건을 바꿔 여러 번 한 뒤 「실험 종료하기」를 누르면 부피에 따른 최고 온도 그래프가 나옵니다.</p>
+<p class="tabdesc only-micro" style="display:none"><b>탭 ①과 같은 실험을 이온 크기로 본 것.</b> 비커·붓는 순서·빠르기는 탭 ①과 같고,
+  용액 색 대신 <b>이온</b>(1 mL = 입자 1개)만 그립니다. 산을 부을 때 H<sup>+</sup>와 Cl<sup>−</sup>가, 염기를 부을 때
+  Na<sup>+</sup>와 OH<sup>−</sup>가 물줄기를 따라 들어오고, OH<sup>−</sup>가 H<sup>+</sup>를 만나는 자리마다 붉은 빛이 작게 퍼지며
+  물 분자 H<sub>2</sub>O가 생깁니다. 남은 이온을 세어 액성을 예측해 보세요 — 지시약은 탭 ①에서 넣습니다.</p>
 <p class="tabdesc only-adv" style="display:none"><b>같은 농도, 다른 산·염기.</b> 묽은 황산(H<sub>2</sub>SO<sub>4</sub>)과
   수산화 칼륨 수용액(KOH)으로 같은 실험을 합니다.
   탭 ①에서 중성이던 조합 C(6+6)가 여기서도 중성일지 <b>먼저 예측</b>하고 확인하세요. 이 탭의 실험 기록은
@@ -140,13 +145,13 @@
   <div>
     <div class="card">
       <div class="stage stage--light">
-        <canvas id="stageCv" aria-label="위쪽에는 왼쪽에 묽은 염산 비커, 오른쪽에 수산화 나트륨 수용액 비커, 가운데에 빈 비커가 있고 가운데 비커 안쪽 오른쪽에 온도계가 꽂혀 있습니다. 섞기를 누르면 두 비커를 차례로 가운데에 붓고 사라지며, 온도계가 천천히 오른 뒤 지시약을 고르면 스포이트가 세 방울 떨어뜨려 색이 퍼집니다. 아래쪽 상자에는 같은 두 용액 속 이온이 그려지고, 붓는 순서대로 들어와 H⁺와 OH⁻가 만나 물이 될 때 붉은 빛이 작게 퍼집니다. 탭 ②에서는 묽은 황산과 수산화 칼륨 수용액으로 같은 화면을 그립니다."></canvas>
+        <canvas id="stageCv" aria-label="왼쪽에 묽은 염산 비커, 오른쪽에 수산화 나트륨 수용액 비커, 가운데에 빈 비커가 있고 가운데 비커 안쪽 오른쪽에 온도계가 꽂혀 있습니다. 섞기를 누르면 두 비커를 차례로 가운데에 붓고 사라지며, 온도계가 천천히 오른 뒤 지시약을 고르면 스포이트가 세 방울 떨어뜨려 색이 퍼집니다. 탭 ②는 같은 비커·같은 붓기를 용액 색 대신 이온으로 그립니다 — 붓는 순서대로 이온이 물줄기를 따라 들어오고, H⁺와 OH⁻가 만나 물이 될 때 붉은 빛이 작게 퍼집니다. 탭 ③에서는 묽은 황산과 수산화 칼륨 수용액으로 같은 화면을 그립니다."></canvas>
       </div>
       <!-- 조작 단추는 장치 그림 «바로 아래» (매뉴얼 §3 분기) — 실험 흐름: 섞기 → 지시약 → 실험 조건 변경 → 실험 종료 -->
       <div class="btnrow btnrow--stage">
         <button class="btn btn--primary" id="mixBtn">섞기</button>
-        <button class="btn indb" id="indBtb"  data-ind="btb"  aria-pressed="false">BTB 용액 넣기</button>
-        <button class="btn indb" id="indPhph" data-ind="phph" aria-pressed="false">페놀프탈레인 용액 넣기</button>
+        <button class="btn indb only-ind" id="indBtb"  data-ind="btb"  aria-pressed="false">BTB 용액 넣기</button>
+        <button class="btn indb only-ind" id="indPhph" data-ind="phph" aria-pressed="false">페놀프탈레인 용액 넣기</button>
         <button class="btn" id="nextBtn">실험 조건 변경하기</button>
         <button class="btn" id="endBtn">실험 종료하기</button>
       </div>
@@ -154,7 +159,7 @@
 
       <div id="guessRow" style="display:none">
         <p class="note note--key" style="margin-bottom:0">
-          <b>지시약을 넣기 전에 예측해 보세요.</b> 위 상자에 남아 있는 이온만 보고 정합니다.</p>
+          <b>지시약을 넣기 전에 예측해 보세요.</b> 남아 있는 이온만 보고 정합니다 — 탭 ②의 입자 모형, 또는 오른쪽 「이온 개수」 칸.</p>
         <div class="guessrow" role="group" aria-label="액성 예측">
           <button class="gbtn" data-g="acid"    aria-pressed="false">산성</button>
           <button class="gbtn" data-g="neutral" aria-pressed="false">중성</button>
@@ -281,8 +286,8 @@
         생각의 어디가 맞고 어디가 틀렸는지 말해 보자.</li>
     <li><span class="tag mdl">모형</span> 슬라이더를 0 mL 로 내려 <b>한쪽만</b> 넣어 보자.
         온도는 어떻게 되는가? 그 이유는?</li>
-    <li><span class="tag pre">예측</span> ② 심화탐구 &mdash; 묽은 황산과 수산화 칼륨 수용액에서도 C(6+6)가 중성일까?
-        먼저 답하고, A~E를 해 보며 <b>중성이 되는 조합</b>을 찾자. 그 까닭을 이온 상자에서 세어 본
+    <li><span class="tag pre">예측</span> ③ 심화탐구 &mdash; 묽은 황산과 수산화 칼륨 수용액에서도 C(6+6)가 중성일까?
+        먼저 답하고, A~E를 해 보며 <b>중성이 되는 조합</b>을 찾자. 그 까닭을 오른쪽 「이온 개수」 칸에서 센
         H<sup>+</sup>의 <b>개수</b>로 설명하자.</li>
     <li><span class="tag lim">한계</span> 이 화면은 1 mL 를 입자 <b>1개</b>로 그렸다.
         실제 용액 1 mL 안에는 이온이 몇 개쯤 있을까? 그 차이 때문에 이 화면이
@@ -317,13 +322,13 @@
       <li><b>그래프의 최고 온도는 총 부피가 같을 때만 서로 비교할 수 있습니다.</b> 홈판처럼
           총 12 mL 로 맞추면 가장 높은 곳이 곧 남은 이온이 없는 곳입니다. 총 부피가 다른 조합을
           섞어 두면 높낮이의 뜻이 달라집니다 &mdash; 그래프 아래 문구가 그것을 알립니다.</li>
-      <li><b>② 심화탐구의 황산은 물에 녹아 H<sup>+</sup> 2개와 SO<sub>4</sub><sup>2&minus;</sup> 1개를
+      <li><b>③ 심화탐구의 황산은 물에 녹아 H<sup>+</sup> 2개와 SO<sub>4</sub><sup>2&minus;</sup> 1개를
           전부 내놓는다고 보았습니다(완전 해리).</b> 실제로는 두 번째 H<sup>+</sup>가 조금 덜 나오지만
           이 화면에서는 다루지 않습니다. 중화열은 여기서도 H<sup>+</sup> + OH<sup>&minus;</sup> → H<sub>2</sub>O
           한 쌍당 같은 값(57.3 kJ/mol)으로 계산했습니다.</li>
       <li>이온이 만나 물이 되는 순간의 <b>붉은 빛</b>은 「여기서 반응이 일어났다」를 보이려는 표시이지,
           실제로 빛이 나는 것이 아닙니다. 중화열은 용액 전체의 온도로만 드러납니다.</li>
-      <li>입자는 <b>2차원 상자</b> 안에서 움직입니다. 실제 용액은 3차원이고, 이온 주위에는
+      <li>탭 ②의 입자는 <b>2차원으로 그린 비커</b> 안에서 움직입니다. 실제 용액은 3차원이고, 이온 주위에는
           물 분자가 둘러싸고 있습니다(수화). 그 물 분자는 그리지 않았습니다.</li>
       <li>이 화면은 <b>온도 변화와 지시약의 색 변화</b>만 다룹니다. pH 값이나 전기 전도도가
           어떻게 변하는지는 <b>이 과목의 범위 밖</b>이라 넣지 않았습니다.
