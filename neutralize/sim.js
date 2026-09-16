@@ -181,9 +181,10 @@ function neuSameTotal(recs) {
 
 /* ================= UI + 렌더 ================= */
 
-/* ───────── 도식·자세 모듈 — 코덱스 납품 2026-09-14 (검증스크립트/_neutralize_fx1/neutralize_design.js · 수정 없이 그대로 · gpt-5.6-sol) ─────────
-   계약·검증 결과는 같은 폴더 README.md (Codex_디자인요청_중화반응관찰_v1.md §3·§4). 이 블록이 없으면 아래 FALLBACK_DESIGN 이 같은 계약으로 돈다.
-   sha256 757a62abd3aed1a4 */
+/* ───────── 도식·자세 모듈 — 코덱스 납품 v2 2026-09-17 (검증스크립트/_neutralize_fx2/neutralize_design.js · 수정 없이 삽입) ─────────
+   계약: Codex_디자인요청_중화반응관찰_v2.md (contract = 2 · spread 접촉점 · mergePose.contact · ring · iconSvg). 하니스: _neutralize_design_verify2.js.
+   이 블록이 없거나 contract < 2 이면 아래 FALLBACK_DESIGN(같은 계약의 최소 구현)이 시계가 있는 표현을 맡는다(D2 스위치).
+   sha256 1e5a0dad4e3f5321 */
 (function () {
   "use strict";
 
@@ -244,11 +245,9 @@ function neuSameTotal(recs) {
     var right = x + w - 1.5;
     var topLeft;
     var topRight;
-
     if (!surface) return;
     topLeft = y + surface.a * 1.5 + surface.b;
     topRight = y + surface.a * (w - 1.5) + surface.b;
-
     g.save();
     beakerPath(g, x, y, w, h, 1.5);
     g.clip();
@@ -283,7 +282,6 @@ function neuSameTotal(recs) {
     var i;
     var tick;
     var length;
-
     g.save();
     g.strokeStyle = colors.glassLine;
     g.lineWidth = 2.2;
@@ -297,14 +295,12 @@ function neuSameTotal(recs) {
     g.quadraticCurveTo(x + w, y + h, x + w, y + h - 10);
     g.lineTo(x + w, y);
     g.stroke();
-
     g.strokeStyle = colors.glassHi;
     g.lineWidth = 2.6;
     g.beginPath();
     g.moveTo(x + 7, y + 12);
     g.lineTo(x + 7, y + h - 22);
     g.stroke();
-
     g.strokeStyle = colors.t3;
     g.lineCap = "butt";
     for (i = 0; i < ticks.length; i += 1) {
@@ -337,7 +333,6 @@ function neuSameTotal(recs) {
     var c1y = spec.y0 + dy * 0.18;
     var c2x = spec.x0 + dx * 0.73;
     var c2y = spec.y0 + dy * 0.86;
-
     g.save();
     g.fillStyle = spec.color;
     g.strokeStyle = spec.colors.waterLine;
@@ -345,13 +340,9 @@ function neuSameTotal(recs) {
     g.lineJoin = "round";
     g.beginPath();
     g.moveTo(spec.x0 + nx * halfTop, spec.y0 + ny * halfTop);
-    g.bezierCurveTo(c1x + nx * halfTop, c1y + ny * halfTop,
-      c2x + nx * halfBottom, c2y + ny * halfBottom,
-      spec.x1 + nx * halfBottom, spec.y1 + ny * halfBottom);
+    g.bezierCurveTo(c1x + nx * halfTop, c1y + ny * halfTop, c2x + nx * halfBottom, c2y + ny * halfBottom, spec.x1 + nx * halfBottom, spec.y1 + ny * halfBottom);
     g.lineTo(spec.x1 - nx * halfBottom, spec.y1 - ny * halfBottom);
-    g.bezierCurveTo(c2x - nx * halfBottom, c2y - ny * halfBottom,
-      c1x - nx * halfTop, c1y - ny * halfTop,
-      spec.x0 - nx * halfTop, spec.y0 - ny * halfTop);
+    g.bezierCurveTo(c2x - nx * halfBottom, c2y - ny * halfBottom, c1x - nx * halfTop, c1y - ny * halfTop, spec.x0 - nx * halfTop, spec.y0 - ny * halfTop);
     g.closePath();
     g.fill();
     g.stroke();
@@ -372,7 +363,6 @@ function neuSameTotal(recs) {
     var columnTop = tubeBottom - (tubeBottom - innerTop) * clamp01(spec.frac);
     var ticks = spec.ticks || [];
     var i;
-
     g.save();
     g.fillStyle = colors.h2oH;
     g.strokeStyle = colors.glassLine;
@@ -386,20 +376,15 @@ function neuSameTotal(recs) {
     g.closePath();
     g.fill();
     g.stroke();
-
     g.beginPath();
     g.arc(x, bottom, bulbR, 0, Math.PI * 2);
     g.fill();
     g.stroke();
-
     g.fillStyle = colors.mercury;
     g.beginPath();
     g.arc(x, bottom, Math.max(1, bulbR - 2.2), 0, Math.PI * 2);
     g.fill();
-    if (spec.frac > 0) {
-      g.fillRect(x - innerHalf, columnTop, innerHalf * 2, tubeBottom - columnTop + 1);
-    }
-
+    if (spec.frac > 0) g.fillRect(x - innerHalf, columnTop, innerHalf * 2, tubeBottom - columnTop + 1);
     g.strokeStyle = colors.t3;
     g.lineCap = "butt";
     for (i = 0; i < ticks.length; i += 1) {
@@ -409,7 +394,6 @@ function neuSameTotal(recs) {
       g.lineTo(spec.tickX1, ticks[i].y);
       g.stroke();
     }
-
     g.strokeStyle = colors.glassHi;
     g.lineWidth = Math.max(1, width * 0.13);
     g.beginPath();
@@ -424,7 +408,6 @@ function neuSameTotal(recs) {
     var x = spec.x;
     var tipY = spec.tipY;
     var colors = spec.colors;
-
     g.save();
     g.fillStyle = colors.t2;
     g.strokeStyle = colors.t1;
@@ -439,7 +422,6 @@ function neuSameTotal(recs) {
     g.closePath();
     g.fill();
     g.stroke();
-
     g.fillStyle = colors.h2oH;
     g.strokeStyle = colors.glassLine;
     g.lineWidth = 1.4;
@@ -452,7 +434,6 @@ function neuSameTotal(recs) {
     g.closePath();
     g.fill();
     g.stroke();
-
     g.fillStyle = spec.stockColor;
     g.globalAlpha = 0.82;
     g.beginPath();
@@ -471,7 +452,6 @@ function neuSameTotal(recs) {
     var x = spec.x;
     var y = spec.y;
     var r = spec.r;
-
     g.save();
     g.fillStyle = spec.color;
     g.strokeStyle = spec.colors.waterLine;
@@ -493,7 +473,6 @@ function neuSameTotal(recs) {
     var t = clamp01(spec.t);
     var first = smooth(t);
     var second = smooth((t - 0.24) / 0.76);
-
     if (t >= 1) return;
     g.save();
     g.strokeStyle = spec.colors.waterLine;
@@ -516,30 +495,34 @@ function neuSameTotal(recs) {
     var left = spec.x + 1.5;
     var right = spec.x + spec.w - 1.5;
     var bottom = spec.y + spec.h - 1.5;
-    var centerX = (left + right) / 2;
-    var centerY = (spec.surfaceY + bottom) / 2;
-    var p = smooth(t);
-    var movingX = spec.cx + (centerX - spec.cx) * p;
-    var movingY = spec.surfaceY + (centerY - spec.surfaceY) * p;
-    var halfW = (right - left) / 2;
-    var halfH = (bottom - spec.surfaceY) / 2;
-
+    var dx = Math.max(Math.abs(spec.cx - left), Math.abs(right - spec.cx));
+    var dy = bottom - spec.cy;
+    var far = Math.sqrt(dx * dx + dy * dy);
+    var p = smooth(t / 0.9);
+    var radius = far * (0.08 + 1.18 * p);
+    var fade = clamp01((t - 0.05) / 0.82);
+    var grad;
     g.save();
     beakerPath(g, spec.x, spec.y, spec.w, spec.h, 1.5);
     g.clip();
-    g.fillStyle = t >= 1 ? spec.to : spec.from;
-    g.fillRect(left, spec.surfaceY, right - left, bottom - spec.surfaceY);
-    if (t > 0 && t < 1) {
+    if (spec.from === spec.to) {
+      g.fillStyle = spec.from;
+      g.fillRect(left, spec.surfaceY, right - left, bottom - spec.surfaceY);
+    } else if (t >= 0.985) {
       g.fillStyle = spec.to;
-      g.globalAlpha = 0.22 + 0.38 * t;
-      ellipsePath(g, movingX, movingY, halfW * p, halfH * p);
-      g.fill();
-      g.globalAlpha = 0.18 + 0.24 * t;
-      ellipsePath(g, movingX, movingY, halfW * p * 0.72, halfH * p * 0.72);
-      g.fill();
-      g.globalAlpha = 0.14 + 0.18 * t;
-      ellipsePath(g, movingX, movingY, halfW * p * 0.44, halfH * p * 0.44);
-      g.fill();
+      g.fillRect(left, spec.surfaceY, right - left, bottom - spec.surfaceY);
+    } else {
+      g.fillStyle = spec.from;
+      g.fillRect(left, spec.surfaceY, right - left, bottom - spec.surfaceY);
+      if (t > 0) {
+        grad = g.createRadialGradient(spec.cx, spec.cy, 0, spec.cx, spec.cy, radius);
+        grad.addColorStop(0, spec.to);
+        grad.addColorStop(0.62, spec.to);
+        grad.addColorStop(1, spec.from);
+        g.globalAlpha = 0.28 + 0.70 * fade;
+        g.fillStyle = grad;
+        g.fillRect(left, spec.surfaceY, right - left, bottom - spec.surfaceY);
+      }
     }
     g.globalAlpha = 1;
     g.strokeStyle = spec.colors.waterLine;
@@ -558,12 +541,10 @@ function neuSameTotal(recs) {
     var alpha = clamp01(spec.alpha);
     var positive = spec.kind === "H" || spec.kind === "Na";
     var reacting = spec.kind === "H" || spec.kind === "OH";
-    var fillColor = spec.kind === "H" ? spec.colors.ionH :
-      spec.kind === "OH" ? spec.colors.ionOH : spec.colors.ionSpec;
+    var fillColor = spec.kind === "H" ? spec.colors.ionH : spec.kind === "OH" ? spec.colors.ionOH : spec.colors.ionSpec;
     var side = rr * 1.75;
     var fontSize = Math.max(9.5, spec.r * 0.78);
     var maxTextWidth = positive ? rr * 1.55 : side * 0.82;
-
     if (scale <= 0 || alpha <= 0) return;
     g.save();
     g.globalAlpha = alpha;
@@ -587,7 +568,6 @@ function neuSameTotal(recs) {
     }
     g.fill();
     g.stroke();
-
     g.fillStyle = spec.colors.h2oH;
     g.font = "600 " + fontSize + "px system-ui,sans-serif";
     g.textAlign = "center";
@@ -610,7 +590,6 @@ function neuSameTotal(recs) {
     var h1y = spec.y + Math.sin(a1) * bond;
     var h2x = spec.x + Math.cos(a2) * bond;
     var h2y = spec.y + Math.sin(a2) * bond;
-
     if (alpha <= 0 || r <= 0) return;
     g.save();
     g.globalAlpha = alpha;
@@ -623,7 +602,6 @@ function neuSameTotal(recs) {
     g.moveTo(spec.x, spec.y);
     g.lineTo(h2x, h2y);
     g.stroke();
-
     g.fillStyle = spec.colors.h2oH;
     g.strokeStyle = spec.colors.t2;
     g.lineWidth = Math.max(1.1, r * 0.18);
@@ -635,7 +613,6 @@ function neuSameTotal(recs) {
     g.arc(h2x, h2y, hRadius, 0, Math.PI * 2);
     g.fill();
     g.stroke();
-
     g.fillStyle = spec.colors.h2oO;
     g.strokeStyle = spec.colors.t2;
     g.lineWidth = Math.max(1, r * 0.14);
@@ -650,7 +627,6 @@ function neuSameTotal(recs) {
   function burst(g, spec) {
     var t = clamp01(spec.t);
     var pulse;
-
     if (t >= 1) return;
     pulse = Math.sin(Math.PI * t);
     g.save();
@@ -660,11 +636,19 @@ function neuSameTotal(recs) {
     g.beginPath();
     g.arc(spec.x, spec.y, spec.r * (0.45 + 1.25 * t), 0, Math.PI * 2);
     g.stroke();
+    finishState(g);
+    g.restore();
+  }
+
+  function ring(g, spec) {
+    var t = clamp01(spec.t);
+    if (t >= 1) return;
+    g.save();
     g.strokeStyle = spec.colors.waterLine;
-    g.lineWidth = 0.9;
-    g.globalAlpha = pulse * 0.34;
+    g.lineWidth = 1.25 - 0.35 * t;
+    g.globalAlpha = 0.72 * (1 - smooth(t));
     g.beginPath();
-    g.arc(spec.x, spec.y, spec.r * (0.22 + 0.82 * t), 0, Math.PI * 2);
+    g.arc(spec.x, spec.y, spec.r * (0.72 + 0.78 * smooth(t)), 0, Math.PI * 2);
     g.stroke();
     finishState(g);
     g.restore();
@@ -678,11 +662,10 @@ function neuSameTotal(recs) {
     var drain = smooth((p - 0.48) / 0.52);
     var finalAngle = Math.atan2(spec.sbh + spec.sbw, spec.sbw);
     var lift = Math.sin(Math.PI * travel) * spec.sbh * 0.16;
-    var magnitude = finalAngle * tilt;
     var result = {
       x: spec.rest.x + (spec.target.x - spec.rest.x) * travel,
       y: spec.rest.y + (spec.target.y - spec.rest.y) * travel - lift,
-      angle: -spec.side * magnitude,
+      angle: -spec.side * finalAngle * tilt,
       depth: 1 - contact,
       remain: 1 - drain,
       streamOn: p >= 0.48 && p < 1
@@ -697,58 +680,39 @@ function neuSameTotal(recs) {
     return result;
   }
 
-  function dropTimeline(q, i, n) {
-    var p = clamp01(q);
-    var count = n > 0 ? n : 1;
-    var index = i < 0 ? 0 : i >= count ? count - 1 : i;
-    var slot = dropTimeline.spreadStart / count;
-    var start = index * slot;
-    var fallEnd = start + slot * 0.64;
-    var end = start + slot;
-    var fall = null;
-    var rippleValue = null;
-    var local;
-
-    if (p >= start && p < fallEnd) {
-      local = (p - start) / (fallEnd - start);
-      fall = local * local;
-    } else if (p >= fallEnd && p < end) {
-      rippleValue = (p - fallEnd) / (end - fallEnd);
+  function mergePose(u) {
+    var p = clamp01(u);
+    var contact = mergePose.contact;
+    var q;
+    var ionPart;
+    var waterPart;
+    var ringPart;
+    if (p < contact) {
+      return { gap: 1 - smooth(p / contact), ionScale: 1, ionAlpha: 1, waterScale: 0, waterAlpha: 0, ring: null };
     }
-    return { fall: fall, ripple: rippleValue };
-  }
-  dropTimeline.spreadStart = 0.72;
-  Object.freeze(dropTimeline);
-
-  function mergePose(e) {
-    var p = clamp01(e);
-    var meet = smooth(p / 0.90);
-    var ionFade = smooth((p - 0.62) / 0.20);
-    var waterGrow = smooth((p - 0.54) / 0.24);
-    var burstValue = null;
-
-    if (p >= 0.50 && p < 0.82) burstValue = (p - 0.50) / 0.32;
     if (p >= 1) {
-      return {
-        gap: 0,
-        ionScale: 0,
-        ionAlpha: 0,
-        waterScale: 1,
-        waterAlpha: 1,
-        burst: null
-      };
+      return { gap: 0, ionScale: 0, ionAlpha: 0, waterScale: 1, waterAlpha: 1, ring: null };
     }
-    return {
-      gap: 1 - meet,
-      ionScale: 1 - 0.18 * meet - 0.82 * ionFade,
-      ionAlpha: 1 - ionFade,
-      waterScale: waterGrow,
-      waterAlpha: waterGrow,
-      burst: burstValue
-    };
+    q = (p - contact) / (1 - contact);
+    ionPart = 1 - smooth(q / 0.42);
+    waterPart = smooth((q - 0.22) / 0.46);
+    ringPart = q < 0.72 ? q / 0.72 : null;
+    return { gap: 0, ionScale: ionPart, ionAlpha: ionPart, waterScale: waterPart, waterAlpha: waterPart, ring: ringPart };
+  }
+  mergePose.contact = 0.6;
+  Object.freeze(mergePose);
+
+  function iconSvg(name, size, color) {
+    var head = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 24 24\" fill=\"" + color + "\" aria-hidden=\"true\">";
+    if (name === "play") return head + "<path d=\"M7 4l13 8-13 8z\"/></svg>";
+    if (name === "pause") return head + "<path d=\"M6 4h4v16H6zM14 4h4v16h-4z\"/></svg>";
+    if (name === "replay") return head + "<path d=\"M5.4 7.2V3L1 7.4l4.4 4.4V8.9A7 7 0 1 1 5.8 16l-2.3 1.5A9.7 9.7 0 1 0 5.4 7.2z\"/></svg>";
+    if (name === "slow") return head + "<circle cx=\"12\" cy=\"12\" r=\"9\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"2\"/><path d=\"M8 8h2v8H8zM12 8h5v2h-3v2h2.5v2H14v2h-2z\"/></svg>";
+    return head + "</svg>";
   }
 
   window.NEU_DESIGN = Object.freeze({
+    contract: 2,
     beakerBack: beakerBack,
     beakerFront: beakerFront,
     stream: stream,
@@ -760,9 +724,10 @@ function neuSameTotal(recs) {
     ion: ion,
     water: water,
     burst: burst,
+    ring: ring,
     pourPose: pourPose,
-    dropTimeline: dropTimeline,
-    mergePose: mergePose
+    mergePose: mergePose,
+    iconSvg: iconSvg
   });
 }());
 
@@ -786,8 +751,10 @@ var FONT = '-apple-system,BlinkMacSystemFont,"Malgun Gothic","맑은 고딕",' +
 
 /* 시간 상수 (초) — 붓기(왼쪽 → 오른쪽 차례로) → 옆 비커 사라짐. 반응·발열은 붓는 «동안» 함께 일어난다 (개선의뢰서 2026-09-17 §4·§5-1).
    빠른 일괄혼합 실험을 관찰하기 쉽게 «느리게» 보여 주는 설명용 모형이다 — 화면의 초는 실제 반응 시간이 아니다 */
-var MIX_T = 5.2, POUR_END = 0.76;      /* 섞기 진행 p ∈ [0,1] · 0~0.76 붓기 · 0.76~1 옆 비커가 서서히 사라진다 */
-var PA = POUR_END * 0.5;                /* 산이 다 들어가는 p — 산의 이온은 산 비커가 배수될 때, 염기의 이온은 염기 비커가 배수될 때 들어온다 */
+var MIX_T = 7.0, POUR_END = 0.80;      /* 섞기 진행 p ∈ [0,1] · 0~0.80 붓기 · 0.80~1 옆 비커가 서서히 사라진다.
+                                           5.2 → 7.0 s (사용자 지시 2026-09-17: 온도 상승을 종전의 0.5 배 속도로 — 염기를 붓는 시간을 늘려 반응이 그만큼 천천히) */
+var ACID_SHARE = 0.40;                  /* 붓기 시간 중 산 비커의 몫 — 염기(반응·발열이 일어나는 쪽)에 60 % 를 준다 */
+var PA = POUR_END * ACID_SHARE;         /* 산이 다 들어가는 p — 산의 이온은 산 비커가 배수될 때, 염기의 이온은 염기 비커가 배수될 때 들어온다 */
 var IND_T = 2.6, N_DROPS = 3;           /* 지시약 진행 q ∈ [0,1] · 방울 셋 — 첫 방울이 «닿는» 순간부터 국소 발색 (indTimeline) */
 var SLOW = 0.5;                         /* 「느리게」 재생 배속 */
 /* 지시약 «원액»의 색 — 방울 색 (BTB 원액은 청록, 페놀프탈레인 원액은 무색) */
@@ -932,10 +899,18 @@ function startMix() {
   var arr = st.parts, hs = [], os = [], i, F = partFrames(sceneGeom());
   for (i = 0; i < arr.length; i++) {
     arr[i].sx = arr[i].x; arr[i].sy = arr[i].y;
-    arr[i].dep = Math.random();                       /* 나가는 차례 — 물줄기가 흐르는 동안 흩어져 차례로 나간다 (exitE) */
+    arr[i].dep = 0;                                   /* 나가는 차례 — 아래에서 쪽마다 고르게(층화) 흩어 놓는다 */
     if (arr[i].kind === "H")  hs.push(i);
     if (arr[i].kind === "OH") os.push(i);
   }
+  /* 나가는 차례(dep) — 쪽마다 0, 1/n, 2/n … 을 섞어 배정: 첫 이온은 물줄기가 닿자마자 나가고(첫 접촉이 곧 보인다) 나머지는 고르게 이어져 온도가 매끄럽게 오른다 */
+  [true, false].forEach(function (left) {
+    var idx = [];
+    for (var j = 0; j < arr.length; j++) if (leftHalf(arr[j]) === left) idx.push(j);
+    var slots = idx.map(function (_, k) { return k / idx.length; });
+    for (var k2 = slots.length - 1; k2 > 0; k2--) { var r2 = Math.floor(Math.random() * (k2 + 1)), t2 = slots[k2]; slots[k2] = slots[r2]; slots[r2] = t2; }
+    for (var m2 = 0; m2 < idx.length; m2++) arr[idx[m2]].dep = slots[m2];
+  });
   var n = Math.min(hs.length, os.length), stageA = [], stageB = [];
   for (i = 0; i < n; i++) {
     var a = arr[hs[i]], c = arr[os[i]];
@@ -1281,6 +1256,9 @@ var DC = {
   btbAcid: neuBTB("acid"), btbNeutral: neuBTB("neutral"), btbBase: neuBTB("base"), phphBase: neuIndColor("phph", "base")
 };
 
+/* 탭 ②의 물 바탕 — 이온 띠를 덮는 옅은 파랑. 용액 색(지시약)은 그리지 않지만 «물속»임은 보인다 (사용자 지시 2026-09-17) */
+var WATER_BG = "rgba(140,190,235,0.34)";
+
 /* ---------- 거시 무대 기하 — 그리기·프로브가 같은 값을 읽는다 (원칙 11·13) ----------
    [묽은 염산 비커]   [가운데 비커 + 온도계(안쪽 오른쪽)]   [수산화 나트륨 수용액 비커]
    세 비커의 바닥을 맞추고, 옆 비커는 가운데 비커보다 낮다. 라벨은 각 비커 아래 */
@@ -1334,7 +1312,7 @@ function pourWarp(x) {
 }
 function posesFor(G) {
   var pp = pourP();
-  return [DESIGN.pourPose(pourWarp(pp / 0.5), pourSpec(G, -1)), DESIGN.pourPose(pourWarp((pp - 0.5) / 0.5), pourSpec(G, 1))];
+  return [DESIGN.pourPose(pourWarp(pp / ACID_SHARE), pourSpec(G, -1)), DESIGN.pourPose(pourWarp((pp - ACID_SHARE) / (1 - ACID_SHARE)), pourSpec(G, 1))];
 }
 function sceneGeom() { var w = cv.parentNode.clientWidth || 600; return macroGeom(w, macroH(w)); }
 
@@ -1351,6 +1329,7 @@ function drawScene(w, h, mode) {
   var IT = st.ind ? indTimeline(st.indP) : null;
   var cxDrop = G.cbx + G.cbw * 0.42;
 
+  var Fm = micro ? partFrames(G) : null;
   /* 가운데 비커의 액체 — 탭 ①·③ 만. 유입된 만큼만 차오른다. 색은 첫 방울이 닿은 뒤 퍼진 만큼만 바뀐다(J-N5) */
   if (!micro && lh > 1) {
     var target = st.ind ? neuIndColor(st.ind, nat) : water, sp = IT ? IT.s : 0;
@@ -1360,6 +1339,10 @@ function drawScene(w, h, mode) {
       /* surface.b 는 비커 (x,y) 기준 로컬 y 다 (납품 README · 계약 3-1) */
       DESIGN.beakerBack(ctx, { x: G.cbx, y: G.cby, w: G.cbw, h: G.cbh, surface: { a: 0, b: ly - G.cby },
                                color: (st.ind && sp >= 1) ? target : water, alpha: 1, colors: DC });
+  } else if (micro && lh > 1) {
+    /* 탭 ②: 파란 물 바탕 — 이온 띠가 액면보다 위로 넓혀졌으면 그 띠까지 덮는다(입자가 물 밖에 있는 것처럼 보이지 않게 · 캡션이 «넓힌 도식»을 밝힌다) */
+    var topY = Math.min(ly, Fm.C.y0 - Fm.r - 4);
+    DESIGN.beakerBack(ctx, { x: G.cbx, y: G.cby, w: G.cbw, h: G.cbh, surface: { a: 0, b: topY - G.cby }, color: WATER_BG, alpha: 1, colors: DC });
   }
   var cticks = [];
   for (var v = 6; v <= 24; v += 6) cticks.push({ y: G.cby + G.cbh - (G.cbh - 10) * (v / 24), major: v % 12 === 0 });
@@ -1376,12 +1359,14 @@ function drawScene(w, h, mode) {
       ctx.save();
       ctx.translate(ps.x, ps.y); ctx.rotate(ps.angle);
       var lx0 = side < 0 ? -G.sbw : 0;                     /* 로컬: 입술이 원점 */
-      if (!micro && vol > 0 && remain > 0) {
+      if (vol > 0 && remain > 0) {
+        /* 탭 ②는 이온 띠(액체보다 높을 수 있다)를 덮는 파란 물 바탕 */
+        var fillEff = micro ? Math.max(fillH, G.sbh - (side < 0 ? Fm.L : Fm.R).y0 + Fm.m + 2) : fillH;
         /* 세계 좌표에서 수평인 액면을 로컬 선으로 — y_w = x·sinθ + y·cosθ = d 에서 y = (d − x·sinθ)/cosθ */
-        var d = ps.depth * (G.sbh - fillH);
+        var d = ps.depth * (G.sbh - fillEff);
         var sinT = Math.sin(ps.angle), cosT = Math.cos(ps.angle);
         DESIGN.beakerBack(ctx, { x: lx0, y: 0, w: G.sbw, h: G.sbh, surface: { a: -sinT / cosT, b: d / cosT },
-                                 color: water, alpha: 1, colors: DC });
+                                 color: micro ? WATER_BG : water, alpha: 1, colors: DC });
       }
       DESIGN.beakerFront(ctx, { x: lx0, y: 0, w: G.sbw, h: G.sbh, ticks: [], tickSide: "left", colors: DC });
       ctx.restore();
@@ -1405,12 +1390,6 @@ function drawScene(w, h, mode) {
   /* 탭 ② — 액면 표시선(용액 색은 그리지 않으므로 «여기까지가 용액»을 선으로) + 이온·물 분자·반응 고리 (온도계보다 먼저 그려 눈금이 가려지지 않게) */
   var bandUp = false;
   if (micro) {
-    if (lh > 1) {
-      ctx.save(); ctx.setLineDash([4, 3]); ctx.strokeStyle = "rgba(40,45,52,0.35)"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(G.cbx + 3, ly); ctx.lineTo(G.cbx + G.cbw - 3, ly); ctx.stroke(); ctx.restore();
-      ctx.fillStyle = C.t3; ctx.font = "10px " + FONT; ctx.textAlign = "left"; ctx.fillText("액면", G.cbx + 5, ly - 3);
-    }
-    var Fm = partFrames(G);
     bandUp = (st.phase !== "before") && (Fm.C.y0 < ly - Fm.r);          /* 입자 띠가 액면보다 위로 넓혀졌다 — 캡션이 밝힌다 */
     drawMicroIons(microLayout(G, poses, ly));
   }
@@ -1562,10 +1541,12 @@ function relaxKeys(items, F, passes) {
   }
 }
 
-var TRAV = 0.42;   /* 이온 하나가 비커를 떠나 자리 잡기까지 — 배수 진행(1−remain) 단위. 출발은 dep·(1−TRAV) 에 흩어 놓아 물줄기가 흐르는 동안 차례로 나간다 */
+var TRAV = 0.42, TRAV_B = 0.30;   /* 이온 하나가 비커를 떠나 자리 잡기까지 — 배수 진행(1−remain) 단위. 출발은 dep·(1−TRAV) 에 흩어 놓아 물줄기가 흐르는 동안 차례로 나간다.
+                                     염기 쪽(TRAV_B)은 짧게 — 염기 물줄기가 닿은 직후(약 0.5 s)부터 첫 접촉·온도 변화가 보이게 (사용자 지시 2026-09-17) */
+function travOf(q) { return leftHalf(q) ? TRAV : TRAV_B; }
 /* 붓는 동안 한 입자의 «나가는 진행» e ∈ [0,1] — 0 이면 아직 비커 안. 물줄기가 흐르는 동안(pourPose.remain 이 줄어드는 동안)에만 는다 — 라벨의 «남은 mL» 과 같은 곡선.
    산의 이온은 산 비커가 배수될 때(p ∈ [0,PA]), 염기의 이온은 염기 비커가 배수될 때(p ∈ [PA,POUR_END]) — 붓는 시점 = 들어오는 시점 = 반응 시점 */
-function exitE(q, ps) { var dr = 1 - ps.remain, a = q.dep * (1 - TRAV); return clamp01((dr - a) / TRAV); }
+function exitE(q, ps) { var tr = travOf(q), dr = 1 - ps.remain, a = q.dep * (1 - tr); return clamp01((dr - a) / tr); }
 /* 경로: 비커 안 → 입술(0~0.30) → 물줄기 끝 = 액면(0.30~0.55) → 자리(0.55~1) */
 function pathPos(e, p0, lip, ent, tgt) {
   if (e <= 0) return p0;
@@ -1588,7 +1569,7 @@ function microLayout(G, poses, ly) {
   }
   function inC(nx, ny) { return mapN(F.C, NX.C, nx, ny); }
   function ion(q, pt, scale, alpha) { out.push({ t: "ion", kind: q.kind, x: pt.x, y: pt.y, r: r, scale: scale, alpha: alpha, label: ION[q.kind].sym }); }
-  function wat(pt, scale, alpha, ang) { out.push({ t: "water", x: pt.x, y: pt.y, r: r * 0.5 * scale, alpha: alpha, ang: ang || 0 }); }
+  function wat(pt, scale, alpha, ang) { out.push({ t: "water", x: pt.x, y: pt.y, r: r * 0.8 * scale, alpha: alpha, ang: ang || 0 }); }   /* 0.5r → 0.8r (사용자 지시 2026-09-17: 물 입자 모형을 키운다) */
 
   if (st.phase !== "mixing") {
     for (i = 0; i < st.parts.length; i++) {
@@ -1634,9 +1615,18 @@ function touchPts(meet, from, r) {
   var ux = dx / d * r * 0.98, uy = dy / d * r * 0.98;
   return { o: { x: meet.x + ux, y: meet.y + uy }, h: { x: meet.x - ux, y: meet.y - uy } };
 }
+/* 물 분자가 생기는 순간의 붉은 하이라이트 — 접촉 뒤 전환 구간 앞부분에만(약 0.2 s) 방사형으로 «순간» 퍼져 생긴 자리를 보인다 (사용자 지시 2026-09-17).
+   표현 모듈의 ring 은 계약에 남겨 둔다(RING) — 이 화면은 붉은 빛을 쓴다. 실제 발광이 아님은 한계 목록이 밝힌다 */
+function redFlash(g, x, y, r, t) {
+  if (t == null || t >= 1) return;
+  var R = r * (0.9 + 1.8 * t), a = 0.75 * (1 - t);
+  var grad = g.createRadialGradient(x, y, 0, x, y, R);
+  grad.addColorStop(0, "rgba(224,69,59," + a.toFixed(3) + ")"); grad.addColorStop(0.5, "rgba(224,69,59," + (a * 0.5).toFixed(3) + ")"); grad.addColorStop(1, "rgba(224,69,59,0)");
+  g.save(); g.fillStyle = grad; g.beginPath(); g.arc(x, y, R, 0, Math.PI * 2); g.fill(); g.restore();
+}
 function drawMicroIons(items) {
   var i, it;
-  for (i = 0; i < items.length; i++) { it = items[i]; if (it.t === "ring") { ringN++; RING(ctx, { x: it.x, y: it.y, r: it.r, t: it.tt, colors: DC }); } }
+  for (i = 0; i < items.length; i++) { it = items[i]; if (it.t === "ring") { ringN++; redFlash(ctx, it.x, it.y, it.r, it.tt); } }
   for (i = 0; i < items.length; i++) { it = items[i]; if (it.t === "water") DESIGN.water(ctx, { x: it.x, y: it.y, r: it.r, ang: it.ang, alpha: it.alpha, colors: DC }); }
   for (i = 0; i < items.length; i++) { it = items[i]; if (it.t === "ion")
     drawIonAny(ctx, { x: it.x, y: it.y, r: it.r, kind: it.kind, scale: it.scale, alpha: it.alpha, label: it.label, colors: DC }); }
@@ -1872,7 +1862,7 @@ function sync() {
              S.base.name + "의 " + ION[S.base.cation].sym + "·OH⁻ (1 mL = 1개) — 물속에서 쉬지 않고 움직입니다. 「섞기」를 누르세요.")
           : st.phase === "mixing"
             ? (st.p < PA ? (S.acid.name + "을(를) 붓는 중입니다 — 물줄기를 따라 이온이 가운데 비커로 들어갑니다.")
-                         : (S.base.name + "을(를) 붓는 중입니다 — 들어온 OH⁻ 가 H⁺ 에 «닿는» 자리마다 작은 고리 표시와 함께 물 분자 H₂O 가 생기고, 그만큼 온도가 오릅니다. 구경꾼 이온은 그대로입니다."))
+                         : (S.base.name + "을(를) 붓는 중입니다 — 들어온 OH⁻ 가 H⁺ 에 «닿는» 자리마다 붉은 빛이 순간 퍼지며 물 분자 H₂O 가 생기고, 그만큼 온도가 오릅니다. 파란 바탕이 용액(물)입니다. 구경꾼 이온은 그대로입니다."))
             : RSn ? "혼합이 끝났습니다 — 남은 이온이 무엇이고 몇 개인지 세어 보세요. 새로 생긴 물의 수만큼 반응이 일어났습니다. 지시약은 탭 ①에서 넣어 확인하세요."
                   : "혼합이 끝났습니다 — 만날 상대가 없어 반응이 없었습니다(물 0개 · 온도 변화 없음).")
     : st.phase === "before"
@@ -2095,7 +2085,7 @@ window.NEUVIEW = { st: st, sync: sync, draw: draw, startMix: startMix, startInd:
                    poses: function () { return posesFor(sceneGeom()); },
                    pourPose: function (side, pp) { var w = cv.parentNode.clientWidth; var G = macroGeom(w, stageH()); return DESIGN.pourPose(pp, pourSpec(G, side)); },
                    pourWarp: pourWarp,
-                   K: { MIX_T: MIX_T, POUR_END: POUR_END, PA: PA, IND_T: IND_T, N_DROPS: N_DROPS, TRAV: TRAV, SLOW: SLOW, POUR_STREAM_AT: POUR_STREAM_AT, POUR_STREAM_SHARE: POUR_STREAM_SHARE,
+                   K: { MIX_T: MIX_T, POUR_END: POUR_END, PA: PA, ACID_SHARE: ACID_SHARE, IND_T: IND_T, N_DROPS: N_DROPS, TRAV: TRAV, TRAV_B: TRAV_B, SLOW: SLOW, POUR_STREAM_AT: POUR_STREAM_AT, POUR_STREAM_SHARE: POUR_STREAM_SHARE,
                         FIRST_CONTACT: FIRST_CONTACT, MERGE_CONTACT: MERGE_CONTACT, DROP_GAP: DROP_GAP, DROP_FALL: DROP_FALL } };
 
 })();
