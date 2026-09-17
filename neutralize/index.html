@@ -35,7 +35,6 @@
   .btn .ic{display:inline-block; vertical-align:-3px; margin-right:5px; line-height:0}
   .playnote{font-size:11.5px; color:var(--t3); line-height:1.45; flex:1 1 220px}
   .stagestat{font-size:12.5px; color:var(--t1); font-weight:600; margin:8px 0 0; font-variant-numeric:tabular-nums}
-  .ctab th.num{text-align:right; font-size:11.5px}
 
   .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0}
   .btnrow--stage{margin-top:8px}           /* 장치 그림 바로 아래 — 그림과 한 덩어리로 읽히게 (§3 분기) */
@@ -63,15 +62,6 @@
   .ros{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px}
   .ros .readout{padding:9px 10px}
   .ros .wide{grid-column:1 / -1}
-
-  .ctab{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px}
-  .ctab th,.ctab td{padding:7px 8px; border-bottom:1px solid var(--line); text-align:left}
-  .ctab th{color:var(--t3); font-weight:600; background:#f8fafc}
-  .ctab td{color:var(--t1); font-weight:700; text-align:right; font-variant-numeric:tabular-nums}
-  .ctab .dot{display:inline-block; width:11px; height:11px; border-radius:50%;
-    vertical-align:-1px; margin-right:7px; border:1px solid rgba(0,0,0,.25)}
-  .ctab .dot.sq{border-radius:3px}
-  .ctab tr.spec th, .ctab tr.spec td{color:var(--t3); font-weight:600}
 
   .note{font-size:12.5px; color:var(--t2); line-height:1.65; margin:10px 0 0;
     background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
@@ -177,7 +167,8 @@
 <p class="tabdesc only-micro" style="display:none"><b>탭 ①과 같은 실험을 이온 크기로 본 것.</b> 비커·붓는 순서·빠르기는 탭 ①과 같고,
   용액 색 대신 <b>이온</b>(1 mL = 입자 1개)만 그립니다. 산을 부을 때 H<sup>+</sup>와 산의 음이온(Cl<sup>−</sup> 또는 NO<sub>3</sub><sup>−</sup>)이, 염기를 부을 때
   염기의 양이온(Na<sup>+</sup> 또는 K<sup>+</sup>)과 OH<sup>−</sup>가 물줄기를 따라 들어오고, OH<sup>−</sup>가 H<sup>+</sup>에 닿은 자리에서 붉은 빛이 순간 퍼지며
-  물 분자 H<sub>2</sub>O가 생깁니다. 파란 바탕은 용액(물)입니다. 남은 이온을 세어 액성을 예측해 보세요 — 지시약은 탭 ①에서 넣습니다.</p>
+  물 분자 H<sub>2</sub>O가 생깁니다. 파란 바탕은 용액(물)입니다. 남은 이온을 세어 액성을 예측해 보세요 — 지시약은 탭 ①에서 넣습니다.
+  「돋보기」를 켜면 OH<sup>−</sup>가 H<sup>+</sup>에 닿는 자리를 확대해 따라갑니다 — <b>H<sup>+</sup> 1개와 OH<sup>−</sup> 1개가 닿아 물 분자 1개</b>가 됩니다(1:1).</p>
 <p class="tabdesc only-adv" style="display:none"><b>같은 농도, 다른 산·염기.</b> 묽은 황산(H<sub>2</sub>SO<sub>4</sub>)과
   수산화 칼륨 수용액(KOH)으로 같은 실험을 합니다.
   탭 ①에서 중성이던 조합 C(6+6)가 여기서도 중성일지 <b>먼저 예측</b>하고 확인하세요. 이 탭의 실험 기록은
@@ -190,7 +181,7 @@
   <div>
     <div class="card">
       <div class="stage stage--light">
-        <canvas id="stageCv" aria-label="왼쪽에 묽은 염산 비커, 오른쪽에 수산화 나트륨 수용액 비커, 가운데에 빈 비커가 있고 가운데 비커 안쪽 오른쪽에 온도계가 꽂혀 있습니다. 섞기를 누르면 두 비커를 차례로 가운데에 붓고 사라지며, 온도계가 천천히 오른 뒤 지시약을 고르면 스포이트가 세 방울 떨어뜨려 색이 퍼집니다. 탭 ②는 같은 비커·같은 붓기를 용액 색 대신 이온으로 그립니다 — 붓는 순서대로 이온이 물줄기를 따라 들어오고, H⁺와 OH⁻가 닿아 물이 될 때 붉은 빛이 순간 퍼지고 그만큼 온도가 오릅니다. 탭 ③에서는 묽은 황산과 수산화 칼륨 수용액으로 같은 화면을 그립니다."></canvas>
+        <canvas id="stageCv" aria-label="왼쪽에 묽은 염산 비커, 오른쪽에 수산화 나트륨 수용액 비커, 가운데에 빈 비커가 있고 가운데 비커 안쪽 오른쪽에 온도계가 꽂혀 있습니다. 섞기를 누르면 두 비커를 차례로 가운데에 붓고 사라지며, 온도계가 천천히 오른 뒤 지시약을 고르면 스포이트가 세 방울 떨어뜨려 색이 퍼집니다. 탭 ②는 같은 비커·같은 붓기를 용액 색 대신 이온으로 그립니다 — 붓는 순서대로 이온이 물줄기를 따라 들어오고, H⁺와 OH⁻가 닿아 물이 될 때 붉은 빛이 순간 퍼지고 그만큼 온도가 오릅니다. 돋보기를 켜면 그 자리를 확대해 H⁺ 1개와 OH⁻ 1개가 물 분자 1개가 되는 것을 따라갑니다. 탭 ③에서는 묽은 황산과 수산화 칼륨 수용액으로 같은 화면을 그립니다."></canvas>
       </div>
       <!-- 조작 단추는 장치 그림 «바로 아래» (매뉴얼 §3 분기) — 실험 흐름: 섞기 → 지시약 → 실험 조건 변경 → 실험 종료 -->
       <div class="btnrow btnrow--stage">
@@ -204,6 +195,7 @@
         <button class="btn btn--sm" id="pauseBtn" aria-pressed="false"><span class="ic" aria-hidden="true"></span><span class="lb">일시정지</span></button>
         <button class="btn btn--sm" id="replayBtn"><span class="ic" aria-hidden="true"></span>다시 재생</button>
         <button class="btn btn--sm" id="slowBtn" aria-pressed="false"><span class="ic" aria-hidden="true"></span>느리게 (½)</button>
+        <button class="btn btn--sm only-micro" id="lensBtn" aria-pressed="false" style="display:none" title="OH⁻ 가 H⁺ 에 닿는 자리를 확대해 따라갑니다 — 1개 + 1개 → 물 분자 1개"><span class="ic" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16"><circle cx="6.5" cy="6.5" r="4.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M10 10l4.3 4.3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span>돋보기</button>
         <span class="playnote">관찰을 위해 반응 과정을 느리게 그린 모형입니다. 다시 재생은 관찰용이라 기록에 남지 않습니다.</span>
       </div>
       <p class="stagestat" id="stageStat" aria-live="polite"></p>
@@ -211,7 +203,7 @@
 
       <div id="guessRow" style="display:none">
         <p class="note note--key" style="margin-bottom:0">
-          <b>지시약을 넣기 전에 예측해 보세요.</b> 남아 있는 이온만 보고 정합니다 — 탭 ②의 입자 모형, 또는 오른쪽 「이온 개수」 칸.</p>
+          <b>지시약을 넣기 전에 예측해 보세요.</b> 남아 있는 이온만 보고 정합니다 — 탭 ②의 입자 모형에서 세어 보세요 (③ 심화탐구는 황산 1개가 내놓는 H<sup>+</sup> 2개를 떠올려 헤아립니다).</p>
         <div class="guessrow" role="group" aria-label="액성 예측">
           <button class="gbtn" data-g="acid"    aria-pressed="false">산성</button>
           <button class="gbtn" data-g="neutral" aria-pressed="false">중성</button>
@@ -261,31 +253,11 @@
           <div><span class="value" id="vNat" style="font-size:18px">&mdash;</span></div></div>
       </div>
 
-      <table class="ctab">
-        <tr><th style="text-align:left">이온 개수</th><th class="num">처음</th><th class="num">현재 (<span id="cntWhen">섞기 전</span>)</th></tr>
-        <tr><th><span class="dot" style="background:var(--d-amber)"></span>H<sup>+</sup> 수소 이온</th>
-            <td id="c0H">6</td><td id="cH">6</td></tr>
-        <tr><th><span class="dot sq" style="background:var(--d-blue)"></span>OH<sup>&minus;</sup> 수산화 이온</th>
-            <td id="c0OH">6</td><td id="cOH">6</td></tr>
-        <!-- 구경꾼 줄 — 지금 계의 두 이온만 보인다(sync 가 data-ion 으로 고른다): 산 Cl⁻/NO₃⁻/SO₄²⁻ · 염기 Na⁺/K⁺ -->
-        <tr class="spec" data-ion="Na"><th><span class="dot" style="background:var(--d-gray)"></span>Na<sup>+</sup> 나트륨 이온</th>
-            <td id="c0Na">6</td><td id="cNa">6</td></tr>
-        <tr class="spec" data-ion="K" style="display:none"><th><span class="dot" style="background:var(--d-gray)"></span>K<sup>+</sup> 칼륨 이온</th>
-            <td id="c0K">6</td><td id="cK">6</td></tr>
-        <tr class="spec" data-ion="Cl"><th><span class="dot sq" style="background:var(--d-gray)"></span>Cl<sup>&minus;</sup> 염화 이온</th>
-            <td id="c0Cl">6</td><td id="cCl">6</td></tr>
-        <tr class="spec" data-ion="NO3" style="display:none"><th><span class="dot sq" style="background:var(--d-gray)"></span>NO<sub>3</sub><sup>&minus;</sup> 질산 이온</th>
-            <td id="c0NO3">6</td><td id="cNO3">6</td></tr>
-        <tr class="spec" data-ion="SO4" style="display:none"><th><span class="dot sq" style="background:var(--d-gray)"></span>SO<sub>4</sub><sup>2&minus;</sup> 황산 이온</th>
-            <td id="c0SO4">6</td><td id="cSO4">6</td></tr>
-        <tr><th><span class="dot" style="background:#c8d4e0"></span>물 분자 H<sub>2</sub>O <span style="font-weight:500;color:var(--t3)">(반응으로 새로 생긴 것)</span></th>
-            <td id="c0W">0</td><td id="cW">0</td></tr>
-      </table>
       <p class="note" style="font-size:11.5px">
         <b>회색 이온(구경꾼 — 학습지에서 고른 산·염기에 따라 Cl<sup>&minus;</sup> 또는 NO<sub>3</sub><sup>&minus;</sup>, Na<sup>+</sup> 또는 K<sup>+</sup> · ③에서는 K<sup>+</sup>·SO<sub>4</sub><sup>2&minus;</sup>)은 반응에 참여하지 않습니다.</b>
         섞기 전에도 섞은 뒤에도 개수가 그대로입니다 &mdash; 이온인 채로 물속에 흩어져 있을 뿐,
-        <b>소금 알갱이가 생기지는 않습니다.</b> 「현재」 열은 H<sup>+</sup>와 OH<sup>&minus;</sup>가 닿아 물이 된 만큼 줄고, 물 분자는 그만큼 늡니다 —
-        원래 있던 물은 그리지 않았습니다.</p>
+        <b>소금 알갱이가 생기지는 않습니다.</b> 남은 이온과 새로 생긴 물 분자는 탭 ②에서 직접 세어 보세요 — H<sup>+</sup> 1개와 OH<sup>&minus;</sup> 1개가 닿을 때마다
+        물 분자가 1개 생깁니다(돋보기). 원래 있던 물은 그리지 않았습니다.</p>
 
       <!-- 실험 기록 — 「실험 조건 변경하기」를 누를 때마다 한 줄 -->
       <table class="runs" id="runsTab">
@@ -500,8 +472,8 @@
     <li><span class="tag mdl">모형</span> 슬라이더를 0 mL 로 내려 <b>한쪽만</b> 넣어 보자.
         온도는 어떻게 되는가? 그 이유는?</li>
     <li><span class="tag pre">예측</span> ③ 심화탐구 &mdash; 묽은 황산과 수산화 칼륨 수용액에서도 C(6+6)가 중성일까?
-        먼저 답하고, 용액 1~5를 해 보며 <b>중성이 되는 조합</b>을 찾자. 그 까닭을 오른쪽 「이온 개수」 칸에서 센
-        H<sup>+</sup>의 <b>개수</b>로 설명하자.</li>
+        먼저 답하고, 용액 1~5를 해 보며 <b>중성이 되는 조합</b>을 찾자. 그 까닭을 황산 1개가 내놓는
+        H<sup>+</sup>의 <b>개수</b>(아래 「가정과 한계」의 황산 항목)로 설명하자.</li>
     <li><span class="tag lim">한계</span> 이 화면은 1 mL 를 입자 <b>1개</b>로 그렸다.
         실제 용액 1 mL 안에는 이온이 몇 개쯤 있을까? 그 차이 때문에 이 화면이
         <b>실제와 달라지는 점</b>을 하나 써 보자.</li>
@@ -544,6 +516,8 @@
           일괄혼합 계산값입니다. 순차 주입에서 도중에 더 높은 온도가 나타나는 것은 이 화면이 다루지 않습니다.</li>
       <li>이온이 닿아 물이 되는 순간의 <b>붉은 빛</b>은 「여기서 반응이 일어났다」를 보이려는 표시이지,
           실제로 빛이 나는 것이 아닙니다. 중화열은 용액 전체의 온도로만 드러납니다.</li>
+      <li><b>돋보기는 같은 화면을 2.4배로 키운 것입니다.</b> 따로 만든 장면이 아니라 탭 ②의 그 입자를 그대로 확대했고, 여러 쌍 중 한 쌍을 따라갑니다 &mdash;
+          그동안 다른 쌍도 같은 방식(H<sup>+</sup> 1개 + OH<sup>&minus;</sup> 1개 → 물 분자 1개)으로 반응합니다. 이온·물 분자의 크기 비와 모양은 도식이지 실제 크기 비가 아닙니다.</li>
       <li>탭 ②의 입자는 <b>2차원으로 그린 비커</b> 안에서 움직입니다. 실제 용액은 3차원이고, 이온 주위에는
           물 분자가 둘러싸고 있습니다(수화). 그 물 분자는 그리지 않았습니다.</li>
       <li>이 화면은 <b>온도 변화와 지시약의 색 변화</b>만 다룹니다. pH 값이나 전기 전도도가

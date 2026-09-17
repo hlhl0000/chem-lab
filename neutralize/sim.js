@@ -848,6 +848,11 @@ var st = {
   autoPaused: false  /* 학습지로 가며 «스스로» 멈춘 것 — 돌아오면 푼다. 사용자가 멈춘 것은 풀지 않는다 */
 };
 var SLOW_ON = false;   /* 「느리게」 — 보는 사람의 설정이라 계와 무관 */
+/* 돋보기(사용자 지시 2026-09-17: 반응비 1:1 을 확대해 관찰) — 이것도 «보기»다. 계·진행·기록·온도에 영향이 없고 EXP 에 넣지 않는다.
+   on: 켜짐 · pair: 붓는 동안 따라가는 짝(OH⁻ 의 parts 색인) · w: 섞은 뒤 따라가는 물 분자 색인 · doneP: 그 짝이 물이 된 진행 p · tx,ty: 마지막 자리 */
+var LENS_K = 2.4;
+var LENS = { on: false, pair: -1, w: -1, doneP: -1, tx: 0, ty: 0 };
+function setLens(on) { LENS.on = !!on; sync(); }
 /* 계별 실험 상태 보관 — 탭 ①·② ↔ ③ 을 오가도 각자의 조건·진행·기록이 남는다 (개선의뢰서 §5-4 · 탭 전환이 기록을 지우지 않는다) */
 var EXP = {}, EXP_KEYS = ["va", "vb", "phase", "p", "ind", "indP", "guess", "parts", "runs", "ended", "paused", "autoPaused"];
 function swapSys(sys) {
@@ -961,7 +966,7 @@ function startMix() {
     a.mx = a.ax; a.my = a.ay;
     a.pair = os[i]; c.pair = hs[i];
     a.ang = rnd(0, Math.PI * 2);                 /* 생길 물 분자의 회전 */
-    stageA.push({ o: a, kx: "ax", ky: "ay" }); stageB.push({ o: a, kx: "mx", ky: "my" });
+    stageA.push({ o: a, kx: "ax", ky: "ay" }); stageB.push({ o: a, kx: "mx", ky: "my", rad: F.r * WATER_EXT });   /* 만나는 자리 = 물 분자가 생길 자리 — 물 분자 크기로 띄운다 */
   }
   /* 짝을 못 찾은 것과 구경꾼 — 가운데 비커 전체로 흩어진다 */
   for (i = 0; i < arr.length; i++) if (arr[i].pair < 0) {
@@ -1429,10 +1434,12 @@ function drawScene(w, h, mode) {
   }
 
   /* 탭 ② — 액면 표시선(용액 색은 그리지 않으므로 «여기까지가 용액»을 선으로) + 이온·물 분자·반응 고리 (온도계보다 먼저 그려 눈금이 가려지지 않게) */
-  var bandUp = false;
+  var bandUp = false, items = null, LS = null;
   if (micro) {
     bandUp = (st.phase !== "before") && (Fm.C.y0 < ly - Fm.r);          /* 입자 띠가 액면보다 위로 넓혀졌다 — 캡션이 밝힌다 */
-    drawMicroIons(microLayout(G, poses, ly));
+    items = microLayout(G, poses, ly);
+    drawMicroIons(items, false);
+    if (LENS.on && !RM) LS = lensState(G, poses, RS);                    /* 돋보기 — 온도계·캡션까지 그린 뒤 맨 위에 얹는다(아래) */
   }
 
   /* 온도계 — 반응(전환)이 진행된 만큼 오른다. curTemp·읽기칸·상태줄과 같은 원천(RS.heat) */
@@ -1487,6 +1494,7 @@ function drawScene(w, h, mode) {
                : (neuIndName(st.ind) + " — " + rd.color + " → " + rd.text), capW);
     for (var c3 = 0; c3 < indLines.length; c3++) { ctx.fillText(indLines[c3], cxm, capY + 3); capY += 14; }
   }
+  if (LS) drawLens(G, items, LS);
   return G;
 }
 /* 글자 뒤에 흰 테두리를 깔고 쓴다 — 입자·유리선 위에서도 읽히게 */
@@ -1537,6 +1545,12 @@ var ringN = 0;
    그리기가 각 그릇의 «액체 영역»(px)으로 옮긴다. 겹침 풀기·처음 배치·도착 배치는 px 로 잰다 — 그릇마다 축척이 다르다 */
 var NX = { L: [0.05, 0.45], R: [0.55, 0.95], C: [0.05, 0.95] }, NY = [0.09, 0.91];
 function ionR(G) { return Math.max(7.5, Math.min(10.5, G.cbw / 18)); }
+/* 물 분자는 이온보다 크게 그린다 — O 반지름 0.8r, H 원 바깥까지 0.8r×(0.95+0.62) ≈ 1.26r (납품 water 의 bond·hRadius). 겹침 풀기(separate·relaxKeys)는 이 크기로 잰다
+   (2026-09-17 물 개수 재확인: 개수는 전 조합에서 맞았으나, 이온 크기로만 재서 물 분자가 이웃과 최대 6 px 겹쳤다 — _neutralize_water_probe.js) */
+var WATER_R = 0.8, WATER_EXT = WATER_R * (0.95 + 0.62);
+function radOf(q, r) { return q.kind === "W" ? r * WATER_EXT : r; }
+/* 띠 계산용 «자리 수» — 물 분자는 이온보다 커서 한 개가 (2·1.26r+3)²/(2r+3)² ≈ 1.5 자리를 차지한다 (섞은 뒤 띠가 그만큼 넓어져야 겹침이 풀린다) */
+function partsNeed(parts, r) { var n = 0, i, sc; for (i = 0; i < parts.length; i++) { sc = (2 * radOf(parts[i], r) + 3) / (2 * r + 3); n += sc * sc; } return Math.ceil(n); }
 /* 이온 n 개가 겹치지 않고 들어갈 최소 띠 높이 — 액체가 얇으면(2 mL) 띠를 위로 넓힌다 (세어 보라고 그린 입자가 포개지면 안 된다) */
 function bandNeed(n, wpx, r, m) { var cols = Math.max(1, Math.floor(wpx / (2 * r + 3))); return Math.ceil(n / cols) * (2 * r + 3) + 2 * m; }
 function partFrames(G) {
@@ -1549,7 +1563,7 @@ function partFrames(G) {
     return { x0: lx0 + m, x1: lx0 + G.sbw - m, y0: Math.min(y0, y1), y1: y1 };
   }
   var cx1 = G.tx - 8 - r;                                       /* 온도계 관 왼쪽까지 */
-  var bandC = Math.max(G.cby + G.cbh - LV.ly, Math.min(G.cbh - 4, bandNeed(st.parts.length, cx1 - (G.cbx + m), r, m)));
+  var bandC = Math.max(G.cby + G.cbh - LV.ly, Math.min(G.cbh - 4, bandNeed(partsNeed(st.parts, r), cx1 - (G.cbx + m), r, m)));
   var Cy0 = G.cby + G.cbh - bandC + m, Cy1 = G.cby + G.cbh - m;
   return { r: r, m: m, ly: LV.ly,
            L: sideFrame(-1, st.va), R: sideFrame(1, st.vb),
@@ -1569,11 +1583,12 @@ function rangeOf(q) { return st.phase === "before" ? (leftHalf(q) ? NX.L : NX.R)
 function pxScale(f, rng) { return { sx: Math.max(1e-6, (f.x1 - f.x0) / (rng[1] - rng[0])), sy: Math.max(1e-6, (f.y1 - f.y0) / (NY[1] - NY[0])) }; }
 /* 도착 자리끼리 겹치지 않게 미리 풀어 둔다 — 가운데 비커 px 축척. items = [{o, kx, ky, fixed}] (fixed 는 움직이지 않는다) */
 function relaxKeys(items, F, passes) {
-  var sc = pxScale(F.C, NX.C), minD = F.r * 2 + 2;
+  var sc = pxScale(F.C, NX.C);
   function clampIt(it) { it.o[it.kx] = Math.max(NX.C[0], Math.min(NX.C[1], it.o[it.kx])); it.o[it.ky] = Math.max(NY[0], Math.min(NY[1], it.o[it.ky])); }
   for (var pass = 0; pass < passes; pass++) for (var i = 0; i < items.length; i++) for (var j = i + 1; j < items.length; j++) {
     var A = items[i], B = items[j];
     if (A.fixed && B.fixed) continue;
+    var minD = (A.rad || F.r) + (B.rad || F.r) + 2;
     var dx = (B.o[B.kx] - A.o[A.kx]) * sc.sx, dy = (B.o[B.ky] - A.o[A.ky]) * sc.sy, d = Math.sqrt(dx * dx + dy * dy);
     if (d < 1e-4) { dx = minD * 0.5; dy = 0; d = minD * 0.5; }
     if (d >= minD) continue;
@@ -1611,7 +1626,7 @@ function microLayout(G, poses, ly) {
   }
   function inC(nx, ny) { return mapN(F.C, NX.C, nx, ny); }
   function ion(q, pt, scale, alpha) { out.push({ t: "ion", kind: q.kind, x: pt.x, y: pt.y, r: r, scale: scale, alpha: alpha, label: ION[q.kind].sym }); }
-  function wat(pt, scale, alpha, ang) { out.push({ t: "water", x: pt.x, y: pt.y, r: r * 0.8 * scale, alpha: alpha, ang: ang || 0 }); }   /* 0.5r → 0.8r (사용자 지시 2026-09-17: 물 입자 모형을 키운다) */
+  function wat(pt, scale, alpha, ang) { out.push({ t: "water", x: pt.x, y: pt.y, r: r * WATER_R * scale, alpha: alpha, ang: ang || 0 }); }   /* 0.5r → 0.8r(WATER_R) (사용자 지시 2026-09-17: 물 입자 모형을 키운다) */
 
   if (st.phase !== "mixing") {
     for (i = 0; i < st.parts.length; i++) {
@@ -1666,12 +1681,109 @@ function redFlash(g, x, y, r, t) {
   grad.addColorStop(0, "rgba(224,69,59," + a.toFixed(3) + ")"); grad.addColorStop(0.5, "rgba(224,69,59," + (a * 0.5).toFixed(3) + ")"); grad.addColorStop(1, "rgba(224,69,59,0)");
   g.save(); g.fillStyle = grad; g.beginPath(); g.arc(x, y, R, 0, Math.PI * 2); g.fill(); g.restore();
 }
-function drawMicroIons(items) {
+function drawMicroIons(items, noCount) {
   var i, it;
-  for (i = 0; i < items.length; i++) { it = items[i]; if (it.t === "ring") { ringN++; redFlash(ctx, it.x, it.y, it.r, it.tt); } }
+  for (i = 0; i < items.length; i++) { it = items[i]; if (it.t === "ring") { if (!noCount) ringN++; redFlash(ctx, it.x, it.y, it.r, it.tt); } }
   for (i = 0; i < items.length; i++) { it = items[i]; if (it.t === "water") DESIGN.water(ctx, { x: it.x, y: it.y, r: it.r, ang: it.ang, alpha: it.alpha, colors: DC }); }
   for (i = 0; i < items.length; i++) { it = items[i]; if (it.t === "ion")
     drawIonAny(ctx, { x: it.x, y: it.y, r: it.r, kind: it.kind, scale: it.scale, alpha: it.alpha, label: it.label, colors: DC }); }
+}
+
+/* ---------- 돋보기 — 반응비 1:1 확대 관찰 (사용자 지시 2026-09-17: 학생들이 H⁺:OH⁻ 반응비를 헷갈린다) ----------
+   «상태»가 아니라 «보기»다 — 계·진행·기록·온도에 아무 영향이 없고(EXP 에 넣지 않는다 · loop 가 읽지 않는다), 다른 탭으로 가도 설정만 남는다.
+   따라가는 자리는 microLayout 이 쓰는 그 좌표(mapN · 단일 원천)이고, 렌즈 안은 «같은 항목»을 LENS_K 배로 다시 그린 것이다 — 따로 만든 애니메이션이 아니다.
+   붓는 중: 짝지은 OH⁻ 하나를 골라 그 만남 자리를 지킨다 — 물이 될 때까지(u < 1), 그 뒤 LENS_HOLD 만큼(진행 p 단위) 더 보여 준 다음 그때 막 비커를 떠난 짝(e 최소)으로 옮긴다.
+   섞은 뒤: 마지막으로 보던 자리에서 가장 가까운 물 분자를 따라간다. 섞기 전·산을 붓는 동안: 따라갈 것이 없다(렌즈 없음 · 캡션이 안내) */
+var LENS_HOLD = 0.05;
+function pairDone(u) { return u >= 1 - 1e-9; }   /* (1−0.55)/0.45 는 부동소수점에서 1 보다 아주 조금 작다(0.9999999999999999) — «끝»을 놓치면 렌즈가 첫 짝에 갇힌다(실측) */
+function lensPick(poses) {
+  var i, q, u, e, best = -1, bestE = 2, cur = -1;
+  if (LENS.pair >= 0 && LENS.pair < st.parts.length) {
+    q = st.parts[LENS.pair];
+    if (q.kind === "OH" && q.pair >= 0) {
+      cur = LENS.pair; u = pairU(q, poses);
+      if (!pairDone(u)) { LENS.doneP = -1; return cur; }
+      if (LENS.doneP < 0) LENS.doneP = st.p;
+      if (st.p - LENS.doneP < LENS_HOLD) return cur;
+    }
+  }
+  for (i = 0; i < st.parts.length; i++) {
+    q = st.parts[i];
+    if (q.kind !== "OH" || q.pair < 0 || i === cur) continue;
+    e = exitE(q, poses[1]);
+    if (e > 0 && !pairDone(pairU(q, poses)) && e < bestE) { bestE = e; best = i; }
+  }
+  if (best >= 0) { LENS.doneP = -1; return best; }
+  return cur;
+}
+function lensR(G) { return Math.max(48, Math.min(80, G.cbh * 0.32)); }
+/* 이번 프레임의 돋보기 — 자리(target: 세계 px)·단계·이름표·렌즈 원의 중심(cx,cy: 화면 안쪽으로 당긴 것). 그리기와 프로브가 같은 함수를 읽는다 */
+function lensState(G, poses, RS) {
+  var out = { on: LENS.on, target: null, stage: null, pill: "", u: 0, n: RS.reacted, R: lensR(G), k: LENS_K, cx: 0, cy: 0 };
+  if (!LENS.on) return out;
+  var F = partFrames(G), q, i;
+  if (st.phase === "mixing") {
+    LENS.pair = lensPick(poses); LENS.w = -1;
+    if (LENS.pair < 0) return out;
+    q = st.parts[LENS.pair];
+    out.target = mapN(F.C, NX.C, q.mx, q.my);
+    out.u = pairU(q, poses);
+    out.stage = out.u <= 0 ? "wait" : out.u < MERGE_CONTACT ? "approach" : !pairDone(out.u) ? "contact" : "done";
+  } else if (st.phase === "after") {
+    LENS.pair = -1;
+    if (!(LENS.w >= 0 && LENS.w < st.parts.length && st.parts[LENS.w].kind === "W")) {
+      var bd = 1e18; LENS.w = -1;
+      for (i = 0; i < st.parts.length; i++) if (st.parts[i].kind === "W") {
+        var pt = mapN(F.C, NX.C, st.parts[i].x, st.parts[i].y), dd = (pt.x - LENS.tx) * (pt.x - LENS.tx) + (pt.y - LENS.ty) * (pt.y - LENS.ty);
+        if (dd < bd) { bd = dd; LENS.w = i; }
+      }
+    }
+    if (LENS.w < 0) return out;
+    q = st.parts[LENS.w];
+    out.target = mapN(F.C, NX.C, q.x, q.y);
+    out.stage = "water";
+  } else { LENS.pair = -1; LENS.w = -1; return out; }
+  LENS.tx = out.target.x; LENS.ty = out.target.y;
+  /* 렌즈 원은 화면 안 · 온도계 글자(비커 오른쪽 바깥)를 가리지 않는 범위에 둔다 — 자리는 늘 렌즈 중심에 온다(확대의 원점이 자리) */
+  out.cx = Math.max(out.R + 3, Math.min(Math.min(G.w - out.R - 3, G.cbx + G.cbw + 4 - out.R), out.target.x));
+  out.cy = Math.max(out.R + 3, Math.min(G.h - out.R - 3, out.target.y));
+  out.pill = out.stage === "wait" ? "H⁺ 1개가 기다립니다 — OH⁻ 1개가 오는 중"
+           : out.stage === "approach" ? "OH⁻ 1개가 H⁺ 1개에 다가갑니다"
+           : out.stage === "contact" ? "닿음 — H⁺ 1개 + OH⁻ 1개 → H₂O 1개"
+           : out.stage === "done" ? "H⁺ 1개 + OH⁻ 1개 → H₂O 1개 (지금까지 " + RS.reacted + "개)"
+           : "물 분자 1개 = H⁺ 1개 + OH⁻ 1개 (모두 " + RS.reacted + "개)";
+  return out;
+}
+function drawLens(G, items, LS) {
+  if (!LS || !LS.target) return;
+  var R = LS.R, k = LS.k, t = LS.target, cx = LS.cx, cy = LS.cy, i, it;
+  var keep = R / k + partFrames(G).r * 3, sub = [];
+  for (i = 0; i < items.length; i++) { it = items[i]; if (Math.abs(it.x - t.x) < keep && Math.abs(it.y - t.y) < keep) sub.push(it); }
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = "#edf4fa"; ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+  ctx.fillStyle = WATER_BG; ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+  ctx.translate(cx - t.x * k, cy - t.y * k); ctx.scale(k, k);
+  drawMicroIons(sub, true);                                        /* 같은 항목을 k 배로 — 고리 횟수는 세지 않는다(본 화면에서 이미 셌다) */
+  ctx.restore();
+  /* 테·손잡이·배율 */
+  ctx.save();
+  var dir = (cx + R * 0.74 + 26 > G.w) ? -1 : 1;
+  ctx.lineCap = "round"; ctx.strokeStyle = "#2b3a4a"; ctx.lineWidth = 7;
+  ctx.beginPath(); ctx.moveTo(cx + dir * R * 0.74, cy + R * 0.74); ctx.lineTo(cx + dir * (R * 0.74 + 20), cy + R * 0.74 + 20); ctx.stroke();
+  ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 1.2; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.beginPath(); ctx.arc(cx, cy, R - 3, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = C.t2; ctx.font = "600 10px " + FONT; ctx.textAlign = "left";
+  haloText("×" + k, cx - R + 8, cy - R + 16);
+  /* 이름표 — 렌즈 위(자리가 없으면 아래). 개수로 말한다: 1개 + 1개 → 1개 */
+  ctx.font = "600 11.5px " + FONT; ctx.textAlign = "center";
+  var tw = ctx.measureText(LS.pill).width + 18, ph = 21;
+  var px = Math.max(3, Math.min(G.w - tw - 3, cx - tw / 2)), py = cy - R - ph - 6;
+  if (py < 2) py = cy + R + 6;
+  ctx.fillStyle = "rgba(255,255,255,0.95)"; ctx.strokeStyle = "#2b3a4a"; ctx.lineWidth = 1;
+  ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(px, py, tw, ph, 7); else ctx.rect(px, py, tw, ph); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.t1; ctx.fillText(LS.pill, px + tw / 2, py + 14.5);
+  ctx.restore();
 }
 
 /* ---------- 무대 ---------- */
@@ -1753,17 +1865,13 @@ function syncLive() {
   setTxt("vT", T.toFixed(1));
   setTxt("vRise", T - NEU.T0 > 0.005 ? ("+" + (T - NEU.T0).toFixed(1)) : "—");
   setTxt("vTwhen", st.phase === "before" ? "온도" : st.phase === "mixing" ? "온도 (반응 중)" : RS.n ? "최고 온도" : "온도 (변화 없음)");
-  var c = curCounts(RS), spc = neuSpectators(st.sys);
-  setTxt("cH", c.H + ""); setTxt("cOH", c.OH + "");
-  setTxt("c" + spc[0], c[spc[0]] + ""); setTxt("c" + spc[1], c[spc[1]] + "");
-  setTxt("cW", c.W + "");
-  setTxt("cntWhen", st.phase === "before" ? "섞기 전" : st.phase === "mixing" ? (RS.reacted ? "반응 중" : "섞는 중") : "섞은 뒤");
+  /* 이온 개수 표는 없앴다(사용자 지시 2026-09-17) — 개수는 상태줄의 반응 누적수와 탭 ②의 입자·돋보기가 말한다 */
   var IT = st.ind ? indTimeline(st.indP) : null;
   var stage = st.phase === "before" ? "섞기 전"
             : st.phase === "mixing" ? (st.p < PA ? "산을 붓는 중" : st.p < POUR_END ? ("염기를 붓는 중 · 반응 " + RS.reacted + "/" + RS.n) : "붓기 끝")
             : !st.ind ? (RS.n ? "혼합 완료 — 최고 온도" : "혼합 완료 — 반응 없음")
             : "지시약 " + IND_STAGE[IT.stage];
-  setTxt("stageStat", (st.paused ? "⏸ 일시정지 · " : "") + stage + " · " + T.toFixed(1) + " ℃ · 새로 생긴 물 " + RS.reacted + "/" + RS.n + (SLOW_ON ? " · 느리게(½)" : ""));
+  setTxt("stageStat", (st.paused ? "⏸ 일시정지 · " : "") + stage + " · " + T.toFixed(1) + " ℃ · 새로 생긴 물 " + RS.reacted + "/" + RS.n + (SLOW_ON ? " · 느리게(½)" : "") + (LENS.on ? " · 돋보기" : ""));
   /* 지시약 단계 캡션은 프레임마다 실제 단계를 따라간다 (떨어지는 중 → 닿는 중 → 퍼지는 중) — sync() 는 전이 때만 돈다 */
   if (st.phase === "after" && st.ind && st.indP < 1 && st.tab !== "micro")
     setTxt("stageCap", neuIndName(st.ind) + " " + IND_STAGE[IT.stage] + " — 첫 방울이 닿은 자리부터 색이 퍼집니다.");
@@ -1775,7 +1883,6 @@ function setDisp(sel, on) {
 
 function sync() {
   var S = SYS();
-  var before = neuIonsBeforeSys(st.sys, st.va, st.vb);
   var after  = neuIonsAfterSys(st.sys, st.va, st.vb);
   var vt = st.va + st.vb;
   var i;
@@ -1795,14 +1902,8 @@ function sync() {
   for (i = 0; i < tb.length; i++) tb[i].setAttribute("aria-pressed", tb[i].dataset.tab === st.tab ? "true" : "false");
 
   setTxt("sVa", st.va + " mL"); setTxt("sVb", st.vb + " mL");
-  /* 개수 표 — 「처음」 열은 계산부의 섞기 전 값, 「현재」 열은 반응 누적수(syncLive) */
-  var spc = neuSpectators(st.sys);                                  /* 구경꾼 두 종류 — 계마다 다르다 */
-  var rows = document.querySelectorAll(".ctab tr.spec");             /* 구경꾼 줄은 지금 계의 두 이온만 보인다 (Na⁺/K⁺ · Cl⁻/NO₃⁻/SO₄²⁻) */
-  for (i = 0; i < rows.length; i++) rows[i].style.display = spc.indexOf(rows[i].getAttribute("data-ion")) >= 0 ? "" : "none";
+  /* 이온 개수 표는 없앴다(사용자 지시 2026-09-17) — 남은 이온은 탭 ②에서 «세어» 보고, 반응비(1:1)는 돋보기로 본다. 반응 누적수는 상태줄(syncLive)이 말한다 */
   setTxt("runsAcid", S.acid.formula); setTxt("runsBase", S.base.formula);
-  setTxt("c0H", before.H + ""); setTxt("c0OH", before.OH + "");
-  setTxt("c0" + spc[0], before[spc[0]] + ""); setTxt("c0" + spc[1], before[spc[1]] + "");
-  setTxt("c0W", "0");
   syncLive();
 
   /* 지시약 판독 — 색이 다 퍼진 뒤에만. 페놀프탈레인은 무색이면 산성·중성을 못 가른다 */
@@ -1834,6 +1935,7 @@ function sync() {
   }
   if (rb) rb.disabled = st.phase === "before" || st.ended;
   if (sb) sb.setAttribute("aria-pressed", SLOW_ON ? "true" : "false");
+  var lb = $("lensBtn"); if (lb) lb.setAttribute("aria-pressed", LENS.on ? "true" : "false");
   $("va").disabled = $("vb").disabled = lockCond;
   syncPresets(lockCond);                                            /* 빠른 선택 단추 = 학습지 용액 1~5 (부피가 적힌 것만 활성) */
   var gb = document.querySelectorAll(".gbtn");
@@ -1897,8 +1999,12 @@ function sync() {
     : "「실험 조건 변경하기」를 누르면 이번 실험이 기록되고 부피를 다시 정할 수 있습니다.");
   setTxt("recCount", st.runs.length + "");
 
-  /* 무대 캡션 — 탭 ②(입자)는 이온을 말하고, 탭 ①·③은 비커·온도계·지시약을 말한다. 남은 이온을 셀 곳: 탭 ①→탭 ② · 탭 ③→오른쪽 「이온 개수」 칸 */
-  var ionWhere = st.tab === "adv" ? "오른쪽 「이온 개수」 칸에서" : "탭 ②에서";
+  /* 무대 캡션 — 탭 ②(입자)는 이온을 말하고, 탭 ①·③은 비커·온도계·지시약을 말한다. 남은 이온을 셀 곳: 탭 ①→탭 ② · 탭 ③(입자 화면 없음)→황산이 내놓는 H⁺ 수로 헤아린다 (개수 표는 없앴다 2026-09-17) */
+  var ionWhere = st.tab === "adv" ? "황산 1개가 내놓는 H⁺ 2개를 떠올려 남은 이온을 헤아려" : "탭 ②에서 남은 이온을 세어";
+  /* 돋보기 안내 — 탭 ②에서 켰을 때만 덧붙인다 (보기 설정 · 계와 무관) */
+  var lensCap = !LENS.on ? "" : st.phase === "before" ? " 돋보기 켜짐 — 「섞기」를 누르면 OH⁻ 가 H⁺ 에 닿는 자리를 확대해 따라갑니다."
+              : st.phase === "mixing" ? " 돋보기 — H⁺ 1개와 OH⁻ 1개가 닿아 물 분자 1개가 됩니다(1:1). 「느리게」·「일시정지」와 함께 보세요."
+              : " 돋보기 — 물 분자 하나를 따라갑니다. 물 분자 1개마다 H⁺ 1개와 OH⁻ 1개가 없어졌습니다.";
   setTxt("stageCap",
     st.tab === "micro"
       ? (st.phase === "before"
@@ -1908,18 +2014,18 @@ function sync() {
             ? (st.p < PA ? (S.acid.name + "을(를) 붓는 중입니다 — 물줄기를 따라 이온이 가운데 비커로 들어갑니다.")
                          : (S.base.name + "을(를) 붓는 중입니다 — 들어온 OH⁻ 가 H⁺ 에 «닿는» 자리마다 붉은 빛이 순간 퍼지며 물 분자 H₂O 가 생기고, 그만큼 온도가 오릅니다. 파란 바탕이 용액(물)입니다. 구경꾼 이온은 그대로입니다."))
             : RSn ? "혼합이 끝났습니다 — 남은 이온이 무엇이고 몇 개인지 세어 보세요. 새로 생긴 물의 수만큼 반응이 일어났습니다. 지시약은 탭 ①에서 넣어 확인하세요."
-                  : "혼합이 끝났습니다 — 만날 상대가 없어 반응이 없었습니다(물 0개 · 온도 변화 없음).")
+                  : "혼합이 끝났습니다 — 만날 상대가 없어 반응이 없었습니다(물 0개 · 온도 변화 없음).") + lensCap
     : st.phase === "before"
       ? (vt === 0 ? "두 비커가 모두 비어 있습니다 — 부피를 정하세요."
          : ("아직 섞지 않았습니다. 왼쪽 비커가 " + S.acid.name + ", 오른쪽 비커가 " + S.base.name + "입니다." + (st.tab === "adv" ? "" : " 이온 크기로 보려면 탭 ②.")))
       : st.phase === "mixing"
         ? (st.p < PA ? (S.acid.name + "을(를) 붓는 중입니다.")
                      : (S.base.name + "을(를) 붓는 중입니다 — H⁺ 와 OH⁻ 가 만나 물 분자 H₂O 가 되는 만큼 온도계가 오릅니다. 구경꾼 이온은 그대로입니다."))
-        : !st.ind ? (RSn ? ("혼합이 끝났습니다 — 이 모형의 최고 온도입니다(열이 빠져나가지 않는다고 봄). 지시약을 골라 떨어뜨리세요 (" + ionWhere + " 남은 이온을 세어 먼저 예측해도 좋습니다).")
+        : !st.ind ? (RSn ? ("혼합이 끝났습니다 — 이 모형의 최고 온도입니다(열이 빠져나가지 않는다고 봄). 지시약을 골라 떨어뜨리세요 (" + ionWhere + " 먼저 예측해도 좋습니다).")
                          : "혼합이 끝났습니다 — 한쪽 용액이 없어 반응이 없었습니다(온도 변화 없음). 지시약으로 액성은 확인할 수 있습니다.")
         : !rd ? (neuIndName(st.ind) + " " + IND_STAGE[indTimeline(st.indP).stage] + " — 첫 방울이 닿은 자리부터 색이 퍼집니다.")
         : rd.determinate
-          ? (neuIndName(st.ind) + "을 넣었습니다. " + ionWhere + " «남아 있는» 이온을 세어 색과 맞춰 보세요.")
+          ? (neuIndName(st.ind) + "을 넣었습니다. " + ionWhere + " 색과 맞춰 보세요.")
           : "페놀프탈레인이 무색 그대로입니다(투입 완료). 무색은 산성일 수도 중성일 수도 있어 이 지시약만으로는 가르지 못합니다.");
 
   /* 그래프 카드 — 실험을 끝낸 뒤에만 */
@@ -1960,14 +2066,14 @@ function moveFree(q, dt, x0, x1) {
 }
 function leftHalf(q) { return q.kind === "H" || q.kind === SYS().acid.anion; }
 function boxOf(q) { var L = st.phase === "before" && leftHalf(q); var R = st.phase === "before" && !L; return [L ? 0.05 : R ? 0.55 : 0.05, L ? 0.45 : 0.95]; }
-/* 겹침 풀기 — 세어 보라고 그린 입자가 포개지면 안 된다(육안 실측: 무작위 걸음만으로는 H⁺ 둘이 겹쳤다).
+/* 겹침 풀기 — 세어 보라고 그린 입자가 포개지면 안 된다(육안 실측: 무작위 걸음만으로는 H⁺ 둘이 겹쳤다). 최소 거리 = 두 입자의 크기 합(radOf · 물 분자는 1.26r) + 2 px.
    그릇(옆 비커·가운데 비커)의 px 축척으로 재서 정규화 좌표를 민다 — 같은 그릇 안의 짝만. 반쪽·상자 경계는 다시 지킨다 */
 function separate(parts) {
-  var F = partFrames(sceneGeom()), minD = F.r * 2 + 2;
+  var F = partFrames(sceneGeom()), r = F.r;
   for (var i = 0; i < parts.length; i++) for (var j = i + 1; j < parts.length; j++) {
     var A = parts[i], B = parts[j], fa = frameOf(A, F);
     if (fa !== frameOf(B, F)) continue;
-    var sc = pxScale(fa, rangeOf(A));
+    var sc = pxScale(fa, rangeOf(A)), minD = radOf(A, r) + radOf(B, r) + 2;
     var dx = (B.x - A.x) * sc.sx, dy = (B.y - A.y) * sc.sy, d = Math.sqrt(dx * dx + dy * dy);
     if (d < 1e-4) { dx = minD * 0.5; dy = 0; d = minD * 0.5; }
     if (d < minD) {
@@ -2005,7 +2111,7 @@ function loop(ts) {
         if (st.phase === "before") { var L = leftHalf(q); moveFree(q, dt, L ? 0.05 : 0.55, L ? 0.45 : 0.95); }
         else moveFree(q, dt, 0.05, 0.95);
       }
-      separate(st.parts);
+      separate(st.parts); separate(st.parts);              /* 두 번 — 한 번에 겹침의 절반씩 미니까 두 번이면 3/4 (물 분자를 키운 뒤 한 번으로는 겹침이 몇 프레임 남았다 · 실측) */
     }
   }
   draw();
@@ -2050,6 +2156,7 @@ for (var sci = 0; sci < sysChoices.length; sci++) sysChoices[sci].addEventListen
 $("worksheet").addEventListener("input", function () { syncPresets((st.phase !== "before") || st.ended); });
 $("replayBtn").addEventListener("click", replay);
 $("slowBtn").addEventListener("click", function () { setSlow(!SLOW_ON); });
+$("lensBtn").addEventListener("click", function () { setLens(!LENS.on); });
 var gbs = document.querySelectorAll(".gbtn");
 for (var gi = 0; gi < gbs.length; gi++) gbs[gi].addEventListener("click", function () {
   st.guess = this.dataset.g; sync();
@@ -2123,6 +2230,7 @@ window.NEUVIEW = { st: st, sync: sync, draw: draw, startMix: startMix, startInd:
                    heatDone: heatDone, curTemp: curTemp, flashCount: function () { return ringN; }, ringCount: function () { return ringN; },
                    nextRun: nextRun, endExperiment: endExperiment, restartAll: restartAll, indReady: indReady,
                    replay: replay, togglePause: togglePause, setSlow: setSlow, swapSys: swapSys, animating: animating, canEnd: canEnd,
+                   lens: function () { var G = sceneGeom(), P = posesFor(G); return lensState(G, P, reactState(P)); }, setLens: setLens, lensCfg: LENS,
                    reactState: function () { return reactState(posesFor(sceneGeom())); },
                    basicSys: function () { return BASIC_SYS; }, applySheetSys: applySheetSys, syncPresets: syncPresets, sheetVolume: sheetVolume,
                    inflow: function () { return inflowOf(posesFor(sceneGeom())); },
@@ -2136,7 +2244,7 @@ window.NEUVIEW = { st: st, sync: sync, draw: draw, startMix: startMix, startInd:
                    pourPose: function (side, pp) { var w = cv.parentNode.clientWidth; var G = macroGeom(w, stageH()); return DESIGN.pourPose(pp, pourSpec(G, side)); },
                    pourWarp: pourWarp,
                    K: { MIX_T: MIX_T, POUR_END: POUR_END, PA: PA, ACID_SHARE: ACID_SHARE, IND_T: IND_T, N_DROPS: N_DROPS, TRAV: TRAV, TRAV_B: TRAV_B, SLOW: SLOW, POUR_STREAM_AT: POUR_STREAM_AT, POUR_STREAM_SHARE: POUR_STREAM_SHARE,
-                        FIRST_CONTACT: FIRST_CONTACT, MERGE_CONTACT: MERGE_CONTACT, DROP_GAP: DROP_GAP, DROP_FALL: DROP_FALL } };
+                        LENS_K: LENS_K, WATER_EXT: WATER_EXT, FIRST_CONTACT: FIRST_CONTACT, MERGE_CONTACT: MERGE_CONTACT, DROP_GAP: DROP_GAP, DROP_FALL: DROP_FALL } };
 
 })();
 
