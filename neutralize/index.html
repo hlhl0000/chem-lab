@@ -175,8 +175,8 @@
   같은 실험을 <b>이온 크기로 보려면 탭 ②</b> — 탭을 오가도 실험은 이어집니다.
   조건을 바꿔 여러 번 한 뒤 「실험 종료하기」를 누르면 부피에 따른 최고 온도 그래프가 나옵니다.</p>
 <p class="tabdesc only-micro" style="display:none"><b>탭 ①과 같은 실험을 이온 크기로 본 것.</b> 비커·붓는 순서·빠르기는 탭 ①과 같고,
-  용액 색 대신 <b>이온</b>(1 mL = 입자 1개)만 그립니다. 산을 부을 때 H<sup>+</sup>와 Cl<sup>−</sup>가, 염기를 부을 때
-  Na<sup>+</sup>와 OH<sup>−</sup>가 물줄기를 따라 들어오고, OH<sup>−</sup>가 H<sup>+</sup>에 닿은 자리에서 붉은 빛이 순간 퍼지며
+  용액 색 대신 <b>이온</b>(1 mL = 입자 1개)만 그립니다. 산을 부을 때 H<sup>+</sup>와 산의 음이온(Cl<sup>−</sup> 또는 NO<sub>3</sub><sup>−</sup>)이, 염기를 부을 때
+  염기의 양이온(Na<sup>+</sup> 또는 K<sup>+</sup>)과 OH<sup>−</sup>가 물줄기를 따라 들어오고, OH<sup>−</sup>가 H<sup>+</sup>에 닿은 자리에서 붉은 빛이 순간 퍼지며
   물 분자 H<sub>2</sub>O가 생깁니다. 파란 바탕은 용액(물)입니다. 남은 이온을 세어 액성을 예측해 보세요 — 지시약은 탭 ①에서 넣습니다.</p>
 <p class="tabdesc only-adv" style="display:none"><b>같은 농도, 다른 산·염기.</b> 묽은 황산(H<sub>2</sub>SO<sub>4</sub>)과
   수산화 칼륨 수용액(KOH)으로 같은 실험을 합니다.
@@ -265,26 +265,29 @@
             <td id="c0H">6</td><td id="cH">6</td></tr>
         <tr><th><span class="dot sq" style="background:var(--d-blue)"></span>OH<sup>&minus;</sup> 수산화 이온</th>
             <td id="c0OH">6</td><td id="cOH">6</td></tr>
-        <tr class="spec only-std"><th><span class="dot" style="background:var(--d-gray)"></span>Na<sup>+</sup> 나트륨 이온</th>
+        <!-- 구경꾼 줄 — 지금 계의 두 이온만 보인다(sync 가 data-ion 으로 고른다): 산 Cl⁻/NO₃⁻/SO₄²⁻ · 염기 Na⁺/K⁺ -->
+        <tr class="spec" data-ion="Na"><th><span class="dot" style="background:var(--d-gray)"></span>Na<sup>+</sup> 나트륨 이온</th>
             <td id="c0Na">6</td><td id="cNa">6</td></tr>
-        <tr class="spec only-std"><th><span class="dot sq" style="background:var(--d-gray)"></span>Cl<sup>&minus;</sup> 염화 이온</th>
-            <td id="c0Cl">6</td><td id="cCl">6</td></tr>
-        <tr class="spec only-adv" style="display:none"><th><span class="dot" style="background:var(--d-gray)"></span>K<sup>+</sup> 칼륨 이온</th>
+        <tr class="spec" data-ion="K" style="display:none"><th><span class="dot" style="background:var(--d-gray)"></span>K<sup>+</sup> 칼륨 이온</th>
             <td id="c0K">6</td><td id="cK">6</td></tr>
-        <tr class="spec only-adv" style="display:none"><th><span class="dot sq" style="background:var(--d-gray)"></span>SO<sub>4</sub><sup>2&minus;</sup> 황산 이온</th>
+        <tr class="spec" data-ion="Cl"><th><span class="dot sq" style="background:var(--d-gray)"></span>Cl<sup>&minus;</sup> 염화 이온</th>
+            <td id="c0Cl">6</td><td id="cCl">6</td></tr>
+        <tr class="spec" data-ion="NO3" style="display:none"><th><span class="dot sq" style="background:var(--d-gray)"></span>NO<sub>3</sub><sup>&minus;</sup> 질산 이온</th>
+            <td id="c0NO3">6</td><td id="cNO3">6</td></tr>
+        <tr class="spec" data-ion="SO4" style="display:none"><th><span class="dot sq" style="background:var(--d-gray)"></span>SO<sub>4</sub><sup>2&minus;</sup> 황산 이온</th>
             <td id="c0SO4">6</td><td id="cSO4">6</td></tr>
         <tr><th><span class="dot" style="background:#c8d4e0"></span>물 분자 H<sub>2</sub>O <span style="font-weight:500;color:var(--t3)">(반응으로 새로 생긴 것)</span></th>
             <td id="c0W">0</td><td id="cW">0</td></tr>
       </table>
       <p class="note" style="font-size:11.5px">
-        <b>회색 두 가지(Na<sup>+</sup>·Cl<sup>&minus;</sup>, ②에서는 K<sup>+</sup>·SO<sub>4</sub><sup>2&minus;</sup>)는 반응에 참여하지 않습니다.</b>
+        <b>회색 이온(구경꾼 — 학습지에서 고른 산·염기에 따라 Cl<sup>&minus;</sup> 또는 NO<sub>3</sub><sup>&minus;</sup>, Na<sup>+</sup> 또는 K<sup>+</sup> · ③에서는 K<sup>+</sup>·SO<sub>4</sub><sup>2&minus;</sup>)은 반응에 참여하지 않습니다.</b>
         섞기 전에도 섞은 뒤에도 개수가 그대로입니다 &mdash; 이온인 채로 물속에 흩어져 있을 뿐,
         <b>소금 알갱이가 생기지는 않습니다.</b> 「현재」 열은 H<sup>+</sup>와 OH<sup>&minus;</sup>가 닿아 물이 된 만큼 줄고, 물 분자는 그만큼 늡니다 —
         원래 있던 물은 그리지 않았습니다.</p>
 
       <!-- 실험 기록 — 「실험 조건 변경하기」를 누를 때마다 한 줄 -->
       <table class="runs" id="runsTab">
-        <tr><th>#</th><th>HCl</th><th>NaOH</th><th>최고 온도</th><th>지시약</th></tr>
+        <tr><th>#</th><th id="runsAcid">HCl</th><th id="runsBase">NaOH</th><th>최고 온도</th><th>지시약</th></tr>
       </table>
       <p class="note" style="font-size:11.5px"><span id="recHint"></span>
         (한 실험 <b id="recCount">0</b>회)</p>
@@ -299,7 +302,7 @@
 <div class="card graphcard" id="graphCard" style="display:none">
   <h2 style="font-size:15px;margin:0 0 10px;color:var(--t1)">실험한 조합의 최고 온도</h2>
   <div class="stage stage--light">
-    <canvas id="graphCv" aria-label="가로축이 각 실험의 묽은 염산·수산화 나트륨 수용액 부피, 세로축이 최고 온도인 그래프입니다. 실험한 조합만 점으로 나타나고, 점의 색은 그 조합에서 본 지시약 색입니다."></canvas>
+    <canvas id="graphCv" aria-label="가로축이 각 실험의 산·염기 부피, 세로축이 최고 온도인 그래프입니다. 실험한 조합만 점으로 나타나고, 점의 색은 그 조합에서 본 지시약 색입니다."></canvas>
   </div>
   <div class="legend legend2">
     <span class="item"><span class="swatch" style="background:#e8cc16"></span>BTB 노란색 &mdash; 산성</span>
@@ -340,9 +343,18 @@
 
   <div class="wsec">활동2. 실험 설계하기</div>
   <div class="wq">
-    <p><span class="qn">Q1.</span> 어떤 산과 어떤 염기를 혼합하는가?</p>
-    <p>산 : <input class="gap" type="text" data-csv="활동2_Q1_산" aria-label="혼합하는 산">&emsp;
-       염기 : <input class="gap" type="text" data-csv="활동2_Q1_염기" aria-label="혼합하는 염기"></p>
+    <p><span class="qn">Q1.</span> 어떤 산과 어떤 염기를 혼합하는가?
+      <span style="color:var(--t3);font-size:12px">(고른 산·염기가 탭 ①·②의 용액이 됩니다 — 입자 모형의 이온도 그에 맞게 바뀝니다.)</span></p>
+    <p style="margin:0 0 4px">산 :</p>
+    <div class="wchoice wchoice--sys" role="group" aria-label="혼합하는 산" data-csv="활동2_Q1_산" data-value="">
+      <button class="wopt" type="button" data-v="HCl (염산)" aria-pressed="false">HCl (염산)</button>
+      <button class="wopt" type="button" data-v="HNO₃ (질산)" aria-pressed="false">HNO<sub>3</sub> (질산)</button>
+    </div>
+    <p style="margin:8px 0 4px">염기 :</p>
+    <div class="wchoice wchoice--sys" role="group" aria-label="혼합하는 염기" data-csv="활동2_Q1_염기" data-value="">
+      <button class="wopt" type="button" data-v="NaOH (수산화 나트륨)" aria-pressed="false">NaOH (수산화 나트륨)</button>
+      <button class="wopt" type="button" data-v="KOH (수산화 칼륨)" aria-pressed="false">KOH (수산화 칼륨)</button>
+    </div>
   </div>
   <div class="wq">
     <p><span class="qn">Q2.</span> 총 5번의 혼합을 진행해보자. 각각 산 수용액 몇 mL와 염기 수용액 몇 mL를 혼합하는가?</p>
@@ -480,7 +492,7 @@
     <li><span class="tag obs">관찰</span> C(6+6)와 D(8+4)에 BTB 대신 <b>페놀프탈레인</b>을 넣어 보자.
         둘 다 무색이다. 페놀프탈레인만으로 알 수 <b>없는</b> 것은 무엇이고, 그래도 알 수 <b>있는</b> 것은
         무엇인가? A(2+10)에도 넣어 보자.</li>
-    <li><span class="tag mdl">모형</span> 회색으로 그린 Na<sup>+</sup>와 Cl<sup>&minus;</sup>는
+    <li><span class="tag mdl">모형</span> 회색으로 그린 구경꾼 이온(Na<sup>+</sup> 또는 K<sup>+</sup>, Cl<sup>&minus;</sup> 또는 NO<sub>3</sub><sup>&minus;</sup>)은
         섞기 전과 뒤의 개수가 같다. 이것으로 &ldquo;중화 반응이 일어나면 <b>소금이 생긴다</b>&rdquo;는
         생각의 어디가 맞고 어디가 틀렸는지 말해 보자.</li>
     <li><span class="tag mdl">모형</span> 슬라이더를 0 mL 로 내려 <b>한쪽만</b> 넣어 보자.
@@ -510,9 +522,9 @@
       <li>온도 계산에 쓴 값: 중화열 <b>57.3 kJ/mol</b>, 물의 비열 <b>4.18 J/(g·K)</b>,
           용액의 밀도 <b>1.0 g/mL</b>, 실온 <b>20 ℃</b>. 용액의 비열을 물과 같다고 보았고,
           섞을 때 부피가 그대로 더해진다고 보았습니다.</li>
-      <li><b>이 화면의 결과는 「같은 농도의 묽은 염산과 수산화 나트륨 수용액」에서만
-          그대로입니다.</b> 농도가 다르거나 묽은 황산처럼 산의 종류가 달라지면
-          부피비가 달라집니다.</li>
+      <li><b>이 화면의 결과는 「같은 농도의 1가 산·염기(염산·질산 / 수산화 나트륨·수산화 칼륨)」에서만
+          그대로입니다.</b> 학습지에서 고른 조합이 달라도 구경꾼 이온의 종류만 다르고 온도·액성은 같습니다. 농도가 다르거나
+          묽은 황산처럼 산의 종류가 달라지면 부피비가 달라집니다.</li>
       <li><b>옆 비커가 사라지는 것은 화면 정리입니다.</b> 실제로는 빈 비커가 그대로 남습니다.
           붓는 모습·방울 셋·색이 퍼지는 빠르기도 도식이며, 실제 홈판에서는 지시약을 1~2방울 씁니다.</li>
       <li><b>페놀프탈레인은 산성과 중성에서 모두 무색입니다.</b> 그래서 이 지시약만으로는 둘을

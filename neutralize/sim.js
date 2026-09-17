@@ -115,15 +115,23 @@ var NEU_PRESET = [
    같은 농도 C 의 두 용액. h = 산 «한 분자»가 내놓는 H⁺ 수 · oh = 염기 한 분자가 내놓는 OH⁻ 수.
    황산 H₂SO₄ 는 h=2 — 그래서 같은 농도라도 중성이 되는 부피비가 1:1 이 아니라 1:2 다(지도서 118쪽 「묽은 황산이면 1:1 이 되지 않는다」).
    완전 해리 가정: 황산의 두 번째 H⁺ 도 전부 나온다고 본다(「가정과 한계」에 명시) */
-var NEU_CHARGE = { H: 1, OH: -1, Na: 1, Cl: -1, K: 1, SO4: -2 };
-var NEU_SYS = {
-  hcl_naoh:  { id: "hcl_naoh",
-               acid: { name: "묽은 염산",         formula: "HCl",   anion: "Cl",  h: 1 },
-               base: { name: "수산화 나트륨 수용액", formula: "NaOH",  cation: "Na", oh: 1 } },
-  h2so4_koh: { id: "h2so4_koh",
-               acid: { name: "묽은 황산",         formula: "H₂SO₄", anion: "SO4", h: 2 },
-               base: { name: "수산화 칼륨 수용액",   formula: "KOH",   cation: "K",  oh: 1 } }
+var NEU_CHARGE = { H: 1, OH: -1, Na: 1, Cl: -1, K: 1, SO4: -2, NO3: -1 };
+/* 산·염기 표 — 학습지 활동2 Q1 에서 산 2택(HCl·HNO₃)·염기 2택(NaOH·KOH)을 고르면 그 조합이 탭 ①·②의 계가 된다 (사용자 지시 2026-09-17).
+   ③ 심화탐구는 황산(h=2)·수산화 칼륨 고정. 모두 같은 농도·완전 해리 — 1가 조합 넷은 ΔT·액성이 같고 구경꾼 이온의 «종류»만 다르다 */
+var NEU_ACID = {
+  hcl:   { name: "묽은 염산", formula: "HCl",   anion: "Cl",  h: 1 },
+  hno3:  { name: "묽은 질산", formula: "HNO₃",  anion: "NO3", h: 1 },
+  h2so4: { name: "묽은 황산", formula: "H₂SO₄", anion: "SO4", h: 2 }
 };
+var NEU_BASE = {
+  naoh: { name: "수산화 나트륨 수용액", formula: "NaOH", cation: "Na", oh: 1 },
+  koh:  { name: "수산화 칼륨 수용액",   formula: "KOH",  cation: "K",  oh: 1 }
+};
+var NEU_SYS = {};
+function neuMakeSys(a, b) { var id = a + "_" + b; NEU_SYS[id] = { id: id, acid: NEU_ACID[a], base: NEU_BASE[b] }; }
+neuMakeSys("hcl", "naoh"); neuMakeSys("hcl", "koh"); neuMakeSys("hno3", "naoh"); neuMakeSys("hno3", "koh"); neuMakeSys("h2so4", "koh");
+/* 기본 실험(탭 ①·②)의 계 id — 학습지 선택(산 hcl|hno3 · 염기 naoh|koh)에서. 모르는 값은 기본(hcl·naoh)으로 */
+function neuBasicSys(acid, base) { return (acid === "hno3" ? "hno3" : "hcl") + "_" + (base === "koh" ? "koh" : "naoh"); }
 function neuSys(id) { return NEU_SYS[id] || NEU_SYS.hcl_naoh; }
 /* 섞기 «전» 이온 개수 (도식 · 완전 해리). 키는 이온 종류 */
 function neuIonsBeforeSys(id, va, vb) {
@@ -788,7 +796,21 @@ var SHOW = {
    계(sys)는 바꾸지 않는다(탭 배선 참조) — 탭 ③에서 적으러 갔다 와도 실험 기록이 남는다. 2026-09-16 */
 SHOW.sheet = { tabMacro: false, micro: false, adv: false, std: true, ind: false, sheet: true };
 /* 탭이 정하는 산·염기 계 — ③ 심화탐구만 황산·수산화 칼륨. 탭 ①·② 는 같은 계(같은 실험을 두 눈금으로 본다 — 탭을 오가도 실험이 이어진다) */
-function sysOfTab(tab) { return tab === "adv" ? "h2so4_koh" : "hcl_naoh"; }
+var BASIC_SYS = "hcl_naoh";   /* 탭 ①·②의 계 — 학습지 활동2 Q1 의 선택이 정한다(applySheetSys). 기본 HCl + NaOH */
+function sysOfTab(tab) { return tab === "adv" ? "h2so4_koh" : BASIC_SYS; }
+/* 학습지 활동2 Q1 의 선택(산 2택 · 염기 2택) → 탭 ①·②의 산·염기 계. 학습지의 선택지와 입자 모형의 이온 종류가 연동된다 (사용자 지시 2026-09-17) */
+function basicSysFromSheet() {
+  var a = document.querySelector('#worksheet .wchoice[data-csv="활동2_Q1_산"]'), b = document.querySelector('#worksheet .wchoice[data-csv="활동2_Q1_염기"]');
+  var av = a ? (a.getAttribute("data-value") || "") : "", bv = b ? (b.getAttribute("data-value") || "") : "";
+  return neuBasicSys(av.indexOf("HNO") === 0 ? "hno3" : "hcl", bv.indexOf("KOH") === 0 ? "koh" : "naoh");
+}
+function applySheetSys() {
+  var sys = basicSysFromSheet();
+  if (sys === BASIC_SYS) return;
+  BASIC_SYS = sys;
+  if (st.sys !== "h2so4_koh" && st.sys !== sys) swapSys(sys);   /* 기본 실험의 계를 바꾼다 — 계마다 기록은 보관(EXP) · 탭 ③에 있으면 돌아올 때 적용 */
+  else sync();
+}
 
 /* ---------- 상태 ---------- */
 var st = {
@@ -1464,7 +1486,8 @@ var ION = {
   OH:  { sym: "OH⁻",   cat: "음", key: true  },
   Na:  { sym: "Na⁺",   cat: "양", key: false },
   Cl:  { sym: "Cl⁻",   cat: "음", key: false },
-  K:   { sym: "K⁺",    cat: "양", key: false },   /* ③ 심화탐구 */
+  K:   { sym: "K⁺",    cat: "양", key: false },   /* KOH (학습지 선택 · ③ 심화탐구) */
+  NO3: { sym: "NO₃⁻",  cat: "음", key: false },   /* HNO₃ (학습지 선택) — 기호가 길어 넓은 사각 */
   SO4: { sym: "SO₄²⁻", cat: "음", key: false },   /* ③ 심화탐구 — 2가 음이온 */
   W:   { sym: "",      cat: "물", key: false }
 };
@@ -1472,7 +1495,7 @@ var ION = {
    이름표만 K⁺ 로, SO₄²⁻ 는 기호가 길어 사각을 옆으로 넓혀 요청자가 그린다(ionmove 의 anionRectW 와 같은 원칙) */
 function drawIonAny(g, spec) {
   if (spec.kind === "K") { spec.kind = "Na"; DESIGN.ion(g, spec); return; }
-  if (spec.kind !== "SO4") { DESIGN.ion(g, spec); return; }
+  if (spec.kind !== "SO4" && spec.kind !== "NO3") { DESIGN.ion(g, spec); return; }   /* 기호가 긴 음이온(SO₄²⁻·NO₃⁻)은 넓은 사각 */
   var r = spec.r * (spec.scale === undefined ? 1 : spec.scale);
   if (r <= 0.3) return;
   g.save();
@@ -1755,6 +1778,9 @@ function sync() {
   setTxt("sVa", st.va + " mL"); setTxt("sVb", st.vb + " mL");
   /* 개수 표 — 「처음」 열은 계산부의 섞기 전 값, 「현재」 열은 반응 누적수(syncLive) */
   var spc = neuSpectators(st.sys);                                  /* 구경꾼 두 종류 — 계마다 다르다 */
+  var rows = document.querySelectorAll(".ctab tr.spec");             /* 구경꾼 줄은 지금 계의 두 이온만 보인다 (Na⁺/K⁺ · Cl⁻/NO₃⁻/SO₄²⁻) */
+  for (i = 0; i < rows.length; i++) rows[i].style.display = spc.indexOf(rows[i].getAttribute("data-ion")) >= 0 ? "" : "none";
+  setTxt("runsAcid", S.acid.formula); setTxt("runsBase", S.base.formula);
   setTxt("c0H", before.H + ""); setTxt("c0OH", before.OH + "");
   setTxt("c0" + spc[0], before[spc[0]] + ""); setTxt("c0" + spc[1], before[spc[1]] + "");
   setTxt("c0W", "0");
@@ -1999,6 +2025,9 @@ $("nextBtn").addEventListener("click", nextRun);
 $("endBtn").addEventListener("click", function () { if (st.ended) restartAll(); else endExperiment(); });   /* 종료 ↔ 초기화 한 단추 */
 $("clrBtn").addEventListener("click", restartAll);
 $("pauseBtn").addEventListener("click", togglePause);
+/* 학습지 활동2 Q1 선택 묶음 — 단추(wopt) 처리 뒤 버블링으로 여기까지 온다 → 탭 ①·②의 계를 맞춘다 */
+var sysChoices = document.querySelectorAll("#worksheet .wchoice--sys");
+for (var sci = 0; sci < sysChoices.length; sci++) sysChoices[sci].addEventListener("click", applySheetSys);
 $("replayBtn").addEventListener("click", replay);
 $("slowBtn").addEventListener("click", function () { setSlow(!SLOW_ON); });
 var gbs = document.querySelectorAll(".gbtn");
@@ -2075,6 +2104,7 @@ window.NEUVIEW = { st: st, sync: sync, draw: draw, startMix: startMix, startInd:
                    nextRun: nextRun, endExperiment: endExperiment, restartAll: restartAll, indReady: indReady,
                    replay: replay, togglePause: togglePause, setSlow: setSlow, swapSys: swapSys, animating: animating, canEnd: canEnd,
                    reactState: function () { return reactState(posesFor(sceneGeom())); },
+                   basicSys: function () { return BASIC_SYS; }, applySheetSys: applySheetSys,
                    inflow: function () { return inflowOf(posesFor(sceneGeom())); },
                    counts: function () { return curCounts(); },
                    indTimeline: indTimeline,
@@ -2101,5 +2131,6 @@ if (typeof module !== "undefined" && module.exports)
     NEU_SYS: NEU_SYS, NEU_CHARGE: NEU_CHARGE, neuSys: neuSys, neuIonsBeforeSys: neuIonsBeforeSys,
     neuIonsAfterSys: neuIonsAfterSys, neuMolReactedSys: neuMolReactedSys, neuHeatJSys: neuHeatJSys,
     neuDeltaTSys: neuDeltaTSys, neuMaxTempSys: neuMaxTempSys, neuNatureSys: neuNatureSys,
-    neuChargeSys: neuChargeSys, neuSpectators: neuSpectators
+    neuChargeSys: neuChargeSys, neuSpectators: neuSpectators,
+    NEU_ACID: NEU_ACID, NEU_BASE: NEU_BASE, neuBasicSys: neuBasicSys
   };
