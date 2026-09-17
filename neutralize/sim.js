@@ -811,6 +811,25 @@ function applySheetSys() {
   if (st.sys !== "h2so4_koh" && st.sys !== sys) swapSys(sys);   /* 기본 실험의 계를 바꾼다 — 계마다 기록은 보관(EXP) · 탭 ③에 있으면 돌아올 때 적용 */
   else sync();
 }
+/* 학습지 활동2 Q2 의 용액 1~5 부피 → 빠른 선택 단추 (사용자 지시 2026-09-17). 학생이 설계한 다섯 조합이 옛 홈판 A~E 자리에 뜬다.
+   0~12 의 정수 두 칸이 다 있을 때만 누를 수 있다(슬라이더 눈금 = 1 mL = 입자 1개). 비었거나 범위 밖이면 「—」 · 잠김 */
+function sheetVolume(n, which) {
+  var el = document.querySelector('#worksheet [data-csv="활동2_Q2_용액' + n + '_' + which + 'mL"]');
+  if (!el) return null;
+  var v = String(el.value || "").trim(), x = parseInt(v, 10);
+  return (v !== "" && String(x) === v && x >= 0 && x <= 12) ? x : null;
+}
+function syncPresets(lock) {
+  var bs = document.querySelectorAll(".pv");
+  for (var i = 0; i < bs.length; i++) {
+    var n = bs[i].getAttribute("data-n"), a = sheetVolume(n, "산"), b = sheetVolume(n, "염기"), ok = a !== null && b !== null;
+    bs[i].querySelector(".pvv").textContent = ok ? (a + "+" + b) : "—";
+    if (ok) { bs[i].setAttribute("data-va", a); bs[i].setAttribute("data-vb", b); }
+    else { bs[i].removeAttribute("data-va"); bs[i].removeAttribute("data-vb"); }
+    bs[i].disabled = !!lock || !ok;
+    bs[i].setAttribute("aria-pressed", (ok && st.va === a && st.vb === b) ? "true" : "false");
+  }
+}
 
 /* ---------- 상태 ---------- */
 var st = {
@@ -1816,8 +1835,7 @@ function sync() {
   if (rb) rb.disabled = st.phase === "before" || st.ended;
   if (sb) sb.setAttribute("aria-pressed", SLOW_ON ? "true" : "false");
   $("va").disabled = $("vb").disabled = lockCond;
-  var pv = document.querySelectorAll(".pv");
-  for (i = 0; i < pv.length; i++) pv[i].disabled = lockCond;
+  syncPresets(lockCond);                                            /* 빠른 선택 단추 = 학습지 용액 1~5 (부피가 적힌 것만 활성) */
   var gb = document.querySelectorAll(".gbtn");
   for (i = 0; i < gb.length; i++) {
     gb[i].disabled = (st.phase !== "after") || !!st.ind;
@@ -2028,6 +2046,8 @@ $("pauseBtn").addEventListener("click", togglePause);
 /* 학습지 활동2 Q1 선택 묶음 — 단추(wopt) 처리 뒤 버블링으로 여기까지 온다 → 탭 ①·②의 계를 맞춘다 */
 var sysChoices = document.querySelectorAll("#worksheet .wchoice--sys");
 for (var sci = 0; sci < sysChoices.length; sci++) sysChoices[sci].addEventListener("click", applySheetSys);
+/* 학습지 활동2 Q2 부피를 적으면 곧바로 빠른 선택 단추에 반영 */
+$("worksheet").addEventListener("input", function () { syncPresets((st.phase !== "before") || st.ended); });
 $("replayBtn").addEventListener("click", replay);
 $("slowBtn").addEventListener("click", function () { setSlow(!SLOW_ON); });
 var gbs = document.querySelectorAll(".gbtn");
@@ -2104,7 +2124,7 @@ window.NEUVIEW = { st: st, sync: sync, draw: draw, startMix: startMix, startInd:
                    nextRun: nextRun, endExperiment: endExperiment, restartAll: restartAll, indReady: indReady,
                    replay: replay, togglePause: togglePause, setSlow: setSlow, swapSys: swapSys, animating: animating, canEnd: canEnd,
                    reactState: function () { return reactState(posesFor(sceneGeom())); },
-                   basicSys: function () { return BASIC_SYS; }, applySheetSys: applySheetSys,
+                   basicSys: function () { return BASIC_SYS; }, applySheetSys: applySheetSys, syncPresets: syncPresets, sheetVolume: sheetVolume,
                    inflow: function () { return inflowOf(posesFor(sceneGeom())); },
                    counts: function () { return curCounts(); },
                    indTimeline: indTimeline,

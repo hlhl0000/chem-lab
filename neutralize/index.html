@@ -229,13 +229,15 @@
   <!-- 오른쪽: 조작과 측정값 -->
   <div>
     <div class="card">
-      <div class="segrow" role="group" aria-label="홈판 A~E 조합">
-        <button class="seg pv" data-va="2"  data-vb="10">A<br>2+10</button>
-        <button class="seg pv" data-va="4"  data-vb="8">B<br>4+8</button>
-        <button class="seg pv" data-va="6"  data-vb="6">C<br>6+6</button>
-        <button class="seg pv" data-va="8"  data-vb="4">D<br>8+4</button>
-        <button class="seg pv" data-va="10" data-vb="2">E<br>10+2</button>
+      <!-- 빠른 선택 = 학습지 활동2 Q2 의 용액 1~5 (부피는 sync 의 syncPresets 가 학습지에서 읽어 채운다 · 적히지 않은 용액은 「—」·잠김) -->
+      <div class="segrow" role="group" aria-label="학습지 용액 1~5 — 활동2 Q2 에 적은 산·염기 부피">
+        <button class="seg pv" data-n="1" disabled aria-pressed="false">용액1<br><span class="pvv">—</span></button>
+        <button class="seg pv" data-n="2" disabled aria-pressed="false">용액2<br><span class="pvv">—</span></button>
+        <button class="seg pv" data-n="3" disabled aria-pressed="false">용액3<br><span class="pvv">—</span></button>
+        <button class="seg pv" data-n="4" disabled aria-pressed="false">용액4<br><span class="pvv">—</span></button>
+        <button class="seg pv" data-n="5" disabled aria-pressed="false">용액5<br><span class="pvv">—</span></button>
       </div>
+      <p class="note" id="pvHint" style="font-size:11.5px;margin:-4px 0 10px">학습지(④) 활동2 Q2 에 적은 <b>용액 1~5 의 부피</b>가 위 단추에 뜹니다 — 누르면 슬라이더에 들어갑니다. 아직 적지 않은 용액은 「—」로 잠겨 있습니다(0~12 mL 정수).</p>
 
       <div class="ctl">
         <div class="row"><label for="va" id="lblVa">묽은 염산 (HCl)</label><span class="val" id="sVa">6 mL</span></div>
@@ -479,7 +481,7 @@
   <ol>
     <li><span class="tag pre">예측</span> C(6+6)를 골라 놓고 <b>섞기 전에</b> 답해 보자.
         섞으면 어떤 이온이 몇 개 남을까? 그때 액성은?</li>
-    <li><span class="tag obs">관찰</span> A부터 E까지 하나씩 하고 「실험 조건 변경하기」로 넘어가며
+    <li><span class="tag obs">관찰</span> 학습지 활동2 Q2 에 적은 용액1부터 5까지 하나씩 하고 「실험 조건 변경하기」로 넘어가며
         <b>남은 이온의 종류와 개수</b>, <b>최고 온도</b>, <b>BTB 색</b>을 표에 적어 보자.
         (6차시 홈판 결과표와 같은 순서다) 다 했으면 「실험 종료하기」를 눌러 그래프를 보자.</li>
     <li><span class="tag rel">관계</span> 온도가 가장 높이 올라간 조합은 어디인가?
@@ -498,7 +500,7 @@
     <li><span class="tag mdl">모형</span> 슬라이더를 0 mL 로 내려 <b>한쪽만</b> 넣어 보자.
         온도는 어떻게 되는가? 그 이유는?</li>
     <li><span class="tag pre">예측</span> ③ 심화탐구 &mdash; 묽은 황산과 수산화 칼륨 수용액에서도 C(6+6)가 중성일까?
-        먼저 답하고, A~E를 해 보며 <b>중성이 되는 조합</b>을 찾자. 그 까닭을 오른쪽 「이온 개수」 칸에서 센
+        먼저 답하고, 용액 1~5를 해 보며 <b>중성이 되는 조합</b>을 찾자. 그 까닭을 오른쪽 「이온 개수」 칸에서 센
         H<sup>+</sup>의 <b>개수</b>로 설명하자.</li>
     <li><span class="tag lim">한계</span> 이 화면은 1 mL 를 입자 <b>1개</b>로 그렸다.
         실제 용액 1 mL 안에는 이온이 몇 개쯤 있을까? 그 차이 때문에 이 화면이
