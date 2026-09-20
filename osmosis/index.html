@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>삼투 현상</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색은 shared/style.css 토큰만. 요소 선택자(button{}, input{})는 쓰지 않는다 (매뉴얼 §12①) · 루트 토큰 재선언 금지 */
+  .page{padding:18px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0; line-height:1.6}
+
+  .tabs{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
+  .tabb{font-family:inherit; font-size:14px; font-weight:600; padding:10px 14px; min-height:44px;
+    border-radius:10px 10px 0 0; border:1px solid var(--line); border-bottom:none;
+    background:#eef2f7; color:var(--t2); cursor:pointer}
+  .tabb[aria-pressed="true"]{background:var(--panel); color:var(--accent-dark);
+    box-shadow:inset 0 3px 0 var(--accent)}
+  .tabdesc{font-size:12.5px; color:var(--t2); line-height:1.65; margin:8px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .tabdesc b{color:var(--t1)}
+
+  .cols{display:grid; grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr); gap:14px; margin-top:12px}
+  @media(max-width:1023px){ .cols{grid-template-columns:1fr} }
+  .scene-card{padding:10px}
+  .scene-stage{min-height:520px; position:relative; border:1px solid var(--line); border-radius:11px; background:var(--panel)}
+  .scene-canvas{display:block; width:100%; height:520px; border-radius:10px; touch-action:none; cursor:grab}
+  .scene-canvas.is-fixed{cursor:default}
+  .scene-canvas:active{cursor:grabbing}
+  .scene-canvas.is-fixed:active{cursor:default}
+  .camera-hint{position:absolute; left:12px; top:12px; z-index:3; padding:6px 9px; border:1px solid rgba(78,113,128,.38); border-radius:999px; background:rgba(244,249,250,.88); color:#345667; font-size:11px; font-weight:700; pointer-events:none}
+  .leader{position:absolute; left:0; top:0; width:100%; height:100%; z-index:1; pointer-events:none; overflow:visible}
+  .leader polyline{fill:none; stroke:#1f2a37; stroke-width:1.6; stroke-linejoin:round; stroke-linecap:round}
+  .scene-label--mass{font-variant-numeric:tabular-nums; white-space:nowrap}
+  .btn.is-on{background:var(--d-blue); color:#fff; border-color:var(--d-blue)}
+  .scene-label{position:absolute; z-index:2; font-size:12px; font-weight:700; padding:5px 8px; border-radius:7px; background:rgba(255,255,255,.92); color:var(--t1); border:1px solid rgba(116,141,153,.45); box-shadow:0 2px 7px rgba(28,53,64,.14); pointer-events:none}
+  .fallback-panel{display:none; min-height:420px; padding:18px; color:var(--t2); font-size:13px; line-height:1.65}
+  .is-hidden{display:none!important}
+  .fxbadge{position:absolute; right:12px; top:12px; z-index:3; font-size:11px; font-weight:700; padding:5px 9px; border-radius:999px; border:1px solid var(--d-amber); background:#fffbf5; color:var(--d-amber)}
+  @media(max-width:1023px){ .scene-stage{min-height:420px} .scene-canvas{height:420px} .fallback-panel{min-height:320px} }
+
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0}
+  .btnrow--stage{margin-top:8px}           /* 장치 그림 바로 아래 — 그림과 한 덩어리로 읽히게 (§3 분기) */
+  .btn{font-family:inherit; font-size:14px; font-weight:600; padding:10px 13px; min-height:44px;
+    border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; box-shadow:var(--shadow)}
+  .btn.primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .btn[disabled]{opacity:.42; cursor:default; box-shadow:none}
+  .stagecap{font-size:12.5px; color:var(--t1); margin:9px 0 0; line-height:1.6; min-height:22px}
+  .stagecap .tag{display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:999px; border:1px solid var(--line); color:var(--t3); margin-right:6px; vertical-align:1px}
+  .stagecap .tag.is-on{border-color:var(--d-green); color:var(--d-green)}
+
+  .ctl{margin-bottom:12px}
+  .ctl .row{display:flex; justify-content:space-between; align-items:baseline;
+    font-size:13px; margin-bottom:4px; color:var(--t2); gap:8px}
+  .ctl .row .val{font-variant-numeric:tabular-nums; font-weight:600; color:var(--t1); white-space:nowrap}
+  .rangeends{display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    font-size:11.5px; color:var(--t3); margin-top:4px}
+  .limit{font-size:11px; color:var(--t3); margin:2px 0 0}
+  .grp{font-size:13px; color:var(--t2); margin:12px 0 4px}
+  .segrow{display:flex; gap:7px; flex-wrap:wrap; margin:2px 0 6px}
+  .seg{font-family:inherit; font-size:12.5px; font-weight:600; padding:8px 6px; min-height:44px;
+    border-radius:9px; border:1px solid var(--line); background:var(--panel); color:var(--t2);
+    cursor:pointer; flex:1 1 auto; line-height:1.35}
+  .seg[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .seg[disabled]{opacity:.42; cursor:default}
+  .seg small{display:block; font-weight:500; font-size:11px; opacity:.85}
+
+  .ros{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px}
+  .ros .readout{padding:9px 10px; position:relative}
+  .ros .wide{grid-column:1 / -1}
+  .badge{display:inline-block; font-size:10.5px; font-weight:700; padding:2px 6px; border-radius:999px; border:1px solid var(--line); color:var(--t3); margin-left:6px; vertical-align:2px}
+  .badge.is-table{border-color:var(--d-green); color:var(--d-green)}
+  .badge.is-est{border-color:var(--d-amber); color:var(--d-amber)}
+  .note{font-size:12.5px; color:var(--t2); line-height:1.65; margin:10px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .note b{color:var(--t1)}
+  .note--key{border-color:var(--d-blue); background:#f5f8ff}
+  .legend{margin:8px 0 0; font-size:11.5px; color:var(--t3); row-gap:4px}   /* 공통 .legend(flex·wrap) 구조를 그대로 쓴다 — .item/.swatch */
+  .legend .item.note-item{color:var(--t3)}
+  .limits{font-size:12.5px; color:var(--t2); line-height:1.7; margin:6px 0 0; padding-left:20px}
+  .limits li{margin:2px 0}
+  .card h2{font-size:14px; margin:0 0 6px; color:var(--t1)}
+</style>
+</head>
+<body>
+<div class="wrap page">
+
+<div class="head">
+  <h1>삼투 현상</h1>
+  <p class="sub">용액의 농도에 따른 삼투 현상과 삼투압을 확인합니다.</p>
+</div>
+
+<div class="tabs" role="group" aria-label="실험 선택">
+  <button class="tabb" data-tab="radish" aria-pressed="true">① 무의 질량 변화</button>
+  <button class="tabb" data-tab="utube" aria-pressed="false">② 삼투 실험</button>
+</div>
+<p class="tabdesc only-tab-radish"><b>무 조각을 수용액에 담가 20분 뒤 질량을 잽니다.</b> 무의 질량·용질의 종류·수용액의 농도를 고른 뒤
+  「20분 담그기」를 누르세요. 처음 화면의 물은 순수한 증류수입니다. 농도가 진할수록 수용액을 짙게 그렸습니다. 화면의 10초가 실제 20분입니다.</p>
+<p class="tabdesc only-tab-utube" style="display:none"><b>반투막을 사이에 둔 U자관에 두 용액을 넣고 액면의 높이를 봅니다.</b> 왼쪽·오른쪽 농도를 정하고
+  「실험 시작」을 누르면 물이 막을 건너 액면의 높이 차가 천천히 생깁니다. 각 팔의 용질 점 개수는 실험 중 변하지 않습니다. 「용매 입자 표시하기」를 켜면 막을 건너는 물 분자가 보입니다.</p>
+
+<div class="cols">
+  <!-- 왼쪽: 무대 -->
+  <div>
+    <div class="card scene-card">
+      <div class="scene-stage" id="stageWrap">
+        <canvas class="scene-canvas" id="stage" aria-label="탭 ①: 큰 비커에 증류수 또는 수용액이 담겨 있고 무 조각이 잠겨 있습니다. 농도가 진할수록 수용액이 짙게 보입니다. 담그기를 시작하면 무가 서서히 부풀거나 쪼글쪼글해집니다. 탭 ②: 바닥 가운데에 반투막이 있는 U자관에 왼쪽·오른쪽 액체가 같은 높이로 들어 있고, 실험을 시작하면 한쪽 액면이 천천히 오르고 다른 쪽은 내려갑니다."></canvas>
+        <div class="camera-hint only-tab-radish" id="camHint" aria-hidden="true">↔ 드래그: 회전</div>
+        <div class="fxbadge is-hidden" id="fxBadge">기본 그림</div>
+        <div class="fallback-panel" id="stageFallback">
+          <b>이 기기에서는 3D 그림을 그릴 수 없습니다(WebGL 사용 불가).</b><br>
+          조작과 수치는 그대로 쓸 수 있습니다. 학교 기기라면 브라우저의 하드웨어 가속 설정을 확인해 보세요.
+        </div>
+        <span class="scene-label is-hidden" id="lblLiquid">증류수</span>
+        <svg class="leader is-hidden" id="leader" aria-hidden="true"><polyline id="leaderLine" points="0,0 0,0 0,0"/></svg>
+        <span class="scene-label scene-label--mass is-hidden" id="lblRadish" aria-live="polite">무의 질량 80.0 g</span>
+        <span class="scene-label is-hidden" id="lblMembrane">반투막</span>
+        <span class="scene-label is-hidden" id="lblLeft">왼쪽</span>
+        <span class="scene-label is-hidden" id="lblRight">오른쪽</span>
+      </div>
+      <!-- 조작 단추는 장치 그림 «바로 아래» (매뉴얼 §3 분기) · primary 는 탭당 1개 -->
+      <div class="btnrow btnrow--stage only-tab-radish">
+        <button class="btn primary" id="soakBtn">20분 담그기</button>
+        <button class="btn" id="soakReset">초기화</button>
+      </div>
+      <div class="btnrow btnrow--stage only-tab-utube" style="display:none">
+        <button class="btn primary" id="runBtn">실험 시작</button>
+        <button class="btn" id="solventBtn" aria-pressed="false">용매 입자 표시하기</button>
+        <button class="btn" id="runReset">초기화</button>
+      </div>
+      <p class="note only-tab-utube" id="solventNote" style="display:none"></p>
+      <p class="stagecap" id="stageCap" aria-live="polite"></p>
+      <p class="legend only-tab-radish"><span class="item"><span class="swatch" style="background:#2f8fc1"></span>물(0 M)</span><span class="item"><span class="swatch" id="swMid" style="background:#1f6d9d"></span>1 M</span><span class="item"><span class="swatch" id="swDeep" style="background:#0f4c7a"></span>2 M 수용액</span><span class="item note-item" id="legendNoteRadish"></span></p>
+      <p class="legend only-tab-utube" style="display:none"><span class="item"><span class="swatch" data-sw="water"></span>물·수용액</span><span class="item"><span class="swatch" data-sw="sucrose"></span>설탕</span><span class="item"><span class="swatch" data-sw="glucose"></span>포도당</span><span class="item"><span class="swatch" data-sw="urea"></span>요소</span><span class="item"><span class="swatch" data-sw="solventLo"></span>용매 입자(묽은 쪽)</span><span class="item"><span class="swatch" data-sw="solventHi"></span>용매 입자(진한 쪽)</span><span class="item"><span class="swatch sq" data-sw="membrane"></span>반투막</span><span class="item note-item" id="legendNoteUtube"></span></p>
+      <p class="note is-hidden only-tab-utube" id="rmNote">(&ldquo;동작 줄이기&rdquo;가 켜져 있어 U자관 용질 점의 흔들림·반짝임과 용매 입자의 이동을 생략했습니다. <b>결과는 같습니다.</b>)</p>
+    </div>
+  </div>
+
+  <!-- 오른쪽: 조작과 측정값 -->
+  <div>
+    <div class="card only-tab-radish">
+      <div class="ctl">
+        <div class="row"><label for="mass">무의 질량</label><span class="val" id="sMass">80 g</span></div>
+        <input type="range" id="mass" min="40" max="160" step="10" value="80" aria-describedby="massLimit">
+        <div class="rangeends"><span>40 g</span><span>160 g</span></div>
+        <p class="limit" id="massLimit">여기까지만 조작 가능(교육적 제한) — 학습지 표는 80 g 기준입니다.</p>
+      </div>
+      <p class="grp" id="soluteLbl1">용질의 종류</p>
+      <div class="segrow" role="group" aria-labelledby="soluteLbl1">
+        <button class="seg sol1" data-sol="sucrose" aria-pressed="true">설탕<small>C<sub>12</sub>H<sub>22</sub>O<sub>11</sub></small></button>
+        <button class="seg sol1" data-sol="glucose" aria-pressed="false">포도당<small>C<sub>6</sub>H<sub>12</sub>O<sub>6</sub></small></button>
+        <button class="seg sol1" data-sol="urea"    aria-pressed="false">요소<small>(NH<sub>2</sub>)<sub>2</sub>CO</small></button>
+      </div>
+      <p class="note" style="margin-top:0; font-size:11.5px">용질을 바꿔도 결과는 같습니다 — 입자 수만 셉니다. 요소: 실제 투석막·세포막은 요소처럼 작은 분자를 통과시킵니다(이 시뮬의 막은 물만 통과하는 이상 반투막입니다).</p>
+      <p class="grp" id="concLbl1">수용액의 농도</p>
+      <div class="segrow" role="group" aria-labelledby="concLbl1">
+        <button class="seg conc" data-c="0"   aria-pressed="true">순수한 물<small>증류수 · 0 M</small></button>
+        <button class="seg conc" data-c="0.5" aria-pressed="false">0.5 M</button>
+        <button class="seg conc" data-c="1"   aria-pressed="false">1.0 M</button>
+        <button class="seg conc" data-c="2"   aria-pressed="false">2.0 M</button>
+      </div>
+
+      <div class="ros">
+        <div class="readout"><div class="label">처음 질량</div>
+          <div><span class="value" id="vM0">80.0</span><span class="unit">g</span></div></div>
+        <div class="readout"><div class="label">나중 질량</div>
+          <div><span class="value" id="vM1">&mdash;</span><span class="unit">g</span></div></div>
+        <div class="readout wide"><div class="label">질량 변화 (나중 − 처음)<span class="badge is-hidden" id="dmBadge"></span></div>
+          <div><span class="value" id="vDm">&mdash;</span><span class="unit">g</span></div></div>
+        <div class="readout wide"><div class="label">경과 <span style="font-weight:400">(가상 시간 · 1 s = 2분)</span></div>
+          <div><span class="value" id="vClock">0:00</span><span class="unit">/ 20:00</span></div></div>
+      </div>
+      <p class="note note--key" id="radishCap" style="display:none"></p>
+    </div>
+
+    <div class="card only-tab-utube" style="display:none">
+      <p class="grp" id="soluteLbl2" style="margin-top:0">용질의 종류</p>
+      <div class="segrow" role="group" aria-labelledby="soluteLbl2">
+        <button class="seg sol2" data-sol="sucrose" aria-pressed="true">설탕<small>C<sub>12</sub>H<sub>22</sub>O<sub>11</sub></small></button>
+        <button class="seg sol2" data-sol="glucose" aria-pressed="false">포도당<small>C<sub>6</sub>H<sub>12</sub>O<sub>6</sub></small></button>
+        <button class="seg sol2" data-sol="urea"    aria-pressed="false">요소<small>(NH<sub>2</sub>)<sub>2</sub>CO</small></button>
+      </div>
+      <p class="note" style="margin-top:0; font-size:11.5px">용질을 바꿔도 결과는 같습니다 — 입자 수만 셉니다.</p>
+      <div class="ctl">
+        <div class="row"><label for="cL">왼쪽 수용액의 농도</label><span class="val" id="sCL">0.00 M</span></div>
+        <input type="range" id="cL" class="rng-count" min="0" max="2" step="0.1" value="0">
+        <div class="rangeends"><span>0 M (물)</span><span>2.0 M</span></div>
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="cR">오른쪽 수용액의 농도</label><span class="val" id="sCR">1.00 M</span></div>
+        <input type="range" id="cR" class="rng-count" min="0" max="2" step="0.1" value="1">
+        <div class="rangeends"><span>0 M (물)</span><span>2.0 M</span></div>
+        <p class="limit">여기까지만 조작 가능(교육적 제한)</p>
+      </div>
+
+      <div class="ros">
+        <div class="readout"><div class="label">왼쪽 농도</div>
+          <div><span class="value" id="vCL">0.00</span><span class="unit">M</span></div></div>
+        <div class="readout"><div class="label">오른쪽 농도</div>
+          <div><span class="value" id="vCR">1.00</span><span class="unit">M</span></div></div>
+        <div class="readout wide"><div class="label">액면 높이차 (오른쪽 − 왼쪽)<span class="badge" id="dhBadge">척도 1/3100</span><span class="badge is-est is-hidden" id="dhMeasuring">재는 중</span></div>
+          <div><span class="value" id="vDh">0.0</span><span class="unit">cm</span></div></div>
+      </div>
+      <p class="note note--key" id="eqCap" style="display:none"></p>
+      <p class="note" style="font-size:11.5px">이 U자관의 높이차는 실제의 약 1/3100로 줄여 그린 것입니다(1 M 농도 차 ≈ 물기둥 248 m). 높이차가 농도 차에 비례한다는 관계만 그대로이고, 농도·높이 수치는 이 척도의 모형값입니다.</p>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:14px">
+  <h2>가정과 한계</h2>
+  <ol class="limits" id="limits"></ol>
+</div>
+
+</div>
+
+<script src="../vendor/three.min.js"></script>
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="osmosis"></script>
+<script src="../shared/qr.js" data-base=".." data-current="osmosis"></script>
+<script src="sim.js"></script>
+</body>
+</html>

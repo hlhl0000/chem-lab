@@ -63,6 +63,16 @@ const SIMS = [
     tags: ["물의 밀도","얼음","육각형 배열","개방 구조","수소 결합","4 ℃","열팽창","부피 변화","비열"]
   },
   {
+    id: "osmosis",
+    title: "삼투 현상",
+    cat: "용액",
+    path: "osmosis/",
+    icon: "osmosis",
+    ready: true,
+    desc: "무 조각을 증류수와 설탕·포도당·요소 수용액에 20분 담가 질량 변화를 재고, 반투막 U자관에 농도가 다른 두 용액을 넣어 액면의 높이 차가 천천히 생기는 것을 봅니다. 용질의 종류를 바꿔도 결과는 같고, 액면이 멈춘 뒤에도 양쪽 농도는 같아지지 않습니다 — 높이차가 만드는 압력이 물의 순 이동을 0으로 만든 것입니다.",
+    tags: ["삼투","삼투압","반투막","용액의 농도","판트호프 법칙","순 이동","비전해질"]
+  },
+  {
     id: "colligative",
     title: "끓는점 오름과 어는점 내림",
     cat: "용액",
@@ -352,6 +362,12 @@ const ICONS = {
            stroke-linecap="round" stroke-linejoin="round"/>
            <path d="M46 20c5 0 6 16 9 16s5-8 5-8" fill="none" stroke="currentColor" stroke-width="3.4"
            stroke-linecap="round" stroke-linejoin="round"/>`,
+  osmosis:`<path d="M14 8v34a6 6 0 0 0 6 6h0a6 6 0 0 0 6-6V8" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
+           <path d="M38 8v34a6 6 0 0 0 6 6h0a6 6 0 0 0 6-6V8" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round" transform="translate(-6 0)"/>
+           <path d="M20 44h18" stroke="currentColor" stroke-width="4"/>
+           <path d="M29 38v10" stroke="currentColor" stroke-width="3" stroke-dasharray="2 2"/>
+           <path d="M14 30h12M38 20h12" stroke="currentColor" stroke-width="3" opacity=".55"/>
+           <circle cx="42" cy="26" r="2.2"/><circle cx="46" cy="33" r="2.2"/><circle cx="41" cy="38" r="2.2"/>`,
   colligative:`<path d="M13 8v13L7 42a5 5 0 0 0 4.6 7h21.8A5 5 0 0 0 38 42L32 21V8" fill="none"
            stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>
            <path d="M9 8h27" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
