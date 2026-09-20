@@ -1892,10 +1892,11 @@ var FALLBACK_FX = (function () {
     el.classList.remove("is-hidden"); sv.classList.remove("is-hidden");
     var w = T3.cv.clientWidth, h = T3.cv.clientHeight, ax = (a.x * 0.5 + 0.5) * w, ay = (-a.y * 0.5 + 0.5) * h;
     var dx = Math.round(Math.min(34, w * 0.06)), dy = -dx;                                   // 대각선 «/» 한 토막(위·오른쪽)
-    var lx = ax + dx + 6, ly = ay + dy - el.offsetHeight / 2;                                 // 라벨 왼쪽 가운데가 수평선 «_» 끝에 닿는다
+    var lx = ax + dx + 6, ly = ay + dy - el.offsetHeight / 2, side = 1;                       // 라벨 왼쪽 가운데가 수평선 «_» 끝에 닿는다
+    if (lx > w - el.offsetWidth - 4) { side = -1; lx = ax - dx - 6 - el.offsetWidth; }       // 오른쪽에 자리가 없으면(좁은 화면 · 확대) 왼쪽으로 거울 배치 «\_»
     lx = Math.max(4, Math.min(w - el.offsetWidth - 4, lx)); ly = Math.max(4, Math.min(h - el.offsetHeight - 4, ly));
     el.style.left = lx + "px"; el.style.top = ly + "px";
-    var ex = lx - 3, ey = ly + el.offsetHeight / 2, kx = Math.min(ax + dx, ex - 2), ky = ey;  // 꺾임점: 수평선 높이
+    var ex = side > 0 ? lx - 3 : lx + el.offsetWidth + 3, ey = ly + el.offsetHeight / 2, kx = side > 0 ? Math.min(ax + dx, ex - 2) : Math.max(ax - dx, ex + 2), ky = ey;   // 꺾임점: 수평선 높이
     pl.setAttribute("points", ax.toFixed(1) + "," + ay.toFixed(1) + " " + kx.toFixed(1) + "," + ky.toFixed(1) + " " + ex.toFixed(1) + "," + ey.toFixed(1));
     sv.setAttribute("viewBox", "0 0 " + w + " " + h);
   }
