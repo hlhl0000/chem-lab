@@ -279,6 +279,8 @@ var TXT = {
   legendRadish: "수용액의 색은 농도가 진할수록 짙게 그린 임의 색입니다(설탕 파랑·포도당 하늘색·요소 회색 계열 — 실제 세 수용액은 모두 무색입니다).",   // 탭 ① — 용질 점 없음 · 용질별 색(사용자 지시 2026-09-20)
   legendUtube: "용질 점(설탕 빨강·포도당 주황·요소 노랑)·용매 입자(묽은 쪽 연한 파랑 · 진한 쪽 진한 파랑)·막의 색은 임의 색입니다. 용질 점 1개는 실제 분자 약 3×10²⁰개를 대표합니다.",   // 탭 ②
   solventBtn: "용매 입자 표시하기",
+  zoomBtn: "확대", zoomBtnOn: "원래 보기",                        // 탭 ① 확대(사용자 지시 10 · 2026-09-20): 비커로 다가가 무의 «수평 정면»에 시선 고정 · 회전 없음
+  camHint: "↔ 드래그: 회전", camHintZoom: "확대 · 무 정면 고정",
   solventNote: "막을 건너는 물 분자 — 위쪽 반은 오른쪽→왼쪽, 아래쪽 반은 왼쪽→오른쪽(위·아래로 나눈 것은 두 방향을 구별해 보이려는 그림 규칙일 뿐, 실제 물 분자는 막의 어느 부분으로든 양쪽으로 건넙니다). 두 방향 개수의 차이가 순 이동이고, 평형에서는 두 방향이 같습니다. 입자는 출발한 쪽 색을 유지합니다(「실험 시작」 뒤에 움직입니다).",
   limitTag: "여기까지만 조작 가능(교육적 제한)",
   measuring: "재는 중",
@@ -1693,6 +1695,7 @@ var FALLBACK_FX = (function () {
   var st = {
     tab: "radish",
     radish: { phase: "idle", t: 0, m: 80, sol: "sucrose", C: 0 },
+    view: { zoom: false, zf: 0 },                                     // 탭 ① 카메라 «보기» 상태(실험 상태 아님) · zf = 확대 진행 0..1(애니메이션)
     utube:  { phase: "idle", t: 0, sol: "sucrose", cL0: UT.cL0, cR0: UT.cR0, xiEq: 0, solvent: false }   // solvent = 「용매 입자 표시하기」 토글(사용자 지시 2026-09-20)
   };
   function settled(tab) {                                          // 래퍼 — 캡션·배지·잠금 해제는 이것만 부른다(코어 직접 호출은 여기 1곳)
@@ -1738,6 +1741,8 @@ var FALLBACK_FX = (function () {
     var lock1 = r.phase === "running";
     $("mass").disabled = lock1; each(".sol1", function (el) { el.disabled = lock1; }); each(".conc", function (el) { el.disabled = lock1; });
     $("soakBtn").disabled = r.phase !== "idle";
+    $("zoomBtn").textContent = st.view.zoom ? TXT.zoomBtnOn : TXT.zoomBtn; $("zoomBtn").setAttribute("aria-pressed", st.view.zoom ? "true" : "false"); $("zoomBtn").className = "btn" + (st.view.zoom ? " is-on" : "");
+    $("camHint").textContent = st.view.zoom ? TXT.camHintZoom : TXT.camHint;
     each(".sol1", function (el) { el.setAttribute("aria-pressed", el.getAttribute("data-sol") === r.sol ? "true" : "false"); });
     each(".conc", function (el) { el.setAttribute("aria-pressed", Number(el.getAttribute("data-c")) === r.C ? "true" : "false"); });
 
@@ -1769,6 +1774,7 @@ var FALLBACK_FX = (function () {
   $("mass").addEventListener("input", function () { st.radish.m = Number(this.value); onInput("radish"); });
   each(".sol1", function (el) { el.addEventListener("click", function () { st.radish.sol = el.getAttribute("data-sol"); onInput("radish"); }); });
   each(".conc", function (el) { el.addEventListener("click", function () { st.radish.C = Number(el.getAttribute("data-c")); onInput("radish"); }); });
+  $("zoomBtn").addEventListener("click", function () { st.view.zoom = !st.view.zoom; sync(); });   // 언제든 · 실험 상태와 무관
   $("soakBtn").addEventListener("click", function () { if (st.radish.phase !== "idle") return; st.radish.phase = "running"; st.radish.t = 0; sync(); });
   $("soakReset").addEventListener("click", function () { toIdle("radish"); sync(); });
   $("cL").addEventListener("input", function () { st.utube.cL0 = Number(this.value); onInput("utube"); });
@@ -1822,6 +1828,11 @@ var FALLBACK_FX = (function () {
              orbit: { yaw: C0.yaw0 * Math.PI / 180, pitch: C0.pitch0 * Math.PI / 180, dist: C0.dist, target: C0.target } };
   }
   var SIDE_MARGIN = 1.6;                                           // cm · 라벨·테두리 여유(가로 시야 하한 유도용)
+  var ZOOM_S = 1.2734 * RADISH_BBOX.wrinkle, ZOOM_H = RADISH_BBOX.h * ZOOM_S + 0.4, ZOOM_W = 2 * (RADISH_BBOX.hx * ZOOM_S + 0.3), ZOOM_NEAR = RADISH_BBOX.hz * ZOOM_S, ZOOM_T = 0.45;   // 가장 큰 무(160 g·0 M · 주름 여유) 상자: 높이 5.88+0.4 · 폭 2·(3.64+0.3) · 앞면까지 깊이 3.64 · 전환 0.45 s
+  function zoomDist(cam) {                                          // «앞면»(카메라 쪽 상자면)이 세로·가로 시야에 들어오는 거리 = 앞면 거리 + 깊이 — 1194 ≈ 12.8 cm · 360(세로 화면 · 가로가 결정) ≈ 18 cm
+    var half = Math.tan(cam.fov * Math.PI / 360);
+    return ZOOM_NEAR + Math.max(ZOOM_H / (2 * half), ZOOM_W / (2 * half * cam.aspect));
+  }
   function resize() {
     if (!T3) return;
     var w = T3.cv.clientWidth, h = T3.cv.clientHeight; if (w < 8 || h < 8) return;
@@ -1841,16 +1852,19 @@ var FALLBACK_FX = (function () {
   function placeCamera(which) {
     var cam = T3.cams[which];
     if (which === "beaker") {
-      var o = T3.orbit;
-      cam.position.set(o.target[0] + o.dist * Math.sin(o.yaw) * Math.cos(o.pitch), o.target[1] + o.dist * Math.sin(o.pitch), o.target[2] + o.dist * Math.cos(o.yaw) * Math.cos(o.pitch));
-      cam.lookAt(o.target[0], o.target[1], o.target[2]);
+      var o = T3.orbit, z = st.view.zf, R = radishNow();
+      var zt = [0, BEAKER.floorY + RADISH_BBOX.h * R.scale * 0.5, 0], zd = zoomDist(cam);   // 확대 목표: 무 중심 높이 · 수평(pitch 0) · 정면(yaw 0) · 거리 = 시야에 꽉 차는 거리
+      var yaw = o.yaw * (1 - z), pitch = o.pitch * (1 - z), dist = o.dist + (zd - o.dist) * z;
+      var tx = o.target[0] + (zt[0] - o.target[0]) * z, ty = o.target[1] + (zt[1] - o.target[1]) * z, tz = o.target[2] + (zt[2] - o.target[2]) * z;
+      cam.position.set(tx + dist * Math.sin(yaw) * Math.cos(pitch), ty + dist * Math.sin(pitch), tz + dist * Math.cos(yaw) * Math.cos(pitch));
+      cam.lookAt(tx, ty, tz);
     } else { var u = OSMO_SCENE.camera.utube; cam.position.set(u.pos[0], u.pos[1], u.pos[2]); cam.lookAt(u.target[0], u.target[1], u.target[2]); }
   }
   function bindOrbit(cv) {                                          // 탭 ①만 회전(A-10) · 탭 ②는 정면 고정(K1)
     var down = null, C = OSMO_SCENE.camera.beaker;
     cv.addEventListener("pointerdown", function (e) { if (st.tab !== "radish") return; down = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); });
     cv.addEventListener("pointermove", function (e) {
-      if (!down) return; var o = T3.orbit;
+      if (!down || st.view.zoom) return; var o = T3.orbit;                       // 확대 중엔 회전 없음(시선 고정)
       o.yaw -= (e.clientX - down.x) * 0.005;                        // 반전(사용자 지시 2026-09-20): 커서가 가는 반대쪽으로 시선이 돈다 — 이후 360° 시뮬 공통 규약 후보
       o.pitch = Math.max(C.pitchMin * Math.PI / 180, Math.min(C.pitchMax * Math.PI / 180, o.pitch - (e.clientY - down.y) * 0.005));
       down.x = e.clientX; down.y = e.clientY;
@@ -1893,13 +1907,15 @@ var FALLBACK_FX = (function () {
   function render(dtDecor) {
     if (!T3) return;
     tFx += dtDecor;
+    var zgoal = st.view.zoom ? 1 : 0; if (RM || dtDecor === 0 && st.view.zf !== zgoal && rafId === null) st.view.zf = zgoal;
+    else if (st.view.zf !== zgoal) { var step = dtDecor / ZOOM_T; st.view.zf = zgoal > st.view.zf ? Math.min(1, st.view.zf + step) : Math.max(0, st.view.zf - step); }
     if (st.tab === "radish") {
       var r = st.radish, R = radishNow(), g = T3.fx.beaker;
       g.beakerLiquid.update(tFx, { level: BEAKER.floorY + BEAKER.level, tint: soluteTint(r.C), deepColor: soluteColors(r.sol).deep, rm: RM });   // tint = C/2 → 용질별 끝색으로 짙어진다(코덱스 v5)
       g.radish.update(tFx, { scale: R.scale, turgor: R.turgor, rm: RM });
       placeCamera("beaker"); T3.renderer.render(T3.scenes.beaker, T3.cams.beaker);
       $("lblLiquid").textContent = r.C === 0 ? "증류수" : shortM(r.C) + " M " + solName(r.sol) + " 수용액";
-      placeLabel("lblLiquid", -3.2, BEAKER.floorY + BEAKER.level + 1.2, 0, "beaker");
+      if (st.view.zf > 0.5) hideLabels(["lblLiquid"]); else placeLabel("lblLiquid", -3.2, BEAKER.floorY + BEAKER.level + 1.2, 0, "beaker");   // 확대 중엔 액면 라벨(시야 밖) 숨김
       placeMassCallout(r.m + R.dm, R.scale);                            // 무의 질량 «화면 안» 콜아웃(지시선 _/ · 실시간 · 사용자 지시 2026-09-20)
       hideLabels(["lblMembrane", "lblLeft", "lblRight"]);
     } else {
