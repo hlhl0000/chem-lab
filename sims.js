@@ -261,6 +261,16 @@ const SIMS = [
     ready: true,
     desc: "눈금 없는 뷰렛 다이얼을 돌려 수산화 나트륨 수용액을 넣다가 멈추고, 그 자리의 액성을 맞히는 2~4인 대결입니다. 쓸 수 있는 정보는 천천히 따라오는 온도계와 페놀프탈레인의 색뿐이고, 넣은 양은 끝까지 숫자로 나오지 않습니다. 모두 끝나면 입자 모형으로 하나씩 열어 보는데, 분홍이 되자마자 멈춘 사람의 플라스크에도 OH⁻가 남아 있습니다.",
     tags: ["중화점","지시약 변색점","페놀프탈레인","액성 판정","대결 게임","온도계"]
+  },
+  {
+    id: "enthalpy",
+    title: "엔탈피와 열화학 반응식",
+    cat: "화학 반응과 에너지",
+    path: "enthalpy/",
+    icon: "enthalpy",
+    ready: true,
+    desc: "손난로와 냉각 팩 안쪽에 온도계를 꽂고 온도 변화를 잰 뒤 손에 쥐어 봅니다. 확대하면 결합이 끊어지고 생기는 과정과 엔탈피 변화가 보이고, 열화학 반응식에서 물질의 양과 상태에 따라 반응 엔탈피가 어떻게 달라지는지 비교합니다.",
+    tags: ["엔탈피","반응 엔탈피","발열 반응","흡열 반응","열화학 반응식","손난로","냉각 팩","열의 이동"]
   }
 ];
 
@@ -417,5 +427,10 @@ const ICONS = {
              <circle cx="32" cy="36" r="2.4"/>
              <path d="M28 41v4L16 59h32L36 45v-4" fill="none" stroke="currentColor" stroke-width="3.5"
              stroke-linejoin="round" stroke-linecap="round"/>
-             <path d="M20 54h24" stroke="currentColor" stroke-width="3" opacity=".5"/>`
+             <path d="M20 54h24" stroke="currentColor" stroke-width="3" opacity=".5"/>`,
+  enthalpy:`<rect x="8" y="16" width="18" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="3.5"/>
+            <rect x="38" y="16" width="18" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="3.5"/>
+            <path d="M28 26h7M33 22l4 4-4 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M36 38h-7M31 34l-4 4 4 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M17 10v12M47 10v12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>`
 };
