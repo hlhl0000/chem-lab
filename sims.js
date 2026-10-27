@@ -271,6 +271,16 @@ const SIMS = [
     ready: true,
     desc: "손난로와 냉각 팩 안쪽에 온도계를 꽂고 온도 변화를 잰 뒤 손에 쥐어 봅니다. 확대하면 결합이 끊어지고 생기는 과정과 엔탈피 변화가 보이고, 열화학 반응식에서 물질의 양과 상태에 따라 반응 엔탈피가 어떻게 달라지는지 비교합니다.",
     tags: ["엔탈피","반응 엔탈피","발열 반응","흡열 반응","열화학 반응식","손난로","냉각 팩","열의 이동"]
+  },
+  {
+    id: "predprey",
+    title: "개체군 변동과 생태계평형",
+    cat: "통합과학",
+    path: "predprey/",
+    icon: "predprey",
+    ready: true,
+    desc: "풀·토끼·여우가 함께 사는 섬에서 탐정이 되어 미션 네 개를 풉니다. 예측을 먼저 고른 뒤 섬을 기르고, 여우를 잡아내거나 변인 하나를 바꾸거나 가뭄을 일으켜 무대에서 단서를 모읍니다. 개체수 기록 그래프로 개체군 변동과 생태계평형을 확인합니다.",
+    tags: ["생태계평형","개체군","포식자","피식자","먹이 관계","생산자","소비자","환경 변화","탐정 게임"]
   }
 ];
 
@@ -432,5 +442,8 @@ const ICONS = {
             <rect x="38" y="16" width="18" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="3.5"/>
             <path d="M28 26h7M33 22l4 4-4 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M36 38h-7M31 34l-4 4 4 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M17 10v12M47 10v12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>`
+            <path d="M17 10v12M47 10v12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>`,
+  predprey:`<path d="M6 44c6-24 12-24 18 0s12 24 18 0 12-24 16-6" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+            <path d="M6 50c8-10 14-10 20 0s12 10 20 0 10-10 12-4" fill="none" stroke="currentColor" stroke-width="2.6" stroke-dasharray="5 4" stroke-linecap="round" opacity=".6"/>
+            <ellipse cx="44" cy="14" rx="7" ry="5"/><path d="M41 10l-1-7M46 10l2-7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`
 };
