@@ -433,6 +433,9 @@ function openModal(title, url, opener) {
 (typeof globalThis !== "undefined" ? globalThis : window).ChemLabQR =
   { encode: encode, draw: drawQR, url: pageUrl, base: PUBLISHED_BASE };
 
+/* 다른 페이지에서 쓰기 — 이 페이지가 아닌 주소를 QR로 그리거나 크게 띄울 때(예: elnino/의 학생 입장 QR) */
+if (typeof window !== "undefined") window.ChemQR = { draw: drawQR, open: openModal };
+
 /* ============================================================
    ③ 붙이기
    ============================================================ */
@@ -440,6 +443,7 @@ if (typeof document !== "undefined") (function init() {
   var me = document.currentScript;
   var current = (me && me.dataset.current) || "";
   var sel = (me && me.dataset.titleSel) || "";
+  if (me && me.dataset.auto === "off") return;   /* 제목 옆 버튼 없이 인코더만 쓰는 페이지(예: elnino/) */
 
   function start() {
     /* 제목 찾기 — 페이지마다 구조가 조금씩 다르므로 순서대로 시도한다 */
