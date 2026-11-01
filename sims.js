@@ -281,6 +281,16 @@ const SIMS = [
     ready: true,
     desc: "풀·토끼·여우가 함께 사는 섬에서 탐정이 되어 미션 네 개를 풉니다. 예측을 먼저 고른 뒤 섬을 기르고, 여우를 잡아내거나 변인 하나를 바꾸거나 가뭄을 일으켜 무대에서 단서를 모읍니다. 개체수 기록 그래프로 개체군 변동과 생태계평형을 확인합니다.",
     tags: ["생태계평형","개체군","포식자","피식자","먹이 관계","생산자","소비자","환경 변화","탐정 게임"]
+  },
+  {
+    id: "elnino",
+    title: "엘니뇨 어부 버티기 게임",
+    cat: "통합과학",
+    path: "https://hlhl0000.github.io/elnino-game/",
+    icon: "elnino",
+    ready: true,
+    desc: "학급 전체가 태평양 서쪽·동쪽 마을의 어부가 되어 휴대폰으로 가까운 바다·먼바다·쉬기를 고르며 24턴을 버팁니다. 무역풍과 바닷물 온도가 달라지는 신호를 읽고, 엘니뇨가 닥치기 전에 마을 창고에 물고기를 맡겨 대비합니다. 끝나면 턴마다 바다의 물고기 수가 어떻게 바뀌었는지 그래프로 비교합니다. 교실 TV에서 방을 만들고 방 코드로 입장하며, 인터넷 연결이 필요합니다.",
+    tags: ["엘니뇨","무역풍","용승","표층 수온","대기와 해양의 상호 작용","어획량","실시간 게임"]
   }
 ];
 
@@ -445,5 +455,9 @@ const ICONS = {
             <path d="M17 10v12M47 10v12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>`,
   predprey:`<path d="M6 44c6-24 12-24 18 0s12 24 18 0 12-24 16-6" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
             <path d="M6 50c8-10 14-10 20 0s12 10 20 0 10-10 12-4" fill="none" stroke="currentColor" stroke-width="2.6" stroke-dasharray="5 4" stroke-linecap="round" opacity=".6"/>
-            <ellipse cx="44" cy="14" rx="7" ry="5"/><path d="M41 10l-1-7M46 10l2-7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`
+            <ellipse cx="44" cy="14" rx="7" ry="5"/><path d="M41 10l-1-7M46 10l2-7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`,
+  elnino:`<circle cx="49" cy="14" r="7" fill="none" stroke="currentColor" stroke-width="3"/>
+            <path d="M28 35V15l11 15H28" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M11 36h34l-6 8H17z"/>
+            <path d="M5 50c5-4 9-4 14 0s9 4 14 0 9-4 14 0 9 4 12 1" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M23 58c4-3 8-3 11 0-3 3-7 3-11 0zm11 0 4-3v6z" opacity=".55"/>`
 };

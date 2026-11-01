@@ -11,9 +11,10 @@
   const base    = me.dataset.base || ".";       // 대문까지의 상대 경로
   const current = me.dataset.current || "";     // 지금 페이지의 시뮬레이션 id
 
-  // 준비된 시뮬레이션만 이동 메뉴에 넣는다
+  // 준비된 시뮬레이션만 이동 메뉴에 넣는다 (사이트 밖 주소는 그대로 — 예: 엘니뇨 게임)
+  const href = p => /^[a-z][a-z0-9+.-]*:/i.test(p) ? p : `${base}/${p}`;
   const options = SIMS.filter(s => s.ready).map(s =>
-    `<option value="${base}/${s.path}" ${s.id === current ? "selected" : ""}>${s.title}</option>`
+    `<option value="${href(s.path)}" ${s.id === current ? "selected" : ""}>${s.title}</option>`
   ).join("");
 
   const html = `
