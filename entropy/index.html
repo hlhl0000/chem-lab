@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>엔트로피</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색은 shared/style.css 토큰만(CPK·실물색·LED 예외는 sim.js 에 근거와 함께). 요소 선택자 금지(§12①) · 루트 토큰 재선언 금지 */
+  .page{padding:18px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0; line-height:1.6}
+  .tabs{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
+  .tabb{font-family:inherit; font-size:14px; font-weight:600; padding:10px 14px; min-height:44px;
+    border-radius:10px 10px 0 0; border:1px solid var(--line); border-bottom:none;
+    background:#eef2f7; color:var(--t2); cursor:pointer}
+  .tabb[aria-pressed="true"]{background:var(--panel); color:var(--accent-dark); box-shadow:inset 0 3px 0 var(--accent)}
+  .tabdesc{font-size:13px; color:var(--t2); line-height:1.65; margin:8px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .lay{display:grid; gap:14px; margin-top:12px; grid-template-columns:minmax(0,1.55fr) minmax(290px,1fr)}
+  @media(max-width:1023px){ .lay{grid-template-columns:1fr} }
+  .side .card + .card{margin-top:12px}
+  .ent-note{font-size:12px; color:var(--t3); margin:6px 0 0; line-height:1.55}
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 0; align-items:center}
+  .seg{display:flex; gap:6px; flex-wrap:wrap}
+  .seg .tg{flex:1 1 18%}
+  .tg[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .sw{display:inline-flex; gap:0; margin:0 0 10px}
+  .sw .tg{border-radius:0}
+  .sw .tg:first-child{border-radius:9px 0 0 9px}
+  .sw .tg:last-child{border-radius:0 9px 9px 0}
+  .chk{font-size:14px; display:flex; gap:6px; align-items:center; min-height:44px}
+  .chk input{width:22px; height:22px}
+  .cv{display:block; width:100%; height:auto; background:#fff; border-radius:10px; border:1px solid var(--line)}
+  .nrow{display:flex; align-items:center; gap:8px}
+  .nrow input[type=range]{flex:1; min-width:0; accent-color:var(--accent); height:36px}
+  .nval{font-size:26px; font-weight:700; color:var(--t1); min-width:96px; font-variant-numeric:tabular-nums}
+  /* LED — 검은 테두리 · 붉은 7세그먼트(실물 표시기 색 — 토큰 예외) */
+  .led{background:#0a0a0a; border:3px solid #000; border-radius:10px; padding:8px 12px 10px; display:inline-block;
+    box-shadow:0 2px 10px rgba(0,0,0,.35), inset 0 0 14px rgba(0,0,0,.9)}
+  .led .cap{font-size:12px; color:#c9a4a0; letter-spacing:.08em; margin:0 0 4px; font-weight:600}
+  .led svg{display:block; height:46px; width:auto; max-width:100%; overflow:visible}
+  .led .on{fill:#ff2b1c; filter:drop-shadow(0 0 2px rgba(255,60,40,.95)) drop-shadow(0 0 6px rgba(255,40,20,.55))}
+  .led .off{fill:#2a0806}
+  .ledrow{display:flex; justify-content:space-between; align-items:flex-end; gap:8px; flex-wrap:wrap; margin-top:8px}
+  .ledrow .led{margin-left:auto}
+  .stage1{position:relative}
+  .zoombox{position:absolute; left:10px; bottom:10px; z-index:2; background:#fff; border:2px solid #334155; border-radius:10px; padding:6px; box-shadow:var(--shadow)}
+  .zoombox canvas{display:block; border:1px solid var(--line); border-radius:6px}
+  .zoombox[hidden]{display:none}   /* 좁은 화면 규칙(display:inline-block)이 hidden 속성을 덮어쓰지 않게 */
+  .zt{font-size:12px; color:var(--t2); margin:4px 0 0; max-width:220px; line-height:1.45}
+  .three{display:grid; gap:10px; grid-template-columns:repeat(3,minmax(0,1fr))}
+  .three .box{border:2px solid var(--line); border-radius:10px; padding:6px; background:#fff; cursor:pointer; text-align:center; font:inherit}
+  .three .box[aria-pressed="true"]{border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+  .three .box b{display:block; font-size:15px; color:var(--t1); margin-top:4px}
+  .vw3{display:grid; gap:10px; grid-template-columns:minmax(0,2fr) minmax(0,1fr); grid-template-rows:auto auto}
+  .vw3 .vw.main{grid-row:1 / span 2}
+  .vw{position:relative; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fff; touch-action:none}
+  .vw canvas{display:block; width:100%}
+  .vw .lab{position:absolute; left:8px; top:6px; font-size:14px; font-weight:700; color:var(--t1); background:rgba(255,255,255,.88); padding:2px 8px; border-radius:6px; pointer-events:none}
+  .eq{font-size:20px; font-weight:600; color:var(--t1); text-align:center; margin:4px 0 8px}
+  .eq span{padding:2px 6px; border-radius:6px}
+  .eq span.on{background:#fff7d6; box-shadow:inset 0 -3px 0 var(--d-amber)}
+  .phase{font-size:14px; color:var(--t2); text-align:center; min-height:22px; margin:4px 0 0}
+  .rxbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:6px}
+  .rxbar input[type=range]{flex:1; min-width:140px; accent-color:var(--accent); height:36px}
+  .readout .value{font-size:28px}
+  .readout.big .value{font-size:34px}
+  .rd{display:grid; gap:8px}
+  .vlabs{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:6px}
+  .vlabs .vl{text-align:center}
+  .vlabs .tg{width:100%}
+  .vlabs small{display:block; font-size:12px; color:var(--t3); margin-top:3px}
+  .temp{height:10px; border-radius:5px; background:#e2e8f0; overflow:hidden; margin:4px auto 0; max-width:140px}
+  .temp i{display:block; height:100%; background:linear-gradient(90deg,#60a5fa,#f87171)}
+  table.ox{width:100%; border-collapse:collapse; font-size:15px; margin-top:6px}
+  table.ox th, table.ox td{border:1px solid var(--line); padding:8px; text-align:center}
+  table.ox th{background:#f3f5f8; color:var(--t2); font-weight:600}
+  table.ox td.o{color:var(--d-green); font-weight:800; font-size:18px}
+  table.ox td.x{color:var(--d-red); font-weight:800; font-size:18px}
+  .limits{margin:0; padding-left:20px; font-size:13px; color:var(--t2); line-height:1.7}
+  @media(max-width:820px){
+    .three{grid-template-columns:1fr 1fr 1fr; gap:6px}
+    .three .box b{font-size:13px}
+    .zoombox{position:static; margin-top:8px; display:inline-block}
+    .vw3{grid-template-columns:1fr 1fr} .vw3 .vw.main{grid-row:auto; grid-column:1 / span 2}
+    .vlabs{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap page">
+
+<div class="head">
+  <h1>엔트로피</h1>
+  <p class="sub">입자 배치의 경우의 수와 물질·에너지의 출입을 확인합니다.</p>
+</div>
+
+<div class="tabs" id="tabs" role="tablist">
+  <button class="tabb" data-tab="1" aria-pressed="true">① 입자의 배열</button>
+  <button class="tabb" data-tab="2" aria-pressed="false">② 물질의 상태</button>
+  <button class="tabb" data-tab="3" aria-pressed="false">③ 반응과 혼합</button>
+  <button class="tabb" data-tab="4" aria-pressed="false">④ 에너지의 이동</button>
+</div>
+<p class="tabdesc" id="tabdesc"></p>
+<div id="body"></div>
+
+<div class="card" style="margin-top:14px">
+  <h2>이 모형의 가정과 한계</h2>
+  <ol class="limits" id="limits"></ol>
+</div>
+
+</div>
+
+<script src="../vendor/three.min.js"></script>
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="entropy"></script>
+<script src="../shared/qr.js" data-base=".." data-current="entropy"></script>
+<script src="sim.js"></script>
+</body>
+</html>

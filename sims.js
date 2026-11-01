@@ -273,6 +273,16 @@ const SIMS = [
     tags: ["엔탈피","반응 엔탈피","발열 반응","흡열 반응","열화학 반응식","손난로","냉각 팩","열의 이동"]
   },
   {
+    id: "entropy",
+    title: "엔트로피",
+    cat: "화학 반응과 에너지",
+    path: "entropy/",
+    icon: "entropy",
+    ready: true,
+    desc: "칸막이를 치우면 퍼지는 입자와, 입자 수가 하나 늘 때마다 두 배가 되는 배치의 경우의 수를 화면 분할로 봅니다. 얼음·물·수증기의 움직임과 입자가 갈 수 있는 자리, 기체 분자 수가 줄어드는 반응과 서로 다른 기체의 혼합에서 가짓수를 비교하고, 세 용기에서 물질과 에너지가 드나드는지 확인합니다.",
+    tags: ["경우의 수","배치","확산","물질의 상태","기체 분자 수","혼합","에너지의 이동"]
+  },
+  {
     id: "predprey",
     title: "개체군 변동과 생태계평형",
     cat: "통합과학",
@@ -453,6 +463,7 @@ const ICONS = {
             <path d="M28 26h7M33 22l4 4-4 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M36 38h-7M31 34l-4 4 4 4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M17 10v12M47 10v12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>`,
+  entropy:`<rect x="5" y="9" width="54" height="46" rx="7" stroke="currentColor" stroke-width="3"/><path d="M32 11v42" stroke="currentColor" stroke-width="2" stroke-dasharray="3 4" opacity=".45"/><circle cx="14" cy="20" r="3.4" fill="currentColor"/><circle cx="24" cy="18" r="3.4" fill="currentColor"/><circle cx="18" cy="30" r="3.4" fill="currentColor"/><circle cx="27" cy="35" r="3.4" fill="currentColor"/><circle cx="14" cy="43" r="3.4" fill="currentColor"/><circle cx="39" cy="23" r="3.4" fill="currentColor"/><circle cx="49" cy="39" r="3.4" fill="currentColor"/><path d="M27 25c6 0 8 5 13 7M37 29l4 3-5 2" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`,
   predprey:`<path d="M6 44c6-24 12-24 18 0s12 24 18 0 12-24 16-6" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
             <path d="M6 50c8-10 14-10 20 0s12 10 20 0 10-10 12-4" fill="none" stroke="currentColor" stroke-width="2.6" stroke-dasharray="5 4" stroke-linecap="round" opacity=".6"/>
             <ellipse cx="44" cy="14" rx="7" ry="5"/><path d="M41 10l-1-7M46 10l2-7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`,
