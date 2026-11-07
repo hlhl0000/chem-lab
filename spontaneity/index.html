@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>반응의 자발성</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색은 shared/style.css 토큰 우선. 범례 점의 색(#6f89aa · #059669)은 무대 그림(SPONT_ART)의 입자 색과 같은 값 — 범례가 무대와 같아야 읽힌다.
+     요소 선택자 금지(§12①) · 루트 토큰 재선언 금지 · 표시 여부는 sim.js 의 SHOW 표 하나가 정한다(§13 ①) */
+  .page{padding:18px 0 40px}
+  .head{position:relative}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0; line-height:1.6}
+  .fps{position:absolute; right:0; top:0; font-size:12px; color:var(--t3); font-variant-numeric:tabular-nums}
+  .tabs{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
+  .tabb{font-family:inherit; font-size:14px; font-weight:600; padding:10px 14px; min-height:44px;
+    border-radius:10px 10px 0 0; border:1px solid var(--line); border-bottom:none;
+    background:#eef2f7; color:var(--t2); cursor:pointer}
+  .tabb[aria-pressed="true"]{background:var(--panel); color:var(--accent-dark); box-shadow:inset 0 3px 0 var(--accent)}
+  .tabdesc{font-size:13.5px; color:var(--t2); line-height:1.65; margin:8px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+
+  .lay{display:grid; gap:14px; margin-top:12px; align-items:start; grid-template-columns:minmax(0,1fr)}
+  .lay.curve-on{grid-template-columns:minmax(0,1.9fr) minmax(250px,1fr)}
+  @media(max-width:1023px){ .lay.curve-on{grid-template-columns:minmax(0,1fr)} }
+  .lay .narrow{max-width:760px; margin-left:auto; margin-right:auto}
+  .lay .wide{max-width:1000px; margin-left:auto; margin-right:auto}
+
+  .stagewrap{position:relative}
+  .st{display:block; width:100%; background:#fff; border-radius:10px; border:1px solid #cbd5e1; touch-action:none; cursor:crosshair}
+  .st.nodraw{cursor:default; touch-action:auto}
+  .ghostlab{position:absolute; left:50%; top:10px; transform:translateX(-50%); background:rgba(15,23,42,.82); color:#fff;
+    border-radius:8px; padding:6px 14px; font-size:15px; font-weight:700; pointer-events:none; white-space:nowrap}
+  .ghostlab.low{top:auto; bottom:10px}
+  .hint{position:absolute; left:50%; top:12px; transform:translateX(-50%); background:rgba(255,255,255,.94); border:1px solid var(--line);
+    border-radius:8px; padding:6px 12px; font-size:13.5px; color:var(--t1); pointer-events:none; white-space:nowrap}
+  .banner{position:absolute; left:50%; top:12px; transform:translateX(-50%); background:#fff7ed; border:2px solid #c2410c; border-radius:8px;
+    padding:6px 14px; font-size:15px; font-weight:700; color:#9a3412; pointer-events:none; white-space:nowrap}
+
+  .two{display:grid; gap:16px; grid-template-columns:repeat(2,minmax(0,1fr))}
+  @media(max-width:599px){ .two{grid-template-columns:minmax(0,1fr)} }
+  .nm{text-align:center; font-weight:700; font-size:15px; color:var(--t1); margin:0 0 6px}
+
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0}
+  .btnrow .b{font-family:inherit; font-size:14px; font-weight:600; min-height:44px; padding:8px 14px; border-radius:9px;
+    border:1px solid var(--line); background:#fff; color:var(--t1); cursor:pointer; flex:0 1 auto}
+  .btnrow .b.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+  .btnrow .b[disabled]{opacity:.45; cursor:not-allowed}
+  .btnrow .b.seg[aria-pressed="true"]{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .btnrow .b.hold{border:2px solid var(--accent); color:var(--accent-dark); touch-action:none; user-select:none; -webkit-user-select:none}
+  .btnrow .b.hold[aria-pressed="true"]{background:#0f172a; border-color:#0f172a; color:#fff}
+  .btnrow.top{margin-top:0}
+
+  .lgd{display:flex; gap:6px 14px; font-size:12.5px; color:var(--t2); margin-top:8px; flex-wrap:wrap; line-height:1.5}
+  .lgd .it{display:inline-flex; align-items:center; gap:5px}
+  .lgd i{display:inline-block; flex:none; width:11px; height:11px; border-radius:50%; background:#6f89aa; border:1px solid #3f536e}
+  .lgd i.near{background:#059669; border-color:#03543d}
+  .lgd i.pale{opacity:.3}
+  .lgd i.ln{width:18px; height:0; border:none; border-radius:0; border-top:3px solid #2563eb; background:none}
+  .lgd i.ln.ref{border-top:2px dashed #334155}
+  .cap{font-size:13px; color:var(--t2); margin:10px 0 0; line-height:1.6}
+  .cap.virt{color:#9a3412; font-weight:700}
+  .stage3{margin-top:8px}
+  /* 처음 모습 표지: 탭 ③은 장면 왼쪽 아래(컵·근접 띠는 무대 가운데~오른쪽) */
+  .ghostlab.corner{left:10px; top:auto; bottom:10px; transform:none}
+  .micro{margin-top:4px}
+
+  /* 값 상자(U-2): 무대 css 폭 ≥ 600 → 무대 안 오른쪽 아래(반투명 흰 바탕). 폭 21 % = 컵 근접 띠 오른쪽 빈자리
+     (냉동실 BK 오른쪽 + NEAR_D = 논리 694 / 900 → 오른쪽 22.9 % · 교실 26.9 %) · < 600 → .below 로 무대 바로 아래 오른쪽 정렬 */
+  .vbox{position:absolute; right:1%; bottom:10px; max-width:21%; box-sizing:border-box; background:rgba(255,255,255,.86);
+    border:1px solid #94a3b8; border-radius:9px; padding:6px 9px; pointer-events:none}
+  .vbox.below{position:static; max-width:100%; width:fit-content; margin:8px 0 0 auto; background:#fff}
+  .vhead{margin:0 0 4px; font-size:12px; font-weight:700; color:#9a3412; line-height:1.35}
+  .vrow{display:flex; justify-content:space-between; align-items:baseline; gap:8px; white-space:nowrap}
+  /* 장면 온도(사용자 지시 11-07 · 값은 의뢰서 §5 ③의 −20 ℃ · 25 ℃): 무대 오른쪽 위 붉은 글씨. 컵 근접 띠(오른쪽 끝 77 %) 밖 */
+  .t3temp{position:absolute; right:1%; top:8px; background:rgba(255,255,255,.86); border-radius:6px; padding:2px 9px;
+    font-size:16px; font-weight:700; color:#b91c1c; font-variant-numeric:tabular-nums; pointer-events:none; white-space:nowrap}
+  .vk{font-size:13px; font-weight:700; color:var(--t1)}
+  .vv{font-size:16px; font-weight:700; color:var(--t1); font-variant-numeric:tabular-nums; min-width:3.2em; text-align:right}
+
+  .side .card h2{color:var(--t1)}
+  .curvebox{background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px 10px}
+  .curvebox + .curvebox{margin-top:10px}
+  .curvebox b{font-size:13px; color:var(--t1)}
+  .curvebox canvas{display:block; width:100%; height:150px; margin-top:4px}
+  .axis{display:flex; justify-content:space-between; font-size:12px; color:var(--t2); margin-top:2px}
+  .note{font-size:12.5px; color:var(--t3); margin:6px 0 0; line-height:1.6}
+
+  .limits{margin-top:14px}
+  .limits summary{cursor:pointer; font-weight:600; color:var(--t1); font-size:14px; min-height:32px}
+  .limits ol{margin:6px 0 0; padding-left:20px; font-size:13px; color:var(--t2); line-height:1.7}
+  @media(max-width:820px){
+    .hint, .banner{white-space:normal; width:86%; text-align:center}
+    .stage3 .banner{white-space:nowrap; width:auto}   /* 오른쪽 위 온도와 겹치지 않게 글 폭만큼 */
+  }
+  /* 좁은 폭: 탭 ③ 장면 위 「가상」 표지가 컵 위쪽 근접 띠를 덮지 않게 한 줄로 작게 */
+  @media(max-width:599px){
+    .stage3 .banner{top:27px; width:auto; white-space:nowrap; font-size:11.5px; padding:2px 8px; border-width:1.5px}   /* 온도 줄 아래 · 컵 근접 띠 위 */
+    .t3temp{top:4px; font-size:13px; padding:1px 7px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap page">
+
+<div class="head">
+  <h1>반응의 자발성</h1>
+  <p class="sub">열의 출입과 주위의 온도에 따른 주위 입자의 운동 변화를 확인합니다.</p>
+  <span class="fps" id="fps"></span>
+</div>
+
+<div class="tabs" id="tabs" role="group" aria-label="탭">
+  <button class="tabb" type="button" data-tab="1" aria-pressed="true">① 열과 주위</button>
+  <button class="tabb" type="button" data-tab="2" aria-pressed="false">② 주위의 온도</button>
+  <button class="tabb" type="button" data-tab="3" aria-pressed="false">③ 계와 주위</button>
+</div>
+
+<!-- 탭 ① -->
+<section class="pane" id="pane1">
+  <p class="tabdesc">비커 둘레에 박스를 그리고, 열이 드나들 때 박스 바깥 입자의 움직임을 관찰합니다.</p>
+  <div class="lay">
+    <div class="card">
+      <div class="narrow">
+        <div class="stagewrap">
+          <canvas class="st" id="st1" aria-label="비커 둘레의 공기 입자. 끌어서 박스를 그립니다"></canvas>
+          <div class="hint" id="hint1">비커 둘레로 끌어서 박스를 그려 보세요</div>
+          <div class="ghostlab" id="ghost1">처음 모습</div>
+        </div>
+        <div class="btnrow">
+          <button type="button" class="b primary" id="exo">발열 반응 시작 · NaOH(s)</button>
+          <button type="button" class="b primary" id="endo">흡열 반응 시작 · NH₄NO₃(s)</button>
+          <button type="button" class="b hold" id="hold1" data-hold="1" aria-pressed="false">처음 모습 보기(누르는 동안)</button>
+          <button type="button" class="b" id="reset1">처음으로</button>
+          <button type="button" class="b" id="clear1">박스 지우기</button>
+          <button type="button" class="b curvebtn" aria-pressed="false">분포 곡선 보기</button>
+        </div>
+        <div class="lgd">
+          <span class="it" id="lg1bn"><i class="near"></i>박스 가까이 있는 입자(색은 자리만 나타냅니다)</span>
+          <span class="it" id="lg1bo"><i></i>박스 바깥 입자</span>
+          <span class="it" id="lg1bi"><i class="pale"></i>박스 안 입자(이것도 주위입니다)</span>
+          <span class="it" id="lg1kn"><i class="near"></i>비커 가까이 있는 입자(색은 자리만 나타냅니다)</span>
+          <span class="it" id="lg1ka"><i></i>입자</span>
+        </div>
+      </div>
+    </div>
+    <div class="side" id="side1">
+      <div class="card">
+        <h2>박스 바깥 입자의 속력 분포</h2>
+        <div class="curvebox"><canvas id="cv1"></canvas><div class="axis"><span>느림</span><span>속력</span><span>빠름</span></div></div>
+        <div class="lgd"><span class="it"><i class="ln"></i>지금</span><span class="it"><i class="ln ref"></i>처음</span></div>
+        <p class="note" id="nb1">박스를 그리면 그 바깥 입자의 곡선이 나타납니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 탭 ② -->
+<section class="pane" id="pane2">
+  <p class="tabdesc">입자 수가 같은 두 주위에 같은 비커로 같은 양의 열을 동시에 넣고 뺍니다.</p>
+  <div class="lay">
+    <div class="card">
+      <div class="wide">
+        <div class="two">
+          <div>
+            <p class="nm">차가운 주위</p>
+            <div class="stagewrap">
+              <canvas class="st" id="st2a" aria-label="차가운 주위의 공기 입자와 비커. 끌어서 박스 크기를 바꿉니다"></canvas>
+              <div class="ghostlab" id="ghost2a">처음 모습</div>
+            </div>
+          </div>
+          <div>
+            <p class="nm">뜨거운 주위</p>
+            <div class="stagewrap">
+              <canvas class="st" id="st2b" aria-label="뜨거운 주위의 공기 입자와 비커. 끌어서 박스 크기를 바꿉니다"></canvas>
+              <div class="ghostlab" id="ghost2b">처음 모습</div>
+            </div>
+          </div>
+        </div>
+        <div class="btnrow">
+          <button type="button" class="b primary" id="in2">같은 열 넣기</button>
+          <button type="button" class="b" id="out2">같은 열 빼기</button>
+          <button type="button" class="b hold" id="hold2" data-hold="2" aria-pressed="false">처음 모습 보기(누르는 동안)</button>
+          <button type="button" class="b" id="reset2">처음으로</button>
+          <button type="button" class="b curvebtn" aria-pressed="false">분포 곡선 보기</button>
+        </div>
+        <div class="lgd">
+          <span class="it"><i class="near"></i>박스 가까이 있는 입자(색은 자리만 나타냅니다)</span>
+          <span class="it"><i></i>박스 바깥 입자</span>
+          <span class="it"><i class="pale"></i>박스 안 입자(이것도 주위입니다)</span>
+        </div>
+      </div>
+    </div>
+    <div class="side" id="side2">
+      <div class="card">
+        <h2>박스 바깥 입자의 속력 분포 (같은 눈금)</h2>
+        <div class="curvebox"><b>차가운 주위</b><canvas id="cv2a"></canvas><div class="axis"><span>느림</span><span>속력</span><span>빠름</span></div></div>
+        <div class="curvebox"><b>뜨거운 주위</b><canvas id="cv2b"></canvas><div class="axis"><span>느림</span><span>속력</span><span>빠름</span></div></div>
+        <div class="lgd"><span class="it"><i class="ln"></i>지금</span><span class="it"><i class="ln ref"></i>처음</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 탭 ③ -->
+<section class="pane" id="pane3">
+  <p class="tabdesc">같은 물을 냉동실과 교실에 두고, 계와 주위의 변화를 함께 봅니다.</p>
+  <div class="lay">
+    <div class="card">
+      <div class="narrow">
+        <div class="btnrow top">
+          <button type="button" class="b seg" id="sFreezer" aria-pressed="true">냉동실</button>
+          <button type="button" class="b seg" id="sClass" aria-pressed="false">교실</button>
+        </div>
+        <div class="stagewrap stage3" id="stw3">
+          <canvas class="st nodraw" id="st3" aria-label="물이 담긴 컵이 놓인 장면"></canvas>
+          <div class="banner" id="virt3m">가상 — 교실에서 실제로 일어나는 일이 아닙니다</div>
+          <div class="t3temp" id="temp3"></div>
+          <div class="ghostlab corner" id="ghost3">처음 모습</div>
+          <!-- VBOX BEGIN -->
+          <div class="vbox" id="vbox3" role="group" aria-label="엔트로피 변화 값">
+            <p class="vhead" id="virt3b">가상 — 교실에서 실제로 일어나는 일이 아닙니다</p>
+            <div class="vrow"><span class="vk">△S계</span><span class="vv" id="vsys"></span></div>
+            <div class="vrow"><span class="vk">△S주위</span><span class="vv" id="vsur"></span></div>
+          </div>
+          <!-- VBOX END -->
+        </div>
+        <div class="btnrow">
+          <button type="button" class="b primary" id="freeze3">물 얼리기</button>
+          <button type="button" class="b" id="real3">실제로 일어나는 변화 보기</button>
+          <button type="button" class="b hold" id="hold3" data-hold="3" aria-pressed="false">처음 모습 보기(누르는 동안)</button>
+          <button type="button" class="b" id="reset3">처음으로</button>
+          <button type="button" class="b" id="zoom3" aria-pressed="false">입자로 보기</button>
+          <button type="button" class="b curvebtn" aria-pressed="false">분포 곡선 보기</button>
+        </div>
+        <div class="micro" id="micro3">
+          <p class="cap">비커 안 = 계(물 분자와 그 잔상) · 비커 밖 = 주위(공기 입자)</p>
+          <p class="cap virt" id="virt3c">가상 — 교실에서 실제로 일어나는 일이 아닙니다</p>
+          <div class="lgd">
+            <span class="it"><i class="near"></i>비커 가까이 있는 주위 입자(색은 자리만 나타냅니다)</span>
+            <span class="it"><i></i>주위 입자</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="side" id="side3">
+      <div class="card">
+        <h2>주위 입자의 속력 분포</h2>
+        <div class="curvebox"><canvas id="cv3"></canvas><div class="axis"><span>느림</span><span>속력</span><span>빠름</span></div></div>
+        <div class="lgd"><span class="it"><i class="ln"></i>지금</span><span class="it"><i class="ln ref"></i>처음</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<details class="limits card"><summary>가정과 한계</summary><ol>
+  <li>주위는 2차원 기체 입자로 나타냈습니다. 무대 가장자리로는 열이 빠져나가지 않습니다.</li>
+  <li>입자의 속력과 시간은 화면용 눈금입니다. 온도 차이도 과장했습니다 — 냉동실과 교실의 실제 차이보다 화면의 차이가 훨씬 큽니다.</li>
+  <li>넣는 열의 양과 계의 변화는 값을 고정한 단순화 모형입니다. 실제 용해 열량과 대응하지 않습니다.</li>
+  <li>교실의 어는 변화는 일어나지 않는 일을 가상으로 보인 것입니다.</li>
+  <li>자발적이라고 빠른 것은 아닙니다. 물은 0 ℃ 아래에서도 한동안 얼지 않을 수 있습니다.</li>
+  <li>박스는 실제 벽이 아닙니다. 박스 안의 공기도 주위입니다.</li>
+  <li>초록색은 자리만 나타냅니다. 비커 가까이에 있는 입자에 색을 입혔을 뿐 더 뜨거운 입자라는 뜻이 아닙니다.</li>
+  <li>열을 뺄 때 차가운 쪽은 입자가 느려 1~2초 늦게 끝날 수 있습니다.</li>
+  <li>△S계·△S주위 값은 이 화면 모형의 값입니다(단위 없음). 실제 물이 얼 때의 값과 크기는 다르고, 부호와 어느 쪽이 큰지만 같습니다.</li>
+</ol></details>
+
+</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="spontaneity"></script>
+<script src="../shared/qr.js" data-base=".." data-current="spontaneity"></script>
+<script src="sim.js"></script>
+</body>
+</html>

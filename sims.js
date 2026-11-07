@@ -283,6 +283,16 @@ const SIMS = [
     tags: ["경우의 수","배치","확산","물질의 상태","기체 분자 수","혼합","에너지의 이동"]
   },
   {
+    id: "spontaneity",
+    title: "반응의 자발성",
+    cat: "화학 반응과 에너지",
+    path: "spontaneity/",
+    icon: "spontaneity",
+    ready: true,
+    desc: "비커 둘레에 박스를 그려 열이 드나들 때 주위 입자의 움직임이 어떻게 달라지는지 봅니다. 차가운 주위와 뜨거운 주위에 같은 열을 넣어 달라지는 정도를 비교하고, 냉동실과 교실에서 물이 어는 변화를 계와 주위로 나누어 살펴봅니다.",
+    tags: ["자발성","계와 주위","주위의 온도","열의 출입","입자 운동","발열 반응","흡열 반응","전체 엔트로피 변화"]
+  },
+  {
     id: "predprey",
     title: "개체군 변동과 생태계평형",
     cat: "통합과학",
@@ -306,6 +316,7 @@ const SIMS = [
 
 /* 카드에 쓰이는 작은 아이콘들 (SVG) */
 const ICONS = {
+  spontaneity:`<g fill="none"><rect x="8" y="8" width="48" height="48" rx="5" stroke="currentColor" stroke-width="2.4" stroke-dasharray="4 4" opacity=".55"/><rect x="22" y="19" width="20" height="27" rx="2" stroke="currentColor" stroke-width="2.6"/><rect x="21" y="17" width="22" height="5" rx="1.5" fill="currentColor"/><path d="M24 36h16v8H24z" fill="currentColor" opacity=".28"/><path d="M5 22h6M3 25h7M53 38h6M55 41h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".7"/><circle cx="14" cy="19" r="2.5" fill="currentColor"/><circle cx="50" cy="35" r="2.5" fill="currentColor"/></g>`,
   geotime:`<rect x="6" y="10" width="52" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="4"/>
          <path d="M6 25h52M6 39h52" stroke="currentColor" stroke-width="2.5" opacity=".45"/>
          <path d="M27 17.5a5 5 0 1 0 5 5" fill="none" stroke="currentColor" stroke-width="3.4"
