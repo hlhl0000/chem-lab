@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>화학 반응 속도</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색: shared/style.css 토큰 우선. 그래프·선·실험 색은 sim.js 머리의 COL 표 한 곳에서만 정한다(지시안 v1.1 §5 «매뉴얼과 다른 점»).
+     표시 여부는 sim.js 가 정한다(§13 ①) — 공개 전 용어는 HTML 에 없다. */
+  .page{padding:18px 0 40px}
+  .head{position:relative}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0; line-height:1.6}
+  .tabbar{display:flex; gap:14px; flex-wrap:wrap; margin-top:14px; align-items:flex-end}
+  .tgrp{display:flex; flex-direction:column; gap:3px}
+  .tgrp .gh{font-size:11.5px; color:var(--t3); font-weight:700; padding-left:4px}
+  .tgrp .row{display:flex; gap:6px; flex-wrap:wrap}
+  .tabb{font-family:inherit; font-size:14px; font-weight:600; padding:10px 14px; min-height:44px;
+    border-radius:10px 10px 0 0; border:1px solid var(--line); border-bottom:none; background:#eef2f7; color:var(--t2); cursor:pointer}
+  .tabb[aria-pressed="true"]{background:var(--panel); color:var(--accent-dark); box-shadow:inset 0 3px 0 var(--accent)}
+  .tabb.later{opacity:.55}
+  .tabdesc{font-size:13.5px; color:var(--t2); line-height:1.65; margin:8px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .pane[hidden]{display:none}
+
+  .lay{display:grid; gap:14px; margin-top:12px; align-items:start; grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr)}
+  .lay > .card{min-width:0}
+  @media(max-width:1023px){ .lay{grid-template-columns:minmax(0,1fr)} }
+  .card h2{font-size:14px; margin:0 0 8px; color:var(--t1)}
+  .note{font-size:12.5px; color:var(--t3); margin:8px 0 0; line-height:1.6}
+
+  .stagewrap{position:relative}
+  .st{display:block; width:100%; aspect-ratio:720/400; background:#fff; border-radius:10px; border:1px solid #94a3b8}
+  #st2{border:2px dashed #94a3b8}
+  .ovl{position:absolute; left:10px; top:8px; background:rgba(255,255,255,.92); border:1px solid var(--line); border-radius:8px;
+    padding:4px 10px; font-size:14px; font-weight:700; color:var(--t1); pointer-events:none; max-width:calc(100% - 20px)}
+  .eq{font-size:16px; font-weight:700; color:var(--t1); margin:0 0 8px; text-align:center}
+
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0; align-items:center}
+  .btnrow button, .btnrow select{font-family:inherit; font-size:14px; font-weight:600; min-height:44px; padding:8px 14px; border-radius:9px;
+    border:1px solid var(--line); background:#fff; color:var(--t1); cursor:pointer}
+  .btnrow button.pri{background:var(--accent); border-color:var(--accent); color:#fff}
+  .btnrow button[disabled], .btnrow select[disabled]{opacity:.45; cursor:not-allowed}
+  .btnrow button[aria-pressed="true"]{background:var(--accent-dark); color:#fff; border-color:var(--accent-dark)}
+
+  .graph canvas{display:block; width:100%; height:270px; background:#fff; border:1px solid var(--line); border-radius:10px; touch-action:none}
+  #g1{cursor:crosshair}
+  .lgd{display:flex; gap:12px; font-size:12.5px; color:var(--t2); margin-top:6px; flex-wrap:wrap; align-items:center}
+  .lgd i{display:inline-block; width:18px; height:0; border-top:3px solid #334155; vertical-align:middle; margin-right:4px}
+  .lgd i.no2{border-top-color:#a0461e}
+  .lgd label{display:inline-flex; gap:5px; align-items:center; cursor:pointer; min-height:44px}
+  .lgd button{font-family:inherit; font-size:13px; min-height:44px; padding:4px 10px; border-radius:8px; border:1px solid var(--line); background:#fff; cursor:pointer}
+  .chip{display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin-right:4px}
+  .names{list-style:none; margin:8px 0 0; padding:8px 10px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:9px; font-size:14px; color:var(--t1); line-height:1.7}
+  .names[hidden]{display:none}
+  .names i{display:inline-block; width:18px; height:0; border-top:3px solid; vertical-align:middle; margin-right:6px}
+  .counter{margin-top:8px; background:#f8fafc; border:1px solid var(--line); border-radius:9px; padding:8px 10px; font-size:13.5px; color:var(--t1); line-height:1.6; min-height:42px}
+  .counts{font-size:13px; color:var(--t2); margin-top:8px}
+  .reveal{margin-top:10px; display:flex; flex-direction:column; gap:6px}
+  .reveal button{align-self:flex-start; font-family:inherit; font-size:14px; font-weight:700; min-height:44px; padding:8px 14px; border-radius:9px;
+    border:1px solid var(--d-green); background:#fff; color:var(--d-green); cursor:pointer}
+  .reveal button[disabled]{opacity:.45; cursor:not-allowed}
+  .reveal .why{font-size:12.5px; color:var(--t3)}
+  .reveal .out{background:#f0fdf4; border:1px solid #bbf7d0; border-radius:9px; padding:8px 10px; font-size:14px; color:var(--t1); line-height:1.6}
+  .reveal .out[hidden]{display:none}
+
+  .tblwrap{overflow-x:auto; max-width:100%}
+  table.exp{width:100%; border-collapse:collapse; font-size:13px}
+  table.exp th, table.exp td{border:1px solid var(--line); padding:5px 6px; text-align:center; vertical-align:middle}
+  table.exp th{background:#f1f5f9; color:var(--t1); font-weight:600; font-size:12.5px}
+  table.exp tr.on td{background:#eff6ff}
+  table.exp button{font-family:inherit; min-height:40px; padding:4px 12px; font-weight:600; white-space:nowrap; border-radius:8px; border:1px solid var(--line); background:#fff; cursor:pointer}
+  table.exp button[disabled]{opacity:.45; cursor:not-allowed}
+  table.exp td.avg{font-weight:700; color:var(--t1)}
+
+  .later-box{margin-top:14px; padding:28px; text-align:center; color:var(--t2); font-size:14px; line-height:1.7}
+  .limits{margin-top:14px}
+  .limits summary{cursor:pointer; font-weight:600; color:var(--t1); font-size:14px}
+  .limits li{font-size:13px; color:var(--t2); line-height:1.65; margin:4px 0}
+  /* 좁은 폭: 시계 띠가 두 줄로 무대를 가리던 것(S-검토 B7) → 무대 위 한 줄로 따로 */
+  @media(max-width:600px){ .tabb{padding:8px 10px; font-size:13px} .ovl{position:static; display:block; margin:0 0 6px; font-size:12.5px; padding:3px 8px; max-width:none; min-height:calc(2.9em + 8px); line-height:1.45} }   /* 두 줄 높이로 고정 — 한 줄/두 줄을 오가며 아래가 20 px 흔들리던 것(S-검토 2라운드 R2-B2) */
+</style>
+</head>
+<body>
+<div class="wrap page">
+
+<div class="head">
+  <h1>화학 반응 속도</h1>
+  <p class="sub">입자의 운동과 반응으로 화학 반응 속도를 확인합니다.</p>
+</div>
+
+<nav class="tabbar" id="tabbar" aria-label="탭">
+  <div class="tgrp"><span class="gh">01 화학 반응 속도</span><div class="row">
+    <button class="tabb" type="button" data-tab="1" aria-pressed="true">반응 속도의 표현</button>
+    <button class="tabb tabname" type="button" data-tab="2" aria-pressed="false">반응 속도식</button>
+  </div></div>
+  <div class="tgrp tabname"><span class="gh tabname">02 1차 반응의 반감기</span><div class="row">
+    <button class="tabb later tabname" type="button" data-tab="3" aria-pressed="false">1차 반응의 반감기</button>
+  </div></div>
+  <div class="tgrp"><span class="gh">03 유효 충돌과 활성화 에너지</span><div class="row">
+    <button class="tabb later" type="button" data-tab="4" aria-pressed="false">유효 충돌</button>
+    <button class="tabb later" type="button" data-tab="5" aria-pressed="false">활성화 에너지</button>
+  </div></div>
+</nav>
+
+<!-- 탭 ① 반응 속도의 표현 -->
+<section class="pane" id="pane1">
+  <p class="tabdesc">N₂O₄(g) → 2NO₂(g) — 용기 속 N₂O₄ 분자가 NO₂ 둘로 갈라집니다. 갈라지는 모습과 그래프를 함께 보고, 그래프에 직선을 그어 기울기를 비교해 보세요.</p>
+  <div class="lay">
+    <div class="card">
+      <div class="stagewrap">
+        <canvas class="st" id="st1" aria-label="N₂O₄ 분자가 든 용기"></canvas>
+        <div class="ovl" id="clock1">반응 전</div>
+      </div>
+      <div class="btnrow">
+        <button type="button" class="pri" id="go1">반응 시작</button>
+        <button type="button" id="reset1">처음으로</button>
+        <button type="button" id="slow1" aria-pressed="false">느리게</button>
+      </div>
+      <p class="note">용기의 부피는 일정합니다. 용기 색은 NO₂가 많을수록 진해집니다(NO₂는 적갈색, N₂O₄는 거의 무색).</p>
+      <p class="note" id="legend1"></p>
+    </div>
+    <div class="card">
+      <h2>반응 시간에 따른 몰농도</h2>
+      <div class="graph"><canvas id="g1" aria-label="반응 시간–몰농도 그래프. 누르면 곡선에 닿는 직선, 끌면 두 점을 잇는 직선"></canvas></div>
+      <div class="lgd"><span><i></i>N₂O₄</span><label><input type="checkbox" id="showNO2"><i class="no2"></i>NO₂도 보기</label><button type="button" id="clr1" style="margin-left:auto">선 지우기</button></div>
+      <ul class="names" id="names1" hidden></ul>
+      <div class="counter" id="ctr1"></div>
+      <div class="counts" id="cnt1"></div>
+      <div class="reveal"><button type="button" id="rev1" disabled>이름 보기</button><span class="why" id="revwhy1">곡선에 닿는 직선과 두 점을 잇는 직선을 하나씩 그으면 켜집니다.</span></div>
+    </div>
+  </div>
+  <details class="limits card"><summary>가정과 한계</summary><ul>
+    <li>이 시뮬은 N₂O₄가 NO₂로 갈라지는 쪽만 봅니다(실제로는 NO₂끼리 다시 붙는 반응도 함께 일어납니다).</li>
+    <li>모든 분자의 질량과 빠르기를 같게 두었습니다 — 갈라져도 분자가 빨라지거나 느려지지 않습니다.</li>
+    <li>분자 수는 실제보다 훨씬 적습니다. 그래서 그래프가 조금씩 들쭉날쭉합니다.</li>
+  </ul></details>
+</section>
+
+<!-- 탭 ② -->
+<section class="pane" id="pane2" hidden>
+  <p class="tabdesc">처음 분자 수를 바꿔 가며 생성물이 생기는 그래프를 그려 보세요. 선이 가파를수록 생성물이 빨리 생깁니다.</p>
+  <div class="lay">
+    <div class="card">
+      <p class="eq" id="eq2"></p>
+      <div class="stagewrap">
+        <canvas class="st" id="st2" aria-label="반응물 분자가 든 용기(큰 용기의 한 부분)"></canvas>
+        <div class="ovl" id="clock2"></div>
+      </div>
+      <div class="btnrow">
+        <select id="rx2" aria-label="반응 고르기">
+          <option value="R1">2NO + O₂ → 2NO₂</option>
+          <option value="R2">2NO + 2H₂ → N₂ + 2H₂O</option>
+        </select>
+        <button type="button" id="slow2" aria-pressed="false">느리게</button>
+      </div>
+      <p class="note" id="legend2"></p>
+    </div>
+    <div class="card">
+      <h2 id="gt2"></h2>
+      <div class="graph"><canvas id="g2" aria-label="반응 시간–생긴 생성물 수 그래프"></canvas></div>
+      <div class="lgd" id="lgd2"></div>
+      <h2 style="margin-top:12px">가상 실험실 — 처음 분자 수를 바꿔 재기</h2>
+      <div class="tblwrap"><table class="exp" id="tbl2"></table></div>
+      <p class="note">점선 안은 큰 용기의 한 부분이라, 반응한 만큼 둘레에서 분자가 들어옵니다. [재기]를 누르면 10번 재어 평균을 냅니다. 부피가 같으므로 분자 수가 2배면 농도도 2배입니다. 2초 동안 생긴 수가 많을수록 반응이 빠릅니다.</p>
+      <div class="reveal"><button type="button" id="rev2" disabled>이름 보기</button><span class="why" id="revwhy2">이 반응의 실험을 모두 재면 켜집니다.</span><div class="out" id="revout2" hidden></div></div>
+    </div>
+  </div>
+  <details class="limits card"><summary>가정과 한계</summary><ul>
+    <li id="lim2a">반응이 일어나는 빈도는 실제 실험에서 잰 결과와 같아지도록 정했습니다. 이 반응이 실제로 어떤 단계를 거쳐 일어나는지는 다루지 않습니다 — 실험값을 따릅니다.</li>
+    <li>이 화면은 큰 용기의 한 부분입니다(점선 = 벽이 아닌 경계). 반응해 줄어든 만큼 둘레에서 같은 분자가 들어오고, 생긴 분자는 잠시 뒤 큰 용기 쪽으로 퍼져 옅어집니다.</li>
+    <li>반응이 일어나면 원자가 가까운 분자 자리로 한꺼번에 옮겨 가게 그렸습니다(실제로는 분자끼리 부딪쳐 바뀝니다).</li>
+    <li>[재기]는 매번 처음 분자 수로 새로 채워 다시 잽니다.</li>
+    <li>분자 수가 적어 잴 때마다 값이 흔들립니다. 그래서 10번 재어 평균을 냅니다.</li>
+  </ul></details>
+</section>
+
+<section class="pane" id="paneL" hidden><div class="card later-box">다음 판에서 열립니다.</div></section>
+
+</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="reactionrate"></script>
+<script src="../shared/qr.js" data-base=".." data-current="reactionrate"></script>
+<script src="sim.js"></script>
+</body>
+</html>

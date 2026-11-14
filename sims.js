@@ -293,6 +293,16 @@ const SIMS = [
     tags: ["자발성","계와 주위","주위의 온도","열의 출입","입자 운동","발열 반응","흡열 반응","전체 엔트로피 변화"]
   },
   {
+    id: "reactionrate",
+    title: "화학 반응 속도",
+    cat: "화학 반응과 에너지",
+    path: "reactionrate/",
+    icon: "reactionrate",
+    ready: true,
+    desc: "N₂O₄ 분자가 NO₂ 둘로 갈라지는 모습과 몰농도 그래프를 함께 보며 그래프에 직선을 그어 기울기를 비교합니다. 반응물의 처음 분자 수를 하나씩 바꿔 가며 생성물이 생기는 그래프의 가파르기를 비교합니다.",
+    tags: ["반응 속도","몰농도","그래프의 기울기","입자 운동","분자 수와 농도"]
+  },
+  {
     id: "predprey",
     title: "개체군 변동과 생태계평형",
     cat: "통합과학",
@@ -325,6 +335,7 @@ const ICONS = {
          <circle cx="35" cy="33" r="2.8"/><circle cx="45" cy="30" r="2.4"/>
          <path d="M16 50v-6M24 50v-8M32 50v-5M40 50v-7M48 50v-6" stroke="currentColor"
          stroke-width="3" stroke-linecap="round"/>`,
+  reactionrate:`<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><g fill="currentColor" fill-opacity=".12"><circle cx="18" cy="18" r="6"/><circle cx="11" cy="24" r="5"/><circle cx="25" cy="24" r="5"/><circle cx="44" cy="12" r="5"/><circle cx="51" cy="17" r="4"/><circle cx="39" cy="30" r="5"/><circle cx="47" cy="33" r="4"/></g><path d="M10 39v15h45M15 40c10 0 9 10 19 10h17"/></g>`,
   mineral:`<path d="M32 5l24 15v24L32 59 8 44V20z" fill="none" stroke="currentColor"
            stroke-width="4" stroke-linejoin="round"/>
            <path d="M32 5v54M8 20l48 24M56 20L8 44" stroke="currentColor" stroke-width="2" opacity=".38"/>
