@@ -90,7 +90,25 @@
   #rp4{display:block; width:100%; aspect-ratio:360/220; background:#fff; border:1px solid var(--line); border-radius:10px}
   .rpbar{height:5px; background:#e2e8f0; border-radius:3px; margin-top:6px; overflow:hidden}
   .rpbar i{display:block; height:100%; width:0; background:#94a3b8}
-  .later-box{margin-top:14px; padding:28px; text-align:center; color:var(--t2); font-size:14px; line-height:1.7}
+  /* 탭 ⑤ */
+  #pane5{position:relative}
+  #pane5 .lay{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}
+  @media(max-width:1023px){ #pane5 .lay{grid-template-columns:minmax(0,1fr)} }
+  #st5{border:2px dashed #94a3b8; background:#eef1f6}
+  #hill5{display:block; width:100%; aspect-ratio:600/400; background:#fff; border:1px solid var(--line); border-radius:10px}
+  #mag5{display:block; width:100%; margin-top:4px}
+  .cap5{margin:6px 0 0; padding:6px 10px; font-size:15px; font-weight:600; color:var(--t1); line-height:1.45; min-height:calc(2.9em + 12px); background:#f8fafc; border:1px solid var(--line); border-radius:9px}
+  .cap5[hidden]{display:none}
+  .cap5.hint{font-weight:500; color:var(--t3)}
+  #mag5[hidden]{display:none}
+  #fly5{position:absolute; left:0; top:0; pointer-events:none; z-index:5}
+  .barrier{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px}
+  .barrier label{font-size:13.5px; font-weight:700; color:var(--t1)}
+  .barrier input[type=range]{flex:1; min-width:150px; height:44px}
+  .barrier .val{font-size:14px; font-weight:700; min-width:64px; color:#c62828}
+  .barrier button{font-family:inherit; font-size:13px; min-height:44px; padding:6px 10px; border-radius:9px; border:1px solid var(--line); background:#fff; cursor:pointer}
+  #wctl5[hidden]{display:none}
+  #wctl5 input[type=range]{flex:1; min-width:140px; height:44px}
   .limits{margin-top:14px}
   .limits summary{cursor:pointer; font-weight:600; color:var(--t1); font-size:14px}
   .limits li{font-size:13px; color:var(--t2); line-height:1.65; margin:4px 0}
@@ -116,7 +134,7 @@
   </div></div>
   <div class="tgrp tabname"><span class="gh tabname">03 유효 충돌과 활성화 에너지</span><div class="row">
     <button class="tabb tabname" type="button" data-tab="4" aria-pressed="false">유효 충돌</button>
-    <button class="tabb later tabname" type="button" data-tab="5" aria-pressed="false">활성화 에너지</button>
+    <button class="tabb tabname" type="button" data-tab="5" aria-pressed="false">활성화 에너지</button>
   </div></div>
 </nav>
 
@@ -224,7 +242,7 @@
   <details class="limits card"><summary>가정과 한계</summary><ul>
     <li>분해되는 N₂O₅는 살아 있는 분자 가운데 무작위로 고릅니다. 오래 있던 분자와 방금 남은 분자, 주변에 분자가 많은 분자와 적은 분자 모두 분해될 가능성이 같습니다.</li>
     <li>실제 용기에는 분자가 셀 수 없이 많아 분자 수가 매끈하게 줄어듭니다. 이 화면은 분자가 적어서, 매 순간 줄어들 «평균» 개수만큼 분해되도록 맞췄습니다(어느 분자가 분해될지는 무작위).</li>
-    <li>N₂O₅ 두 개가 분해될 때 O₂ 하나가 생기므로, 화면에서는 두 번째 분해마다 O₂를 그렸습니다. 생긴 NO₂와 O₂는 용기에 남지만, 화면을 가리지 않도록 잠시 보인 뒤 옅어지게 그렸습니다(생긴 수는 아래 글로 셉니다).</li>
+    <li>N₂O₅ 두 개가 분해될 때 O₂ 하나가 생기므로, 화면에서는 두 번째 분해마다 O₂를 그렸습니다. 생긴 NO₂와 O₂는 닫힌 용기에 그대로 남아 함께 움직입니다. 남은 N₂O₅가 잘 보이도록 생긴 분자는 처음부터 끝까지 같은 연한 색으로 그렸습니다.</li>
     <li>모든 분자의 빠르기를 같은 정도로 두었습니다. 분자 수가 줄어도 분자가 느려지지 않습니다.</li>
   </ul></details>
 </section>
@@ -269,7 +287,57 @@
   </ul></details>
 </section>
 
-<section class="pane" id="paneL" hidden><div class="card later-box">다음 판에서 열립니다.</div></section>
+<!-- 탭 ⑤ -->
+<section class="pane" id="pane5" hidden>
+  <p class="tabdesc">용기 속 분자들이 쉬지 않고 부딪칩니다. 알맞은 방향으로 부딪친 충돌마다 점 하나가 날아가 그 충돌의 세기만큼 언덕을 오릅니다. 꼭대기를 넘은 충돌만 생성물이 됩니다. 언덕 높이를 바꾸거나, 충돌 하나를 붙잡아 원자 배열이 바뀌는 모습을 천천히 보세요.</p>
+  <div class="lay">
+    <div class="card">
+      <p class="eq" id="eq5"></p>
+      <div class="stagewrap">
+        <canvas class="st" id="st5" aria-label="분자들이 부딪치는 용기(큰 용기의 한 부분)"></canvas>
+      </div>
+      <div class="btnrow">
+        <span class="seg" role="group" aria-label="반응 방향"><button type="button" id="dirF5" aria-pressed="true">정반응</button><button type="button" id="dirR5" aria-pressed="false">역반응</button></span>
+        <button type="button" id="slow5" aria-pressed="false">느리게</button>
+      </div>
+      <p class="note" id="legend5"></p>
+      <p class="note">점선 안은 큰 용기의 한 부분이라, 반응해 줄어든 만큼 둘레에서 같은 분자가 들어옵니다. 생긴 분자는 잠시 뒤 큰 용기 쪽으로 퍼져 옅어집니다.</p>
+    </div>
+    <div class="card">
+      <h2>반응의 진행에 따른 엔탈피</h2>
+      <canvas id="hill5" aria-label="반응의 진행–엔탈피 그림. 알맞은 방향으로 부딪친 충돌마다 점이 그 세기만큼 언덕을 오릅니다"></canvas>
+      <p class="cap5" id="cap5" hidden></p>
+      <canvas id="mag5" hidden aria-label="천천히 보는 충돌의 원자 배열"></canvas>
+      <div class="barrier">
+        <label for="ea5">언덕 높이</label>
+        <input type="range" id="ea5" min="60" max="250" step="1" value="183">
+        <span class="val" id="eaV5">183 kJ</span>
+        <button type="button" id="eaBook5">교과서 값</button>
+      </div>
+      <div class="btnrow">
+        <button type="button" id="catchX5" aria-pressed="false">넘는 충돌 하나 천천히</button>
+        <button type="button" id="catchF5" aria-pressed="false">못 넘는 충돌 하나 천천히</button>
+      </div>
+      <div class="btnrow" id="wctl5" hidden>
+        <button type="button" id="wPlay5">이 자리에 두기</button>
+        <input type="range" id="wScrub5" min="0" max="1000" value="0" aria-label="천천히 보기의 진행">
+        <button type="button" id="wClose5">닫기</button>
+      </div>
+      <p class="note" id="arm5" aria-live="polite"></p>
+      <div class="counter" id="ctr5"></div>
+      <div class="lgd" id="lgd5"></div>
+      <div class="reveal"><button type="button" id="rev5" disabled>이름 보기</button><span class="why" id="revwhy5">넘는 충돌과 못 넘는 충돌을 하나씩 천천히 보면 켜집니다.</span><div class="out" id="revout5" hidden></div></div>
+    </div>
+  </div>
+  <details class="limits card"><summary>가정과 한계</summary><ul>
+    <li>실제 HI는 보통의 조건에서 부딪쳐도 생성물이 생기는 비율이 아주 작습니다. 반응이 보이도록 충돌 세기와 언덕 높이 사이의 눈금을 화면용으로 크게 줄였습니다. 그림의 183 · 170 · 13 kJ는 교과서 값입니다.</li>
+    <li>언덕 위 점은 충돌 한 번을 천천히 그린 것입니다. 용기 속에서는 충돌이 순식간에 끝납니다.</li>
+    <li>원자 배열이 바뀌는 모습은 교과서 그림(꼭대기에서 H···I 두 줄이 사각형을 이룸)을 따른 모형입니다. 실제 원자들이 움직이는 길은 더 복잡할 수 있습니다.</li>
+    <li>언덕 높이를 바꿔도 반응물과 생성물의 높이 차(ΔH = 13 kJ)는 그대로 두었습니다.</li>
+    <li>모든 분자의 질량을 같게 두었습니다. 생긴 분자가 다시 반응하는 것은 다루지 않습니다.</li>
+  </ul></details>
+  <canvas id="fly5" aria-hidden="true"></canvas>
+</section>
 
 </div>
 

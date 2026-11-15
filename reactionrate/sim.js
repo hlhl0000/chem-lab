@@ -105,7 +105,8 @@ var RRC = (function () {
         for (j = head[gx + gy * cw]; j >= 0; j = next[j]) {
           if (j <= i) continue;
           var q = ms[j]; if (q.dead) continue;
-          if (p.pair === q.id && this.t < p.pairUntil) continue;   /* 갈라진 짝은 잠깐 서로 밀어내지 않는다 — 다음 걸음에 ≈ 4 px 튀던 것(S-검토 C3) */
+          if (p.pair === q.id && this.t < p.pairUntil) continue;
+          if (p.grp && p.grp === q.grp && this.t < p.grpUntil) continue;   /* 한 분해에서 함께 생긴 분자들(탭 ③ NO₂·NO₂·O₂)도 잠깐 서로 밀어내지 않는다. 탭 ①②④는 grp 없음 */   /* 갈라진 짝은 잠깐 서로 밀어내지 않는다 — 다음 걸음에 ≈ 4 px 튀던 것(S-검토 C3) */
           if (p.ghost || q.ghost) continue;   /* 옅어지는 생성물은 부딪치지 않는다(탭 ③④ — 반응물 판정을 흐리지 않게) */
           var dx = q.x - p.x, dy = q.y - p.y, d2 = dx * dx + dy * dy, s = p.R + q.R;
           if (d2 >= s * s || d2 === 0) continue;
@@ -297,7 +298,7 @@ var RRC = (function () {
      분자 하나하나는 «언제든 같은 가능성»으로 사라진다(나이·주변 분자 수와 무관 — 고르는 것은 살아 있는 것 중 무작위).
      다만 분자 수가 적어 생기는 흔들림을 없애려고, 사라지는 «개수»는 매끈한 값 Ns(dNs = −k·Ns·dt — k 와 지금 값만 씀)를 따라간다:
      Ns 가 (지금 개수 − 1 + u) 밑으로 내려갈 때 하나를 지운다(u = 0~JIT 흔들림). 지시안 v2 §D1(Fable 논의) */
-  var T3C = { W: 720, H: 400, S: 0.85, NS: [32, 64, 128], K: Math.LN2 / 6, T1: 6, TMAX: 36, REC: 0.1, JIT: 0.12, LIFE: 0.8, FADE: 0.5, SUB: 2 };
+  var T3C = { W: 720, H: 400, S: 0.85, NS: [32, 64, 128], K: Math.LN2 / 6, T1: 6, TMAX: 36, REC: 0.1, JIT: 0.12, LIFE: 0.8, FADE: 0.5, SUB: 2, PROD_A: 0.4 };   /* LIFE·FADE 는 주입(prodFade) 전용 · PROD_A = 생성물을 그리는 불투명도(늘 같음) */
   function Tab3(seed) { this.seed = seed || 31; this.inject = null; this.reset(128); }
   Tab3.prototype.jit = function () { return this.w.r() * T3C.JIT; };   /* 0 ≤ u < JIT — 매끈한 값이 정수일 때 개수가 바로 그 정수(5t₁ 에 처음의 1/32 이 정확히 남음) */
   Tab3.prototype.reset = function (n0) {
@@ -312,7 +313,8 @@ var RRC = (function () {
     var t = Math.round(this.rt / T3C.REC) * T3C.REC; this.rec.push({ t: t, n: this.nA, scan: this.w.count("N2O5") });
     for (var j = 0; j < 5; j++) if (this.marks[j] == null && this.nA <= this.n0 / Math.pow(2, j + 1)) this.marks[j] = t;
   };
-  /* N₂O₅ 하나 → NO₂ 둘(제자리 — 부모의 N·O 원자 위에) + 두 번째 분해마다 O₂ 하나. 생성물은 부딪치지 않고 옅어진다(화면을 가리지 않게) */
+  /* N₂O₅ 하나 → NO₂ 둘(제자리 — 부모의 N·O 원자 위에) + 두 번째 분해마다 O₂ 하나. 생성물은 닫힌 용기에 그대로 남아 다른 분자와 똑같이 부딪치며 움직인다
+     (사용자 지시 2026-11-15: «NO₂ 분자와 산소 분자들이 사라지지 않게» — 이전 판 D3 «0.8 s에 옅어짐»을 대체). 빠르기는 부모의 빠르기 그대로(탭 ① 과 같은 규칙 — 분해가 용기를 데우지 않게) */
   Tab3.prototype.decompose = function (m) {
     var w = this.w, at = worldAtoms(m), cx = m.x, cy = m.y, cO = -1, bd = 1e9, i, j;
     for (i = 0; i < at.length; i++) if (at[i][0] === "O") { var d = (at[i][1] - cx) * (at[i][1] - cx) + (at[i][2] - cy) * (at[i][2] - cy); if (d < bd) { bd = d; cO = i; } }
@@ -323,12 +325,15 @@ var RRC = (function () {
       for (j = 0; j < at.length; j++) if (at[j][0] === "O" && used.indexOf(j) < 0) os.push([j, (at[j][1] - at[i][1]) * (at[j][1] - at[i][1]) + (at[j][2] - at[i][2]) * (at[j][2] - at[i][2])]);
       os.sort(function (a, b) { return a[1] - b[1]; }); var o1 = at[os[0][0]], o2 = at[os[1][0]]; used.push(os[0][0], os[1][0]);
       var px = (at[i][1] + o1[1] + o2[1]) / 3, py = (at[i][2] + o1[2] + o2[2]) / 3, mx = (o1[1] + o2[1]) / 2, my = (o1[2] + o2[2]) / 2;
-      var ex = px - cx, ey = py - cy, L = Math.sqrt(ex * ex + ey * ey) || 1, out = 0.5 * this.v0;
-      var k = w.add("NO2", px, py, m.vx + out * ex / L, m.vy + out * ey / L, Math.atan2(my - at[i][2], mx - at[i][1]), m.w);
-      k.ghost = true; k.life = T3C.LIFE; kids.push(k);
+      var ex = px - cx, ey = py - cy, L = Math.sqrt(ex * ex + ey * ey) || 1, S = Math.sqrt(m.vx * m.vx + m.vy * m.vy) || 1;
+      var vx = 0.6 * m.vx / S + 0.8 * ex / L, vy = 0.6 * m.vy / S + 0.8 * ey / L, V = Math.sqrt(vx * vx + vy * vy) || 1;
+      var k = w.add("NO2", px, py, S * vx / V, S * vy / V, Math.atan2(my - at[i][2], mx - at[i][1]), m.w * 1.5);
+      kids.push(k);
     }
     this.ev++; this.nNO2 += 2;
-    if (this.ev % 2 === 0) { var o = w.add("O2", at[cO][1], at[cO][2], m.vx, m.vy, 2 * Math.PI * w.r(), m.w); o.ghost = true; o.life = T3C.LIFE; this.nO2++; kids.push(o); }
+    if (this.ev % 2 === 0) { var o = w.add("O2", at[cO][1], at[cO][2], m.vx, m.vy, 2 * Math.PI * w.r(), m.w); this.nO2++; kids.push(o); }
+    if (this.inject === "prodFade") kids.forEach(function (q) { q.ghost = true; q.life = T3C.LIFE; });   /* FAIL 주입: 이전 판(생성물이 옅어져 사라짐) */
+    kids.forEach(function (q) { q.grp = m.id; q.grpUntil = w.t + 0.25; });
     this.events.push({ x: cx, y: cy, t: w.t, id: m.id });
     m.dead = true; this.nA--;
     return kids;
@@ -364,14 +369,15 @@ var RRC = (function () {
      다시 보기: 지나간 1 s 의 모든 분자 위치를 기록해 두고, 고른 종류의 «다음» 충돌을 붙잡아 그 기록을 느리게 다시 튼다(무대는 멈추지 않는다). */
   var T4C = { W: 720, H: 400, N: 80, V0: 105, ORI: 0.6, PAR: 0.5, VTH: 150, LIFE: 0.9, FADE: 0.5, INFADE: 0.5, SUB: 2, BUF: 1.1, TAU: 2, RVIEW: { x: 72, y: 48 }, PRE: 0.6, POST: 0.35, MERGE: 0.15,
     NA_ORI: 0.85, NA_FAST: 1.1, DA_ORI: 0.5, DA_PAR: 0.65, DA_SLOW: 0.55, DA_SP: 1.0 };   /* (다) 붙잡기: 방향은 판정 경계(0.6 · 0.5)보다 안쪽, 세기는 VTH 의 0.7 밑 — 경계 근처의 «애매한» 충돌은 붙잡지 않는다(Fable D5-1) */
-  function judgeHI(p, q, nx, ny, vn) {
+  function judgeHI(p, q, nx, ny, vn, vth) {   /* vth: 세기 문턱(없으면 T4C.VTH — 탭 ⑤가 언덕 높이에 따라 바꿔 넘긴다 · T4C 는 고치지 않는다) */
+    var VTH = vth || T4C.VTH;
     var upx = Math.cos(p.a), upy = Math.sin(p.a), uqx = Math.cos(q.a), uqy = Math.sin(q.a);   /* HI 국소 +x = I→H */
     var cp = upx * nx + upy * ny, cq = uqx * nx + uqy * ny, pp = upx * uqx + upy * uqy, s = -vn;
-    var ori = Math.abs(cp) < T4C.ORI && Math.abs(cq) < T4C.ORI && pp > T4C.PAR, fast = s >= T4C.VTH;
+    var ori = Math.abs(cp) < T4C.ORI && Math.abs(cq) < T4C.ORI && pp > T4C.PAR, fast = s >= VTH;
     var cat = null;
     if (ori && fast) cat = "ga";
-    else if (!ori && s >= T4C.NA_FAST * T4C.VTH && Math.abs(cp) > T4C.NA_ORI && Math.abs(cq) > T4C.NA_ORI && cp * cq > 0) cat = "na";   /* (나) = 교과서처럼 머리–꼬리(둘 다 중심선 방향 · 같은 쪽) — T자·반대쪽 나란히는 붙잡지 않음(S-검토 v2 B2) */
-    else if (Math.abs(cp) < T4C.DA_ORI && Math.abs(cq) < T4C.DA_ORI && pp > T4C.DA_PAR && s < T4C.DA_SLOW * T4C.VTH &&
+    else if (!ori && s >= T4C.NA_FAST * VTH && Math.abs(cp) > T4C.NA_ORI && Math.abs(cq) > T4C.NA_ORI && cp * cq > 0) cat = "na";   /* (나) = 교과서처럼 머리–꼬리(둘 다 중심선 방향 · 같은 쪽) — T자·반대쪽 나란히는 붙잡지 않음(S-검토 v2 B2) */
+    else if (Math.abs(cp) < T4C.DA_ORI && Math.abs(cq) < T4C.DA_ORI && pp > T4C.DA_PAR && s < T4C.DA_SLOW * VTH &&
       Math.sqrt(p.vx * p.vx + p.vy * p.vy) < T4C.DA_SP * T4C.V0 && Math.sqrt(q.vx * q.vx + q.vy * q.vy) < T4C.DA_SP * T4C.V0) cat = "da";
     return { ori: ori, fast: fast, react: ori && fast, cat: cat, cp: cp, cq: cq, pp: pp, s: s };
   }
@@ -386,11 +392,12 @@ var RRC = (function () {
   }
   Tab4.prototype.hit = function (p, q, nx, ny, vn) {
     if (p.k !== "HI" || q.k !== "HI" || p.merge || q.merge) return false;
-    var J = judgeHI(p, q, nx, ny, vn), w = this.w, sg = surfGap(p, q);
+    var J = judgeHI(p, q, nx, ny, vn, this.vth), w = this.w, sg = surfGap(p, q);
     if (sg > this.maxBounceGap) this.maxBounceGap = sg; if (-sg > this.maxPen) this.maxPen = -sg;   /* 검사용: 판정 순간 원자 공 사이 틈(+)·겹침(−) */
     if (this.inject === "noOrient") J.react = J.fast;   /* FAIL 주입: 방향을 보지 않으면 (나) 기하가 반응해야 한다 */
     this.hits++; if (J.cat) this.byCat[J.cat]++;
     var ev = { t: w.t, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, nx: nx, ny: ny, s: J.s, cat: J.cat, react: J.react, ids: [p.id, q.id] };
+    if (this.onJudge) this.onJudge(J, ev);   /* 탭 ⑤: 방향이 맞은 충돌마다 언덕 위 점 하나 */
     if (this.want && !this.cap && J.cat === this.want) this.cap = { want: this.want, ev: ev, ids: [p.id, q.id], until: w.t + T4C.POST };
     if (!J.react) return false;
     this.reacts++;
@@ -487,13 +494,162 @@ var RRC = (function () {
   };
   Tab4.prototype.count = function (k) { var n = 0; this.w.mols.forEach(function (m) { if (!m.dead && m.k === k && !m.ghost) n++; }); return n; };
 
+  /* ════════ 탭 ⑤ — 활성화 에너지 (2HI ⇄ H₂ + I₂) ════════
+     정반응 상자 = 탭 ④ 엔진 그대로(Tab4 · 세기 문턱만 vth 로 넘김) · 역반응 상자 = 같은 World 위 H₂ + I₂(Tab5R).
+     에너지 눈금: 교과서 장벽 183 kJ ↔ 탭 ④ 세기 문턱 VTH(150). 충돌 세기 E = 183·(s/VTH)² — 운동 에너지라 빠르기의 제곱.
+     방향이 맞은 충돌마다 «점 하나»가 그 세기만큼 언덕을 오른다(onClimb). 넘음 ⇔ E ≥ 장벽 ⇔ 상자에서 반응 — 같은 판정에서 나온다. */
+  var T5C = { DH: 13, EA_BOOK: 183, EMIN: 60, EMAX: 250, A: 0.24, B: 0.76, X0: 0.1, X1: 0.9 };
+  function energyOf(s) { return T5C.EA_BOOK * (s / T4C.VTH) * (s / T4C.VTH); }
+  function sThresh(E) { return T4C.VTH * Math.sqrt(Math.max(0, E) / T5C.EA_BOOK); }
+  /* 언덕: x ∈ [0,1] 반응의 진행 · 반응물 0 · 생성물 DH · 꼭대기 정확히 Ea(x = 0.5) */
+  function curveE(x, Ea) {
+    if (x <= T5C.A) return 0; if (x >= T5C.B) return T5C.DH;
+    var u = (x - T5C.A) / (T5C.B - T5C.A), s2 = Math.sin(Math.PI * u); s2 *= s2;
+    return u <= 0.5 ? Ea * s2 : T5C.DH + (Ea - T5C.DH) * s2;
+  }
+  /* 높이 E(절대) 에 닿는 진행 자리 — 출발한 쪽 비탈 */
+  function turnX(E, Ea, fromRight) {
+    var base = fromRight ? T5C.DH : 0, uu = Math.asin(Math.sqrt(Math.max(0, Math.min(1, (E - base) / (Ea - base))))) / Math.PI;
+    if (fromRight) uu = 1 - uu;
+    return T5C.A + uu * (T5C.B - T5C.A);
+  }
+  function lamOf(x) { return Math.max(0, Math.min(1, (x - T5C.X0) / (T5C.X1 - T5C.X0))); }   /* 언덕 위 자리 → 원자 배열의 진행 */
+
+  /* 역반응 상자: H₂ 40 + I₂ 40. 방향 — 두 분자 축이 중심선에 거의 수직이고 서로 나란함(네 원자가 사각형 · 동핵이라 앞뒤 없음) */
+  function atomNarrow(p, q) {
+    var A = worldAtomsR(p), B = worldAtomsR(q), best = null;
+    for (var i = 0; i < A.length; i++) for (var j = 0; j < B.length; j++) {
+      var ex = B[j][0] - A[i][0], ey = B[j][1] - A[i][1], dd = Math.sqrt(ex * ex + ey * ey) || 1e-9, pen = A[i][2] + B[j][2] - dd;
+      if (pen > 0 && (!best || pen > best.pen)) best = { nx: ex / dd, ny: ey / dd, pen: pen };
+    }
+    return best;
+  }
+  function judgeRev(p, q, nx, ny, vn, vth) {
+    var ux = Math.cos(p.a), uy = Math.sin(p.a), wx = Math.cos(q.a), wy = Math.sin(q.a);
+    var cp = ux * nx + uy * ny, cq = wx * nx + wy * ny, pp = Math.abs(ux * wx + uy * wy), s = -vn;
+    var ori = Math.abs(cp) < T4C.ORI && Math.abs(cq) < T4C.ORI && pp > T4C.PAR;
+    return { ori: ori, s: s, react: ori && s >= vth };
+  }
+  function Tab5R(seed) {
+    var self = this; this.w = new World({ W: T4C.W, H: T4C.H, seed: seed || 77, v0: T4C.V0, kinds: ["HI", "H2", "I2"] });
+    this.w.narrow = atomNarrow; this.reacts = 0; this.vth = T4C.VTH; this.onJudge = null; this.inject = null;
+    for (var i = 0; i < T4C.N / 2; i++) ["H2", "I2"].forEach(function (k) { var m = self.w.place(k), v = rayleighVel(self.w, T4C.V0); m.vx = v[0]; m.vy = v[1]; });
+    this.w.onHit = function (p, q, nx, ny, vn) { return self.hit(p, q, nx, ny, vn); };
+  }
+  function dist2(a, b) { return Math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1])); }
+  function tagged(m) { var sh = shape(m.k).atoms; return worldAtomsR(m).map(function (a, i) { return [a[0], a[1], a[2], sh[i][0]]; }); }
+  Tab5R.prototype.hit = function (p, q, nx, ny, vn) {
+    if (p.ghost || q.ghost) return false;
+    if (!((p.k === "H2" && q.k === "I2") || (p.k === "I2" && q.k === "H2"))) return false;
+    var J = judgeRev(p, q, nx, ny, vn, this.vth);
+    if (this.onJudge) this.onJudge(J, { t: this.w.t, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
+    if (!J.react) return false;
+    this.reacts++;
+    var A = tagged(p).concat(tagged(q));
+    var Hs = A.filter(function (a) { return a[3] === "H"; }), Is = A.filter(function (a) { return a[3] === "I"; });
+    var d00 = dist2(Hs[0], Is[0]) + dist2(Hs[1], Is[1]), d01 = dist2(Hs[0], Is[1]) + dist2(Hs[1], Is[0]);
+    var pairs = d00 <= d01 ? [[Hs[0], Is[0]], [Hs[1], Is[1]]] : [[Hs[0], Is[1]], [Hs[1], Is[0]]];
+    function mid(pr) { return [(pr[0][0] + pr[1][0]) / 2, (pr[0][1] + pr[1][1]) / 2]; }
+    var cvx = (p.vx + q.vx) / 2, cvy = (p.vy + q.vy) / 2, c0 = mid(pairs[0]), c1 = mid(pairs[1]), ex = c1[0] - c0[0], ey = c1[1] - c0[1], L = Math.sqrt(ex * ex + ey * ey) || 1, sep = 0.45 * T4C.V0, w = this.w;
+    [[pairs[0], -1], [pairs[1], 1]].forEach(function (pr) {
+      var c = mid(pr[0]), h = pr[0][0], i = pr[0][1];
+      var m = w.add("HI", c[0], c[1], cvx + pr[1] * sep * ex / L, cvy + pr[1] * sep * ey / L, Math.atan2(h[1] - i[1], h[0] - i[0]), 0);
+      m.ghost = true; m.life = T4C.LIFE;
+    });
+    p.dead = q.dead = true; this.inflow("H2"); this.inflow("I2");
+    return true;
+  };
+  Tab5R.prototype.inflow = function (k) {
+    var w = this.w, R = w.radius(k) + 0.5, W = T4C.W, H = T4C.H, v = rayleighVel(w, T4C.V0), sp = Math.sqrt(v[0] * v[0] + v[1] * v[1]), th = (w.r() - 0.5) * 2.2, x, y, nx, ny, g, i;
+    for (g = 0; g < 40; g++) {
+      var side = Math.floor(w.r() * 4), u = w.r(), free = true;
+      if (side === 0) { x = R + 0.5; y = R + u * (H - 2 * R); nx = 1; ny = 0; } else if (side === 1) { x = W - R - 0.5; y = R + u * (H - 2 * R); nx = -1; ny = 0; }
+      else if (side === 2) { y = R + 0.5; x = R + u * (W - 2 * R); nx = 0; ny = 1; } else { y = H - R - 0.5; x = R + u * (W - 2 * R); nx = 0; ny = -1; }
+      for (i = 0; i < w.mols.length; i++) { var o = w.mols[i]; if (o.dead || o.ghost) continue; if (dist2([o.x, o.y], [x, y]) < o.R + R + 1) { free = false; break; } }
+      if (free) break;
+    }
+    var c = Math.cos(th), s = Math.sin(th), m = w.add(k, x, y, sp * (nx * c - ny * s), sp * (nx * s + ny * c), 2 * Math.PI * w.r(), (w.r() - 0.5) * 2.4); m.inT = 0;
+  };
+  Tab5R.prototype.step = function (dt) {
+    var h = dt / T4C.SUB, w = this.w, i;
+    for (var s = 0; s < T4C.SUB; s++) {
+      w.step(h);
+      for (i = 0; i < w.mols.length; i++) { var m = w.mols[i]; if (m.dead) continue; if (m.inT != null) { m.inT += h; if (m.inT > T4C.INFADE) m.inT = null; } if (m.life != null) { m.life -= h; if (m.life <= 0) m.dead = true; } }
+      if (this.inject !== "noThermo") {
+        var e2 = 0, n = 0; for (i = 0; i < w.mols.length; i++) { var a = w.mols[i]; if (!a.dead && !a.ghost) { e2 += a.vx * a.vx + a.vy * a.vy; n++; } }
+        if (n && e2 > 0) { var lam = Math.sqrt(1 + (h / T4C.TAU) * (T4C.V0 * T4C.V0 * n / e2 - 1)); for (i = 0; i < w.mols.length; i++) { var b = w.mols[i]; if (!b.dead && !b.ghost) { b.vx *= lam; b.vy *= lam; } } }
+      }
+      w.compact();
+    }
+  };
+  Tab5R.prototype.count = function (k) { var n = 0; this.w.mols.forEach(function (m) { if (!m.dead && m.k === k && !m.ghost) n++; }); return n; };
+
+  function Tab5(seed) {
+    var self = this; seed = seed || 57;
+    this.fwd = new Tab4(seed); this.rev = new Tab5R(seed + 20); this.dir = "F"; this.ea = T5C.EA_BOOK;
+    this.climbs = 0; this.crosses = 0; this.log = []; this.onClimb = null; this.inject = null;
+    this.fwd.onJudge = function (J, ev) { if (self.dir === "F" && J.ori) self.climb(J.s, J.react, ev.x, ev.y); };
+    this.rev.onJudge = function (J, ev) { if (self.dir === "R" && J.ori) self.climb(J.s, J.react, ev.x, ev.y); };
+    this.setEa(T5C.EA_BOOK);
+  }
+  Tab5.prototype.box = function () { return this.dir === "F" ? this.fwd : this.rev; };
+  Tab5.prototype.need = function () { return this.dir === "F" ? this.ea : this.ea - T5C.DH; };
+  Tab5.prototype.setEa = function (E) { this.ea = E; this.fwd.vth = sThresh(E); this.rev.vth = sThresh(E - T5C.DH); this.resetCounts(); };
+  Tab5.prototype.setDir = function (d) { this.dir = d; this.resetCounts(); };
+  Tab5.prototype.resetCounts = function () { this.climbs = 0; this.crosses = 0; this.log = []; this.base = { f: this.fwd.reacts, r: this.rev.reacts }; };
+  Tab5.prototype.boxReactsNow = function () { return this.dir === "F" ? this.fwd.reacts - this.base.f : this.rev.reacts - this.base.r; };
+  Tab5.prototype.climb = function (s, react, x, y) {
+    var E = energyOf(s), need = this.need(), cross = this.inject === "dotLoose" ? E >= 0.8 * need : E >= need;   /* dotLoose = FAIL 주입: 점 판정을 상자와 다르게 */
+    this.climbs++; if (cross) this.crosses++;
+    var r = { E: E, need: need, cross: cross, react: react, fromR: this.dir === "R", Ea: this.ea, x: x, y: y, t: this.box().w.t };
+    this.log.push(r); if (this.log.length > 600) this.log.shift();
+    if (this.onClimb) this.onClimb(r);
+  };
+  Tab5.prototype.step = function (dt) { this.box().step(dt); };
+  /* 천천히 보기: 붙잡은 충돌 하나가 언덕 위를 지나는 길(구간 [초, 시작 x, 끝 x, 0 고르게 / 1 감속 / 2 가속]) */
+  var T5W = { RUN: 2.0, UP: 4.2, HOLD: 1.8, DOWN: 3.2, OUT: 2.0, END: 1.4, UPF: 3.4, HOLDF: 1.2, BACK: 2.8 };
+  function watchPath(r, inject) {
+    var R = r.fromR, s0 = R ? T5C.X1 : T5C.X0, foot = R ? T5C.B : T5C.A, far = R ? T5C.A : T5C.B, end = R ? T5C.X0 : T5C.X1, W = T5W;
+    var top = r.cross || inject === "failToTop" ? 0.5 : turnX((R ? T5C.DH : 0) + r.E, r.Ea, R);   /* failToTop = FAIL 주입: 못 넘는 충돌도 꼭대기까지 */
+    var seg = r.cross ? [[W.RUN, s0, foot, 0], [W.UP, foot, 0.5, 1], [W.HOLD, 0.5, 0.5, 0], [W.DOWN, 0.5, far, 2], [W.OUT, far, end, 0], [W.END, end, end, 0]]
+                      : [[W.RUN, s0, foot, 0], [W.UPF, foot, top, 1], [W.HOLDF, top, top, 0], [W.BACK, top, foot, 2], [W.OUT, foot, s0, 0], [W.END, s0, s0, 0]];
+    var T = 0; seg.forEach(function (g) { T += g[0]; });
+    return { seg: seg, T: T, top: top, cross: r.cross, fromR: R };
+  }
+  function watchAt(path, tau) {
+    var t = Math.max(0, tau), i, g, k;
+    for (i = 0; i < path.seg.length; i++) { g = path.seg[i]; if (t <= g[0] || i === path.seg.length - 1) { k = Math.max(0, Math.min(1, t / g[0])); if (g[3] === 1) k = 1 - (1 - k) * (1 - k); else if (g[3] === 2) k = k * k; return { x: g[1] + (g[2] - g[1]) * k, seg: i }; } t -= g[0]; }
+  }
+
+  /* ── 탭 ⑤ 원자 배열의 변화(교과서 그림 Ⅳ-7 꼭대기 그림: H···I 두 줄이 사각형 · 네 변 모두 점선) ──
+     lam ∈ [0,1] = 반응의 진행. 0 = HI + HI(나란히 · 멀리) · 0.5 = 꼭대기 배열(옛 결합 H–I 와 새 결합 H–H·I–I 가 반씩) · 1 = H₂ + I₂(떨어짐).
+     결합 길이는 분자 모양(shape)에서 유도한다(원칙 13). 늘어남 비율 STRETCH·떨어진 거리 FAR 만 화면용 상수.
+     원자 순서: 0 H(위) 1 I(위) 2 H(아래) 3 I(아래). 결합 [i, j, 세기 0..1] — 세기 1 = 온전한 결합, 0.5 = 반쯤, 0 = 없음. */
+  var T5G = { STRETCH: 1.32, FAR: 22, APPROACH: 0.3, PULL0: 0.2, PULL1: 0.5, BOND0: 0.25, BOND1: 0.75 };
+  function sstep(k) { k = k < 0 ? 0 : (k > 1 ? 1 : k); return k * k * (3 - 2 * k); }
+  function bondLen(kind) { var a = shape(kind).atoms; return Math.sqrt((a[1][1] - a[0][1]) * (a[1][1] - a[0][1]) + (a[1][2] - a[0][2]) * (a[1][2] - a[0][2])); }
+  function complexGeom(lam) {
+    lam = lam < 0 ? 0 : (lam > 1 ? 1 : lam);
+    var dHI = bondLen("HI"), dHH = bondLen("H2"), dII = bondLen("I2"), S = T5G.STRETCH, F = T5G.FAR;
+    var cHI = dHI * S, cHH = dHH * S, cII = dII * S;   /* 꼭대기 배열의 세 거리 */
+    function near(m) { return sstep(m / T5G.APPROACH); }                                   /* 멀리 → 맞닿음 */
+    function pull(m) { return sstep((m - T5G.PULL0) / (T5G.PULL1 - T5G.PULL0)); }          /* 맞닿음 → 꼭대기 배열 */
+    var w, hH, hI;
+    if (lam <= 0.5) { var a = near(lam), b = pull(lam); w = dHI + (cHI - dHI) * b; hH = F + (cHH - F) * a; hI = F + (cII - F) * a; }
+    else { var mu = 1 - lam, a2 = near(mu), b2 = pull(mu); w = F + (cHI - F) * a2; hH = dHH + (cHH - dHH) * b2; hI = dII + (cII - dII) * b2; }
+    var q = sstep((lam - T5G.BOND0) / (T5G.BOND1 - T5G.BOND0));
+    return { lam: lam, atoms: [["H", -w / 2, -hH / 2], ["I", w / 2, -hI / 2], ["H", -w / 2, hH / 2], ["I", w / 2, hI / 2]],
+      bonds: [[0, 1, 1 - q], [2, 3, 1 - q], [0, 2, q], [1, 3, q]], d: { HI: w, HH: hH, II: hI, HI0: dHI, HH0: dHH, II0: dII } };
+  }
+
   return { rng: rng, KINDS: KINDS, fallbackShape: fallbackShape, setShapes: setShapes, shape: shape, usingArt: function () { return usingArt; }, local: local, worldAtoms: worldAtoms, atomCount: atomCount,
     World: World, T1C: T1C, Tab1: Tab1, tangentFit: tangentFit, snapT: snapT, T2C: T2C, RX: RX, Lab: Lab,
-    rayleighVel: rayleighVel, T3C: T3C, Tab3: Tab3, T4C: T4C, Tab4: Tab4, judgeHI: judgeHI };
+    rayleighVel: rayleighVel, T3C: T3C, Tab3: Tab3, T4C: T4C, Tab4: Tab4, judgeHI: judgeHI, T5G: T5G, complexGeom: complexGeom,
+    T5C: T5C, T5W: T5W, energyOf: energyOf, sThresh: sThresh, curveE: curveE, turnX: turnX, lamOf: lamOf, Tab5R: Tab5R, Tab5: Tab5, judgeRev: judgeRev, watchPath: watchPath, watchAt: watchAt };
 })();
 /* ==== CORE END ==== */
 
-/* ==== ART BEGIN (Astra RR_ART 1.2.0 — 원본 그대로 · 수정 금지) ==== */
+/* ==== ART BEGIN (Astra RR_ART 1.3.0 — 원본 그대로 · 수정 금지) ==== */
 (function (root) {
   'use strict';
   var PI = Math.PI, radii = {H: 3.2, N: 4.5, O: 4.05, I: 5.45};
@@ -532,10 +688,10 @@ var RRC = (function () {
     return o;
   }
   function circle(c,x,y,r) { c.beginPath(); c.arc(x,y,r,0,2*PI); }
-  function ball(c,t) {
+  function ball(c,t,rs) {
     var p=colors[t[0]], x=t[1], y=t[2], r=t[3], g=c.createRadialGradient(x-r*0.32,y-r*0.38,r*0.04,x,y,r);
     g.addColorStop(0,p[0]); g.addColorStop(0.53,p[1]); g.addColorStop(1,p[2]);
-    var rim=t[0]==='H'?0.8:0.38;
+    var rim=(t[0]==='H'?0.8:0.38)*(rs||1);
     circle(c,x,y,r-rim/2); c.fillStyle=g; c.fill(); c.strokeStyle=p[3]; c.lineWidth=rim; c.stroke();
   }
   function number(v,d) { return typeof v==='number' && isFinite(v) ? v : d; }
@@ -588,6 +744,31 @@ var RRC = (function () {
     ctx.lineCap='round'; ctx.lineWidth=1.25; ctx.strokeStyle='#b5b4ad'; ctx.stroke();
     ctx.lineWidth=0.65; ctx.strokeStyle='#f8f3dc'; ctx.stroke(); ctx.restore();
   }
+  /* v1.3.0 (main finish — Codex usage limit): ball-and-stick atoms + bonds whose look follows bond order continuously.
+     order >= 0.9 solid rod · 0.5 round dots (textbook ···) · <= 0.1 nothing. Dots are anchored at the bond midpoint so they do not crawl. */
+  var STRUCT={atomScale:0.45,lw:0.65,period:1.25,colour:'#5f6b7a'};
+  function halfBond(c,x0,y0,x1,y1,dash,gap){c.setLineDash(gap>0?[dash,gap]:[]);c.lineDashOffset=0;c.beginPath();c.moveTo(x0,y0);c.lineTo(x1,y1);c.stroke();}
+  function structure(ctx,atoms,bonds,x,y,s) {
+    var scale, as, i, b, A, B, o, k, mx, my, dash, gap, alpha;
+    s=s||defaultOptions; scale=Math.max(0,number(s.scale,1)); if(!scale||!atoms){return;}
+    as=Math.max(0.05,Math.min(1,number(s.atomScale,STRUCT.atomScale)));
+    ctx.save(); ctx.translate(x,y); ctx.scale(scale,scale);
+    if(s.alpha!==undefined){ctx.globalAlpha*=Math.max(0,Math.min(1,number(s.alpha,1)));}
+    ctx.lineCap='round'; ctx.strokeStyle=STRUCT.colour; ctx.lineWidth=STRUCT.lw;
+    for(i=0;bonds&&i<bonds.length;i++){
+      b=bonds[i]; A=atoms[b[0]]; B=atoms[b[1]]; o=Math.max(0,Math.min(1,number(b[2],0)));
+      if(!A||!B||o<=0.1){continue;}
+      alpha=o<0.5?(o-0.1)/0.4:1; k=o>=0.9?1:(o>0.5?(o-0.5)/0.4:0);
+      dash=k*STRUCT.period; gap=k>=1?0:STRUCT.period-dash;
+      mx=(A[1]+B[1])/2; my=(A[2]+B[2])/2;
+      ctx.save(); ctx.globalAlpha*=alpha;
+      halfBond(ctx,mx,my,A[1],A[2],dash,gap); halfBond(ctx,mx,my,B[1],B[2],dash,gap);
+      ctx.restore();
+    }
+    ctx.setLineDash([]);
+    for(i=0;i<atoms.length;i++){A=atoms[i]; if(!colors[A[0]]){continue;} ball(ctx,[A[0],A[1],A[2],radii[A[0]]*as],as);}
+    ctx.restore();
+  }
   function legendSwatch(el,size) {
     var p=colors[el], id='rr-ball-'+el;
     if(!p){throw new Error('Unknown element');}
@@ -595,7 +776,7 @@ var RRC = (function () {
     return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" aria-hidden="true"><defs><radialGradient id="'+id+'" cx="34%" cy="30%" r="72%"><stop stop-color="'+p[0]+'"/><stop offset=".53" stop-color="'+p[1]+'"/><stop offset="1" stop-color="'+p[2]+'"/></radialGradient></defs><circle cx="12" cy="12" r="10" fill="url(#'+id+')" stroke="'+p[3]+'" stroke-width=".8"/></svg>';
   }
   function icon(size) { size=Math.max(1,number(size,64)); return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><g fill="currentColor" fill-opacity=".12"><circle cx="18" cy="18" r="6"/><circle cx="11" cy="24" r="5"/><circle cx="25" cy="24" r="5"/><circle cx="44" cy="12" r="5"/><circle cx="51" cy="17" r="4"/><circle cx="39" cy="30" r="5"/><circle cx="47" cy="33" r="4"/></g><path d="M10 39v15h45M15 40c10 0 9 10 19 10h17"/></svg>'; }
-  root.RR_ART={contract:1,version:'1.2.0',shape:shape,molecule:molecule,flash:flash,impact:impact,legendSwatch:legendSwatch,svg:{icon:icon},info:function(){return {cacheEntries:keys.length};}};
+  root.RR_ART={contract:1,version:'1.3.0',structure:structure,structureDefaults:function(){return {atomScale:STRUCT.atomScale,lineWidth:STRUCT.lw,period:STRUCT.period,colour:STRUCT.colour};},shape:shape,molecule:molecule,flash:flash,impact:impact,legendSwatch:legendSwatch,svg:{icon:icon},info:function(){return {cacheEntries:keys.length};}};
 })(window);
 /* ==== ART END ==== */
 
@@ -610,6 +791,8 @@ var RRC = (function () {
   var TSCALE_RM = 0.6, TSCALE_SLOW = 0.3;
   /* 색 상수 표 — 이 표에서만 정한다(지시안 §5) */
   var COL = { a: "#334155", b: "#a0461e", line: ["#2563eb", "#059669", "#ca8a04"], exp: ["#1f2937", "#2563eb", "#059669", "#c2410c"], tint: "160,70,30", axis: "#334155", grid: "#e2e8f0", mark: "#cbd5e1", text: "#454b52" };
+  /* 탭 ⑤ 색 — 활성화 에너지 화살표 빨강 · ΔH 파랑(설계안 §1-2 «한 그림에 두 화살표를 다른 색으로») · 넘은 점 호박 · 되돌아온 점 회색 */
+  var COL5 = { ea: "#c62828", dh: "#1d4ed8", cross: "#f59e0b", back: "#64748b", dot: "#334155" };
   var T1C = RRC.T1C, T2C = RRC.T2C;
   function $(id) { return document.getElementById(id); }
   var DPR = Math.min(2, window.devicePixelRatio || 1);
@@ -647,8 +830,8 @@ var RRC = (function () {
   function showTab(id) {
     cur = id;
     Array.prototype.forEach.call(document.querySelectorAll("[data-tab]"), function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-tab") === id)); });
-    $("pane1").hidden = id !== "1"; $("pane2").hidden = id !== "2"; $("pane3").hidden = id !== "3"; $("pane4").hidden = id !== "4"; $("paneL").hidden = id !== "5";
-    if (id === "2") T2.ensure(); if (id === "3") T3.ensure(); if (id === "4") T4.ensure();
+    $("pane1").hidden = id !== "1"; $("pane2").hidden = id !== "2"; $("pane3").hidden = id !== "3"; $("pane4").hidden = id !== "4"; $("pane5").hidden = id !== "5";
+    if (id === "2") T2.ensure(); if (id === "3") T3.ensure(); if (id === "4") T4.ensure(); if (id === "5") T5.ensure();
   }
   $("tabbar").addEventListener("click", function (e) { var b = e.target.closest ? e.target.closest("[data-tab]") : null; if (b) showTab(b.getAttribute("data-tab")); });
 
@@ -888,7 +1071,7 @@ var RRC = (function () {
     function drawStage() {
       var W = T3C.W, H = T3C.H, c = fit($("st3"), W, H), now = tab.w.t;
       c.clearRect(0, 0, W, H);
-      tab.w.mols.forEach(function (m) { var a = 1; if (m.life != null) a = Math.min(1, Math.max(0, m.life / T3C.FADE)) * 0.85; drawMol(c, m, a); });
+      tab.w.mols.forEach(function (m) { var a = m.k === "N2O5" ? 1 : T3C.PROD_A; if (m.life != null) a = Math.min(1, Math.max(0, m.life / T3C.FADE)) * 0.85; drawMol(c, m, a); });   /* 생성물은 남아 움직이되 «늘 같은» 연한 색(시간에 따라 옅어지지 않음) — 남은 N₂O₅ 가 묻히지 않게. life 는 주입(prodFade)에서만 */
       flashes(c, tab.events, now, 0.7); noteFlashArea(tab.events, now, W, H, 0.7);
       /* 표시한 분자 — 살아 있으면 따라가는 고리, 분해되면 그 자리에 점선 고리가 1.5 s 남음 */
       rings.forEach(function (g) {
@@ -937,7 +1120,7 @@ var RRC = (function () {
       var best = null, bd = 30 * 30; tab.w.mols.forEach(function (m) { if (m.dead || m.k !== "N2O5") return; for (var i = 0; i < rings.length; i++) if (rings[i].id === m.id) return; var d = (m.x - x) * (m.x - x) + (m.y - y) * (m.y - y); if (d < bd) { bd = d; best = m; } });
       if (!best) return; if (rings.length >= 5) rings.shift(); rings.push({ id: best.id, x: best.x, y: best.y, gone: null });
     });
-    $("legend3").innerHTML = "원자 — " + swatch("N") + " N · " + swatch("O") + " O &nbsp;|&nbsp; 생긴 분자(NO₂ · O₂)는 옅어집니다";
+    $("legend3").innerHTML = "원자 — " + swatch("N") + " N · " + swatch("O") + " O &nbsp;|&nbsp; 생긴 NO₂ · O₂는 용기에 남아 함께 움직입니다(N₂O₅가 잘 보이도록 연하게 그림)";
     return {
       ensure: ensure,
       frame: function (dt) {
@@ -1050,12 +1233,269 @@ var RRC = (function () {
     };
   })();
 
+  /* ════════ 탭 ⑤ — 활성화 에너지 ════════
+     시안 3·3-b 고름(원장): 나란히(L5 A) · 점이 충돌 자리에서 언덕으로 날아감(C5 B) · 점만(D5 B) · 밀대 60~250 kJ(S5 B) ·
+     붙잡아 천천히 보기(M5 A) · 언덕 위 점을 따라다니는 말풍선(M6 B). 계산·판정은 RRC.Tab5, 원자 배열은 RRC.complexGeom, 그림은 RR_ART.structure.
+   * «활성화 에너지»는 정·역반응 화면에서 처음부터 쓴다(P0 A3 — 표식 A3). 그 밖의 용어는 [이름 보기] 뒤(REVEAL). */
+  var T5 = (function () {
+    var tab = null, inited = false, slow = false, revealed = false, seen = { X: false, F: false };
+    var C5 = RRC.T5C, DH = C5.DH, EA_BOOK = C5.EA_BOOK;
+    var HG = { W: 600, H: 400, L: 62, R: 586, T: 22, B: 352, EMIN: -22, EMAX: 280 };
+    var PH = { fly: 0.35, run: 0.3, up: 0.55, down: 0.55, out: 0.35 };
+    var dots = [], rings = [], shownC = 0, shownX = 0, arm = null, watch = null;
+    function yOf(E) { return HG.B - (E - HG.EMIN) / (HG.EMAX - HG.EMIN) * (HG.B - HG.T); }
+    function xOf(u) { return HG.L + u * (HG.R - HG.L); }
+    function ensure() {
+      if (inited) return; inited = true; tab = new RRC.Tab5(57);
+      tab.onClimb = function (r) {
+        rings.push({ x: r.x, y: r.y, t: 0, react: r.react, s: Math.sqrt(r.E / EA_BOOK) * T4C.VTH });
+        if (arm && r.cross === (arm === "X") && !watch) { arm = null; watch = { r: r, path: RRC.watchPath(r, tab.inject), tau: 0, playing: true }; lastSide = null; shownC++; if (r.cross) shownX++; syncWatch(); updReveal(); return; }
+        dots.push({ t: 0, r: r });
+      };
+      setEa(EA_BOOK); syncDir(); updReveal();
+    }
+    /* [이름 보기]는 붙잡는 순간이 아니라, 붙잡은 충돌이 꼭대기를 지나거나 되돌아선 뒤에 켜진다(S-검토 v3 C) */
+    function noteSeen() { if (!watch) return; var k0 = watch.r.cross ? "X" : "F"; if (!seen[k0] && RRC.watchAt(watch.path, watch.tau).seg >= 3) { seen[k0] = true; updReveal(); } }
+    function clearView() { dots = []; rings = []; shownC = 0; shownX = 0; watch = null; arm = null; syncWatch(); }
+    function setEa(E) { tab.setEa(E); clearView(); $("ea5").value = E; $("eaV5").textContent = E + " kJ"; counter(); }
+    function syncDir() {
+      var F = tab.dir === "F";
+      $("eq5").textContent = F ? "정반응: 2HI(g) → H₂(g) + I₂(g)" : "역반응: H₂(g) + I₂(g) → 2HI(g)";
+      $("dirF5").setAttribute("aria-pressed", String(F)); $("dirR5").setAttribute("aria-pressed", String(!F));
+      $("legend5").innerHTML = "원자 — " + swatch("H") + " H · " + swatch("I") + " I &nbsp;|&nbsp; " + (F ? "용기 속 분자: HI" : "용기 속 분자: H₂와 I₂");
+    }
+    /* 점 하나: 날아감(충돌 자리 → 언덕 출발점) → 평지 → 오름 → (넘음: 반대편으로 / 못 넘음: 되돌아옴) → 사라짐 */
+    function dotPos(d) {
+      var r = d.r, t = d.t - PH.fly, x0 = r.fromR ? C5.X1 : C5.X0, foot = r.fromR ? C5.B : C5.A, base = r.fromR ? DH : 0, x, alpha = 1, phase;
+      var top = r.cross ? 0.5 : RRC.turnX(base + r.E, r.Ea, r.fromR);
+      if (t < 0) return { phase: "fly", k: 1 + t / PH.fly };
+      if (t < PH.run) { x = x0 + (foot - x0) * (t / PH.run); phase = "run"; }
+      else if ((t -= PH.run) < PH.up) { var e = 1 - (1 - t / PH.up) * (1 - t / PH.up); x = foot + (top - foot) * e; phase = "up"; }
+      else if ((t -= PH.up) < PH.down) { var k = t / PH.down, e2 = k * k; if (r.cross) { var far = r.fromR ? C5.A : C5.B; x = 0.5 + (far - 0.5) * e2; } else x = top + (foot - top) * e2; phase = "down"; }
+      else if ((t -= PH.down) < PH.out) { var k2 = t / PH.out, end = r.cross ? (r.fromR ? C5.X0 : C5.X1) : x0, s0 = r.cross ? (r.fromR ? C5.A : C5.B) : foot; x = s0 + (end - s0) * k2; alpha = 1 - k2; phase = "out"; }
+      else return null;
+      return { x: x, E: RRC.curveE(x, r.Ea), alpha: alpha, phase: phase };
+    }
+    function watchState() { if (!watch) return null; var a = RRC.watchAt(watch.path, watch.tau); return { x: a.x, seg: a.seg, r: watch.r, path: watch.path }; }
+    /* 말풍선 글 — 그림의 실제 배열(geo)에서 정한다(진행만 보면 세기가 작은 충돌에 «늘어나며 약해짐»이 떴다 · S-검토 v3 B1). 공개 전 용어 없음 */
+    var STR_MIN = 0.15;   /* 옛 결합 늘어남이 꼭대기 늘어남의 15 % 밑이면 «거의 늘어나지 않음» */
+    function oldStretch(geo, F) { var d = geo.d, S = RRC.T5G.STRETCH; return F ? (d.HI / d.HI0 - 1) / (S - 1) : (d.HH / d.HH0 - 1) / (S - 1); }
+    function caption(lam, ws, geo) {
+      var F = !ws.r.fromR, back = !ws.r.cross && ws.seg >= 3, d = geo.d, S = RRC.T5G.STRETCH;
+      var old = F ? "H–I" : "H–H · I–I", nw = F ? "H–H · I–I" : "H–I", a0 = F ? "HI 두 개" : "H₂와 I₂", a1 = F ? "H₂와 I₂" : "HI 두 개", p = F ? lam : 1 - lam;
+      var st = oldStretch(geo, F), rowsFar = d.HH > d.HH0 * S * 1.6, colsFar = d.HI > d.HI0 * S * 1.6, startFar = F ? rowsFar : colsFar, endFar = F ? colsFar : rowsFar;
+      var q = F ? geo.bonds[2][2] : geo.bonds[0][2];
+      if (back) { var tst = oldStretch(RRC.complexGeom(RRC.lamOf(ws.path.top)), F); return tst < STR_MIN ? "충돌 세기가 작아 " + old + " 결합이 거의 늘어나지 않은 채 " + a0 + "로 되돌아감" : "꼭대기에 못 미쳐 " + old + " 결합이 다시 짧아짐 → " + a0 + "로 되돌아감"; }
+      if (p <= 0.5 && startFar) return a0 + "가 다가감";
+      if (p <= 0.5 && st < STR_MIN) return a0 + "가 맞닿음";
+      if (q < 0.4 || !ws.r.cross) return old + " 결합이 늘어나며 약해지고, 새 짝(" + nw + ")이 가까워짐";
+      if (q <= 0.6) return "꼭대기 — 옛 결합(" + old + ")과 새 결합(" + nw + ")이 반쯤씩 이어진 불안정한 배열";
+      if (!endFar) return nw + " 결합이 생김";
+      return a1 + "가 떨어져 나감";
+    }
+    function countLines(c, txt, maxW) { var n = 1, line = ""; txt.split(" ").forEach(function (wd) { var t = line ? line + " " + wd : wd; if (c.measureText(t).width > maxW && line) { n++; line = wd; } else line = t; }); return n; }
+    function wrapText(c, txt, x, y, maxW, lh) {
+      var words = txt.split(" "), line = "", lines = [];
+      words.forEach(function (wd) { var t = line ? line + " " + wd : wd; if (c.measureText(t).width > maxW && line) { lines.push(line); line = wd; } else line = t; });
+      if (line) lines.push(line); lines.forEach(function (l, i) { c.fillText(l, x, y + i * lh); }); return lines.length;
+    }
+    function drawStage() {
+      var b = tab.box(), W = T4C.W, H = T4C.H, c = fit($("st5"), W, H), now = b.w.t, i;
+      c.clearRect(0, 0, W, H);
+      b.w.mols.forEach(function (m) { if (m.dead) return; var a = 1; if (m.inT != null && !RM) a = Math.min(1, 0.25 + 1.5 * m.inT); if (m.life != null && m.life < T4C.FADE) a = Math.min(a, Math.max(0, m.life / T4C.FADE)); drawMol(c, m, a); });
+      for (i = rings.length - 1; i >= 0; i--) {
+        var g = rings[i], k = g.t / 0.6; if (k >= 1) { rings.splice(i, 1); continue; }
+        if (g.react && ART && ART.impact) { ART.impact(c, g.x, g.y, k, { size: Math.max(0.3, Math.min(1.6, 0.3 + 0.9 * g.s / T4C.VTH)), angle: 0, reduced: RM }); continue; }   /* 반응한 충돌 = 탭 ④와 같은 충돌 표시 */
+        c.save(); c.globalAlpha = 1 - k; c.strokeStyle = COL5.back; c.lineWidth = 1.6; c.beginPath(); c.arc(g.x, g.y, (RM ? 14 : 10 + 8 * k), 0, 2 * Math.PI); c.stroke(); c.restore();
+      }
+      var ws = watchState();
+      if (ws && watch.tau < 3) { c.save(); c.globalAlpha = Math.max(0, 1 - watch.tau / 3); c.strokeStyle = "#334155"; c.lineWidth = 2; c.setLineDash([5, 4]); c.beginPath(); c.arc(ws.r.x, ws.r.y, 16, 0, 2 * Math.PI); c.stroke(); c.restore(); }
+    }
+    function arrow(c, x, y0, y1, col, w) {
+      c.strokeStyle = col; c.fillStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(x, y0); c.lineTo(x, y1 + (y1 < y0 ? 7 : -7)); c.stroke();
+      var d = y1 < y0 ? 1 : -1; c.beginPath(); c.moveTo(x, y1); c.lineTo(x - 5, y1 + 9 * d); c.lineTo(x + 5, y1 + 9 * d); c.closePath(); c.fill();
+    }
+    function drawHill() {
+      var cv = $("hill5"), c = fit(cv, HG.W, HG.H), Ea = tab.ea, i, x, F = tab.dir === "F";
+      var k = (cv.clientWidth || HG.W) / HG.W, f = Math.max(1, Math.min(1.8, 0.95 / Math.max(0.3, k)));   /* 좁은 화면에서 글자·말풍선을 키운다(화면 글자 ≥ 약 12 px) */
+      function font(w, px) { return w + " " + Math.round(px * f) + "px 'Noto Sans KR', sans-serif"; }
+      c.clearRect(0, 0, HG.W, HG.H); c.textBaseline = "middle";
+      c.strokeStyle = COL.axis; c.lineWidth = 1.6; c.beginPath(); c.moveTo(HG.L - 14, HG.T - 6); c.lineTo(HG.L - 14, HG.B + 18); c.lineTo(HG.R + 4, HG.B + 18); c.stroke();
+      c.fillStyle = COL.axis; c.font = font("600", 15); c.textAlign = "center"; ["엔", "탈", "피"].forEach(function (ch, j) { c.fillText(ch, 24, 150 + j * 20 * f); });
+      c.textAlign = "right"; c.fillText("반응의 진행", HG.R, HG.B + 34);
+      if (Ea !== EA_BOOK) { c.setLineDash([5, 5]); c.strokeStyle = "#cbd5e1"; c.lineWidth = 2; c.beginPath(); for (i = 0; i <= 200; i++) { x = i / 200; c[i ? "lineTo" : "moveTo"](xOf(x), yOf(RRC.curveE(x, EA_BOOK))); } c.stroke(); c.setLineDash([]);
+        c.fillStyle = "#94a3b8"; c.textAlign = "center"; c.font = font("500", 13); c.fillText("교과서 언덕", xOf(0.5), Ea > EA_BOOK ? yOf(EA_BOOK) + 14 * f : yOf(EA_BOOK) - 12); }   /* 새 언덕이 더 높으면 옛 꼭대기 아래(새 곡선 위에 얹히던 것 · S-검토 v3 C) */
+      c.setLineDash([6, 5]); c.strokeStyle = "#9ca3af"; c.lineWidth = 1.2;
+      c.beginPath(); c.moveTo(xOf(0.08), yOf(Ea)); c.lineTo(xOf(0.97), yOf(Ea)); c.stroke();
+      c.beginPath(); c.moveTo(xOf(C5.A), yOf(0)); c.lineTo(xOf(0.97), yOf(0)); c.stroke(); c.setLineDash([]);
+      c.strokeStyle = "#111827"; c.lineWidth = 3; c.beginPath(); for (i = 0; i <= 300; i++) { x = i / 300; c[i ? "lineTo" : "moveTo"](xOf(x), yOf(RRC.curveE(x, Ea))); } c.stroke();
+      var xa = xOf(0.13), xb = xOf(0.82);
+      arrow(c, xa, yOf(0), yOf(Ea), COL5.ea, F ? 3.2 : 1.6); arrow(c, xb, yOf(DH), yOf(Ea), COL5.ea, F ? 1.6 : 3.2);
+      c.fillStyle = COL5.ea; c.textAlign = "left"; c.font = font(F ? "700" : "500", F ? 17 : 15); c.fillText("㉠ " + Ea + " kJ", xa + 8, yOf(Ea * 0.55)); var laW = c.measureText("㉠ " + Ea + " kJ").width, laEnd = xa + 8 + laW, laPx = (F ? 17 : 15) * f;
+      /* ㉡ 글자: 캔버스 오른쪽에서 잘리면 줄이고(390 · S-검토 v3 B4), «H₂ + I₂»와 겹치지 않게 세로를 묶는다(낮은 언덕 · B3) */
+      var lbT = "㉡ " + (Ea - DH) + " kJ", lbPx = (F ? 15 : 17) * f, lbAv = HG.W - 3 - (xb + 8), lh = 18 * f;
+      c.font = (F ? "500 " : "700 ") + lbPx.toFixed(1) + "px 'Noto Sans KR', sans-serif"; var lbW = c.measureText(lbT).width;
+      if (lbW > lbAv) { lbPx *= lbAv / lbW; c.font = (F ? "500 " : "700 ") + lbPx.toFixed(1) + "px 'Noto Sans KR', sans-serif"; lbW = c.measureText(lbT).width; }
+      var prodY = yOf(DH) - 16 * f, yLo = yOf(Ea) + lh * 0.6, yHi = prodY - lh * 1.1, yLb = (yOf(DH) + yOf(Ea)) / 2;
+      yLb = yLo <= yHi ? Math.max(yLo, Math.min(yHi, yLb)) : yOf(Ea) - lh * 0.7;
+      c.fillText(lbT, xb + 8, yLb); layout = { W: HG.W, H: HG.H, k: k, lb: [xb + 8, yLb - lbPx / 2, lbW, lbPx], lbPx: lbPx * k, la: [xa + 8, yOf(Ea * 0.55) - laPx / 2, laW, laPx],
+        arA: [xa - 6, yOf(Ea), 12, yOf(0) - yOf(Ea)], arB: [xb - 6, yOf(Ea), 12, yOf(DH) - yOf(Ea)] };
+      var xd = xOf(0.985); c.strokeStyle = COL5.dh; c.lineWidth = 2.4; c.beginPath(); c.moveTo(xd, yOf(0)); c.lineTo(xd, yOf(DH)); c.stroke();
+      c.beginPath(); c.moveTo(xd - 5, yOf(DH)); c.lineTo(xd + 5, yOf(DH)); c.moveTo(xd - 5, yOf(0)); c.lineTo(xd + 5, yOf(0)); c.stroke();
+      c.fillStyle = COL5.dh; c.font = font("700", 15); c.textAlign = "right"; c.fillText("ΔH = " + DH + " kJ", xOf(0.97), yOf(0) + 18 * f); var dhW = c.measureText("ΔH = " + DH + " kJ").width;
+      c.fillStyle = "#111827"; c.textAlign = "left"; c.font = font("700", 15); c.fillText("HI + HI", xOf(0.0), yOf(0) + 18 * f); c.fillText("H₂ + I₂", xOf(0.84), prodY); layout.prod = [xOf(0.84), prodY - 7.5 * f, c.measureText("H₂ + I₂").width, 15 * f];
+      layout.dh = [xOf(0.97) - dhW, yOf(0) + 18 * f - 7.5 * f, dhW, 15 * f]; layout.hi = [xOf(0), yOf(0) + 18 * f - 7.5 * f, c.measureText("HI + HI").width, 15 * f];
+      c.fillStyle = "rgba(29,78,216,.12)"; c.beginPath(); c.arc(xOf(F ? C5.X0 : C5.X1), yOf(F ? 0 : DH), 11, 0, 2 * Math.PI); c.fill();
+      var ws = watchState(), dim = ws ? 0.25 : 1;
+      dots.forEach(function (d) {
+        var p = dotPos(d); if (!p || p.phase === "fly") return;
+        var done = p.phase === "down" || p.phase === "out", col = done ? (d.r.cross ? COL5.cross : COL5.back) : COL5.dot;
+        c.globalAlpha = p.alpha * dim; c.fillStyle = col; c.strokeStyle = "#fff"; c.lineWidth = 1.5; c.beginPath(); c.arc(xOf(p.x), yOf(p.E) - 7, 7, 0, 2 * Math.PI); c.fill(); c.stroke(); c.globalAlpha = 1;
+      });
+      if (!ws) { magOff(); setCap(null, k < 0.75); layout.bubble = null; return; }
+      var px = xOf(ws.x), py = yOf(RRC.curveE(ws.x, ws.r.Ea)) - 10, past = ws.seg >= 3;
+      c.fillStyle = past ? (ws.r.cross ? COL5.cross : COL5.back) : COL5.dot; c.strokeStyle = "#fff"; c.lineWidth = 2; c.beginPath(); c.arc(px, py, 10, 0, 2 * Math.PI); c.fill(); c.stroke();
+      var lam = RRC.lamOf(ws.x), geo = RRC.complexGeom(lam);
+      lastCap = { cap: caption(lam, ws, geo), stretch: oldStretch(geo, !ws.r.fromR) };
+      /* 좁은 화면(언덕 그림 < 450 px): 말풍선이 그림을 거의 덮고 점까지 가렸다(390 육안) → 그림 바로 아래 칸에 두고 꼭지가 점의 가로 자리를 따라감 */
+      if (k < 0.75) { fontPx = 14; setCap(null, true); layout.bubble = null; drawMag(ws, lam, geo, px / HG.W); return; }
+      magOff();
+      /* 말풍선(M6 B) — 점을 따라다니며 그 자리의 원자 배열. ㉠ 글자와 ㉡ 화살표 사이에 들 수 있으면 그 사이로(꼭대기에서 «㉠ 183 kJ»를 가리던 것 · 1366 육안) */
+      /* 말풍선 = 원자 그림만(작게) · 설명 글은 언덕 그림 바로 아래 고정 줄(#cap5). 글까지 담은 큰 말풍선은 높은 언덕(240~250 kJ)에서 어디에 두어도 ㉠·㉡·ΔH를 덮었다(S-검토 v3 3라운드 전 실측) */
+      var band = xb - 6 - (laEnd + 6), bw = 136 * f, lo = 4, hi, capTxt = caption(lam, ws, geo);
+      if (band >= 210 * f) { bw = Math.min(bw, band); lo = laEnd + 6; hi = xb - 6 - bw; } else hi = HG.W - bw - 4;   /* 띠가 좁으면(210 미만) 예전처럼 그림 안 어디든 */
+      var bh = 128 * f;
+      /* 자리 후보: 위 · 아래 · 오른쪽 · 왼쪽 — 그림 안에 들고 점(±13)을 가리지 않는 첫 후보(앞서 쓴 쪽 우선). 아래로 뒤집힌 뒤 바닥에 눌려 점을 덮던 것(S-검토 v3 B2) */
+      var dotR = [px - 13, py - 13, 26, 26], bxC = Math.max(lo, Math.min(hi, px - bw / 2)), yC = Math.max(4, Math.min(HG.H - bh - 4, py - bh / 2));
+      /* 후보마다 «가리는 넓이»(㉠·㉡·ΔH·H₂ + I₂·HI + HI 글자 ×50(㉠·㉡ 값 글자는 ×1000 — 사실상 절대 피함), ㉠·㉡ 화살표 ×1)를 재서 가장 적은 곳 — 옆으로 비킨 말풍선이 ㉠·㉡을 덮던 것(S-검토 v3 2라운드 R2-B1).
+         점(±13)·그림 밖은 후보에서 뺀다. 앞서 쓴 자리는 덜 가리는 곳보다 40 px² 이내로만 나쁘면 그대로(자리 뛰기 줄임) */
+      var bxF = Math.max(4, Math.min(HG.W - bw - 4, px - bw / 2)), xs = [bxC, bxF, Math.max(4, laEnd + 6), Math.max(4, xb - 6 - bw)];
+      var cands = [];
+      xs.forEach(function (x0, n) { cands.push({ s: "up" + n, x: x0, y: py - bh - 22 }); cands.push({ s: "down" + n, x: x0, y: py + 22 }); });
+      var ys = [yC, 4, HG.H - bh - 4];
+      ["la", "lb"].forEach(function (q) { var r0 = layout[q]; if (r0) { ys.push(r0[1] - bh - 4); ys.push(r0[1] + r0[3] + 4); } });
+      ys.forEach(function (y0, n) { cands.push({ s: "right" + n, x: px + 22, y: y0 }); cands.push({ s: "left" + n, x: px - 22 - bw, y: y0 }); });
+      function okC(o) { return o.x >= 4 && o.x + bw <= HG.W - 4 && o.y >= 4 && o.y + bh <= HG.H - 4 && !hit([o.x, o.y, bw, bh], dotR); }
+      function cover(o) { var r = [o.x, o.y, bw, bh], t = 0; [["la", 1000], ["lb", 1000], ["dh", 50], ["prod", 50], ["hi", 50], ["arA", 1], ["arB", 1]].forEach(function (q) { var a = layout[q[0]]; if (a) { if (q[1] >= 1000) a = [a[0] - 4, a[1] - 4, a[2] + 8, a[3] + 8]; t += q[1] * area(r, a); }   /* ㉠·㉡ 글자는 4 px 띄움 */ }); return t; }
+      var pick = null, best = 1e18, prev = null;
+      cands.forEach(function (o) { if (!okC(o)) return; o.c = cover(o); if (o.c < best - 1e-9) { best = o.c; pick = o; } if (o.s === lastSide) prev = o; });
+      if (prev && prev.c <= best + 40) pick = prev;
+      if (!pick) pick = { s: "down0", x: bxC, y: Math.min(HG.H - bh - 4, py + 22) };
+      layout.cover = pick.c || 0;
+      lastSide = pick.s;
+      var bx = pick.x, by = pick.y, side = pick.s.replace(/[0-9]/g, "");
+      var cx = bx + bw / 2, cy = by + 72 * f, sc = 3.6 * f, tip = Math.max(bx + 10, Math.min(bx + bw - 10, px)), tipY = Math.max(by + 10, Math.min(by + bh - 10, py));
+      layout.bubble = [bx, by, bw, bh]; layout.dot = dotR;
+      fontPx = 15; setCap(capTxt);
+      c.save(); c.fillStyle = "rgba(255,255,255,.97)"; c.strokeStyle = COL.axis; c.lineWidth = 1.5; c.beginPath(); c.rect(bx, by, bw, bh); c.fill(); c.stroke();
+      c.beginPath();
+      if (side === "down") { c.moveTo(tip - 8, by); c.lineTo(px, py + 12); c.lineTo(tip + 8, by); }
+      else if (side === "up") { c.moveTo(tip - 8, by + bh); c.lineTo(px, py - 12); c.lineTo(tip + 8, by + bh); }
+      else if (side === "right") { c.moveTo(bx, tipY - 8); c.lineTo(px + 12, py); c.lineTo(bx, tipY + 8); }
+      else { c.moveTo(bx + bw, tipY - 8); c.lineTo(px - 12, py); c.lineTo(bx + bw, tipY + 8); }
+      c.fill(); c.stroke();
+      drawGeo(c, geo, cx, cy, sc);
+      if (revealed && Math.abs(lam - 0.5) < 0.08) { c.fillStyle = COL5.ea; c.font = font("700", 14); c.textBaseline = "middle"; c.fillText("활성화물", cx, by + 13 * f); } /*REVEAL*/
+      c.restore(); c.textBaseline = "middle";
+    }
+    var fontPx = 0, layout = {}, lastSide = null, lastCap = { cap: "", stretch: 0 };
+    function area(a, b) { var w = Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0]), h = Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]); return w > 0 && h > 0 ? w * h : 0; }
+    function hit(a, b) { return a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]; }
+    function drawGeo(c, geo, cx, cy, sc) {
+      if (ART && ART.structure) { ART.structure(c, geo.atoms, geo.bonds, cx, cy, { scale: sc }); return; }
+      geo.atoms.forEach(function (a) { c.beginPath(); c.arc(cx + a[1] * sc, cy + a[2] * sc, (a[0] === "H" ? 1.5 : 2.5) * sc, 0, 2 * Math.PI); c.fillStyle = ELC[a[0]]; c.fill(); });   /* FALLBACK */
+    }
+    function magOff() { var m = $("mag5"); if (!m.hidden) m.hidden = true; }
+    /* 넓은 화면: 설명 줄은 늘 자리를 차지한다(붙잡을 때 아래 단추가 62 px 내려가던 것 · S-검토 v3 R3-C1) — 보는 중이 아니면 안내 글. 좁은 화면(아래 칸)에서는 숨김 */
+    var CAP_HINT = "충돌 하나를 붙잡아 천천히 보면, 여기에 원자 배열이 어떻게 바뀌는지가 나옵니다.";
+    function setCap(t, narrow) { var e = $("cap5"); if (narrow) { if (!e.hidden) e.hidden = true; return; } if (e.hidden) e.hidden = false; var v = t == null ? CAP_HINT : t; e.classList.toggle("hint", t == null); if (e.textContent !== v) e.textContent = v; }
+    /* 좁은 화면의 말풍선 — 언덕 그림 바로 아래(같은 너비) · 위 꼭지가 점의 가로 자리(fx = 그림 너비에 대한 비)를 가리킴 */
+    function drawMag(ws, lam, geo, fx) {
+      var m = $("mag5"); if (m.hidden) m.hidden = false;
+      var W = m.clientWidth || 320, H = 220, c; m.style.height = H + "px"; c = fit(m, W, H); c.clearRect(0, 0, W, H);
+      var tip = Math.max(14, Math.min(W - 14, fx * W));
+      c.fillStyle = "#fff"; c.strokeStyle = COL.axis; c.lineWidth = 1.5; c.beginPath(); c.rect(1, 12, W - 2, H - 13); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(tip - 9, 12.5); c.lineTo(tip, 1); c.lineTo(tip + 9, 12.5); c.fill(); c.stroke();
+      drawGeo(c, geo, W / 2, 94, 5);
+      c.fillStyle = "#1f2937"; c.font = "600 14px 'Noto Sans KR', sans-serif"; c.textAlign = "center"; c.textBaseline = "top"; wrapText(c, caption(lam, ws, geo), W / 2, 164, W - 24, 19);
+      if (revealed && Math.abs(lam - 0.5) < 0.08) { c.fillStyle = COL5.ea; c.font = "700 15px 'Noto Sans KR', sans-serif"; c.textBaseline = "middle"; c.fillText("활성화물", W / 2, 94 - 7.5 * 5 - 14); } /*REVEAL*/
+    }
+    /* 날아가는 점(C5 B) — 탭 위 겹친 캔버스 */
+    function drawFly() {
+      var pane = $("pane5"), cv = $("fly5"), pr = pane.getBoundingClientRect(), W = Math.round(pr.width), H = Math.round(pr.height);
+      cv.style.width = W + "px"; cv.style.height = H + "px"; var c = fit(cv, W, H); c.clearRect(0, 0, W, H);
+      var br = $("st5").getBoundingClientRect(), hr = $("hill5").getBoundingClientRect(), bs = br.width / T4C.W, hs = hr.width / HG.W, dim = watch ? 0.25 : 1;
+      dots.forEach(function (d) {
+        var p = dotPos(d); if (!p || p.phase !== "fly") return;
+        var k = Math.max(0, Math.min(1, p.k)), e = k * k * (3 - 2 * k), r = d.r;
+        var x0 = br.left - pr.left + r.x * bs, y0 = br.top - pr.top + r.y * bs, x1 = hr.left - pr.left + xOf(r.fromR ? C5.X1 : C5.X0) * hs, y1 = hr.top - pr.top + (yOf(r.fromR ? DH : 0) - 7) * hs;
+        c.globalAlpha = dim; c.fillStyle = COL5.dot; c.strokeStyle = "#fff"; c.lineWidth = 1.5; c.beginPath(); c.arc(x0 + (x1 - x0) * e, y0 + (y1 - y0) * e - Math.sin(Math.PI * e) * 40, 6, 0, 2 * Math.PI); c.fill(); c.stroke(); c.globalAlpha = 1;
+      });
+    }
+    function counter() {
+      var F = tab.dir === "F", need = tab.need(), pct = shownC ? Math.round(100 * shownX / shownC) : 0;
+      $("ctr5").innerHTML = (F ? "정반응의 활성화 에너지 ㉠ = <b>" : "역반응의 활성화 에너지 ㉡ = <b>") + need + " kJ</b><br>언덕을 오른 충돌 <b>" + shownC + "</b>번 · 그중 꼭대기를 넘은 충돌 <b>" + shownX + "</b>번 (" + pct + " %)"; /*A3*/
+    }
+    function syncWatch() {
+      $("wctl5").hidden = !watch;
+      if (watch) { $("wPlay5").textContent = watch.playing ? "이 자리에 두기" : (watch.tau >= watch.path.T ? "처음부터 다시" : "이어 보기");   /* 말풍선만 세운다 — 용기 속 분자는 늘 움직임(«정지·멈춤» 단추 금지) */ $("wScrub5").value = String(Math.round(1000 * watch.tau / watch.path.T)); }
+      $("arm5").textContent = arm ? (arm === "X" ? "꼭대기를 넘는 다음 충돌을 기다리는 중…" : "꼭대기를 넘지 못하는 다음 충돌을 기다리는 중…") : (watch ? "붙잡은 충돌 하나를 천천히 보는 중 — 밀대로 앞뒤로 옮겨 볼 수 있습니다." : "");
+      $("catchX5").setAttribute("aria-pressed", String(arm === "X")); $("catchF5").setAttribute("aria-pressed", String(arm === "F"));
+    }
+    function updReveal() {
+      var all = seen.X && seen.F, b = $("rev5"); b.disabled = !all && !revealed; $("revwhy5").hidden = all || revealed; b.textContent = revealed ? "이름 숨기기" : "이름 보기";
+      $("revout5").hidden = !revealed;
+      $("revout5").textContent = revealed ? "언덕 꼭대기처럼 반응물 사이의 결합이 약해지고 생성물 사이의 결합이 생기는 상태를 활성화 상태, 이 상태에 있는 불안정한 화합물을 활성화물이라고 합니다. 반응물과 활성화물의 에너지 차이가 활성화 에너지입니다." : ""; /*REVEAL*/
+    }
+    $("dirF5").addEventListener("click", function () { if (tab.dir === "F") return; tab.setDir("F"); clearView(); syncDir(); counter(); });
+    $("dirR5").addEventListener("click", function () { if (tab.dir === "R") return; tab.setDir("R"); clearView(); syncDir(); counter(); });
+    $("slow5").addEventListener("click", function () { slow = !slow; this.setAttribute("aria-pressed", String(slow)); });
+    /* 183 붙음은 손가락·마우스로 끌 때만 — 키보드 ←/→ 가 183 에 갇히던 것(S-검토 v3 B5) */
+    var eaDrag = false;
+    $("ea5").addEventListener("pointerdown", function () { eaDrag = true; });
+    ["pointerup", "pointercancel"].forEach(function (ev) { window.addEventListener(ev, function () { eaDrag = false; }); });
+    $("ea5").addEventListener("input", function () { var v = +this.value; if (eaDrag && Math.abs(v - EA_BOOK) <= 3) v = EA_BOOK; setEa(v); });
+    $("eaBook5").addEventListener("click", function () { setEa(EA_BOOK); });
+    $("catchX5").addEventListener("click", function () { watch = null; arm = "X"; syncWatch(); });
+    $("catchF5").addEventListener("click", function () { watch = null; arm = "F"; syncWatch(); });
+    $("wPlay5").addEventListener("click", function () { if (!watch) return; if (watch.tau >= watch.path.T) watch.tau = 0; watch.playing = !watch.playing; syncWatch(); });
+    $("wScrub5").addEventListener("input", function () { if (!watch) return; watch.playing = false; watch.tau = watch.path.T * (+this.value) / 1000; syncWatch(); noteSeen(); });
+    $("wClose5").addEventListener("click", function () { watch = null; arm = null; syncWatch(); });
+    $("rev5").addEventListener("click", function () { if (!(seen.X && seen.F) && !revealed) return; revealed = !revealed; updReveal(); });
+    $("lgd5").innerHTML = "<span><i style='border-top-color:" + COL5.ea + "'></i>활성화 에너지</span><span><i style='border-top-color:" + COL5.dh + "'></i>반응 엔탈피(ΔH)</span><span><span class='chip' style='background:" + COL5.cross + ";border-radius:50%'></span>꼭대기를 넘은 충돌</span><span><span class='chip' style='background:" + COL5.back + ";border-radius:50%'></span>되돌아온 충돌</span>"; /*A3*/
+    return {
+      ensure: ensure,
+      frame: function (dt) {
+        if (!inited) return;
+        var h = dt * (slow ? TSCALE_SLOW : 1) * (RM ? TSCALE_RM : 1);
+        tab.step(h);
+        rings.forEach(function (g) { g.t += h; });
+        dots.forEach(function (d) { var before = dotPos(d); d.t += h; var p = dotPos(d); if (before && before.phase === "up" && (!p || p.phase !== "up")) { shownC++; if (d.r.cross) shownX++; } });
+        dots = dots.filter(function (d) { return dotPos(d); });
+        if (watch && watch.playing) { watch.tau = Math.min(watch.path.T, watch.tau + dt * (RM ? TSCALE_RM : 1)); if (watch.tau >= watch.path.T) watch.playing = false; syncWatch(); }
+        noteSeen();
+        if (!$("pane5").hidden) { drawStage(); drawHill(); drawFly(); counter(); }
+      },
+      state: function () {
+        var ws = watchState(), b = tab.box();
+        return { dir: tab.dir, ea: tab.ea, need: tab.need(), climbs: tab.climbs, crosses: tab.crosses, boxReacts: tab.boxReactsNow(), shownC: shownC, shownX: shownX, dots: dots.length,
+          fontPx: fontPx, mag: !$("mag5").hidden, layout: JSON.parse(JSON.stringify(layout)), cap: lastCap, watch: ws ? { x: ws.x, seg: ws.seg, cross: ws.r.cross, fromR: ws.r.fromR, tau: watch.tau, T: watch.path.T, playing: watch.playing, lam: RRC.lamOf(ws.x) } : null, arm: arm, seen: seen, revealed: revealed,
+          reactants: tab.dir === "F" ? b.count("HI") : b.count("H2") + b.count("I2"), t: b.w.t, mols: b.w.mols.filter(function (m) { return !m.dead; }).map(function (m) { return [m.x, m.y, m.id]; }) };
+      },
+      tab: function () { return tab; },
+      seek: function (tau) { if (watch) { watch.tau = tau; watch.playing = false; syncWatch(); noteSeen(); } },
+      /* 검사용: 정해 둔 충돌 하나로 천천히 보기(실제 붙잡기와 같은 길 · 화면 확인 전용) */
+      watchWith: function (r) { watch = { r: r, path: RRC.watchPath(r, tab.inject), tau: 0, playing: false }; lastSide = null; syncWatch(); },
+      setEaTest: function (E) { setEa(E); }
+    };
+  })();
+
   /* ════════ 시계 하나 ════════ */
   var last = 0, raf = 0;
-  function loop(ts) { var dt = last ? Math.min(0.05, (ts - last) / 1000) : 0; last = ts; T1.frame(dt); T2.frame(dt); T3.frame(dt); T4.frame(dt); raf = requestAnimationFrame(loop); }
+  function loop(ts) { var dt = last ? Math.min(0.05, (ts - last) / 1000) : 0; last = ts; T1.frame(dt); T2.frame(dt); T3.frame(dt); T4.frame(dt); T5.frame(dt); raf = requestAnimationFrame(loop); }
   document.addEventListener("visibilitychange", function () { if (!document.hidden) { last = 0; cancelAnimationFrame(raf); raf = requestAnimationFrame(loop); } });
-  window.__rr = { T1: T1, T2: T2, T3: T3, T4: T4, showTab: showTab, flashArea: flashArea, usingArt: function () { return RRC.usingArt(); },
-    advance: function (sec) { for (var i = 0; i < Math.round(sec * 30); i++) { T1.frame(1 / 30); T2.frame(1 / 30); T3.frame(1 / 30); T4.frame(1 / 30); } } };
+  window.__rr = { T1: T1, T2: T2, T3: T3, T4: T4, T5: T5, showTab: showTab, flashArea: flashArea, usingArt: function () { return RRC.usingArt(); },
+    advance: function (sec) { for (var i = 0; i < Math.round(sec * 30); i++) { T1.frame(1 / 30); T2.frame(1 / 30); T3.frame(1 / 30); T4.frame(1 / 30); T5.frame(1 / 30); } } };
   showTab("1");
   raf = requestAnimationFrame(loop);
 })();
