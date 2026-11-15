@@ -74,6 +74,22 @@
   table.exp button[disabled]{opacity:.45; cursor:not-allowed}
   table.exp td.avg{font-weight:700; color:var(--t1)}
 
+  /* 탭 ③④ */
+  .seg{display:inline-flex; gap:0; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+  .seg button{border:none !important; border-radius:0 !important; border-right:1px solid var(--line) !important; min-width:56px}
+  .seg button:last-child{border-right:none !important}
+  .seglab{font-size:13px; color:var(--t2); font-weight:600}
+  #st3, #st4{touch-action:manipulation}
+  #st4{border:2px dashed #94a3b8}
+  .catch{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:4px 0 8px}
+  .catch button{font-family:inherit; display:flex; flex-direction:column; align-items:center; gap:2px; min-height:44px; padding:6px 4px 4px; border-radius:9px;
+    border:1px solid var(--line); background:#fff; color:var(--t1); font-weight:700; font-size:14px; cursor:pointer}
+  .catch button[aria-pressed="true"]{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent) inset}
+  .catch button.seen{background:#f0fdf4}
+  .catch canvas{display:block; width:100%; max-width:150px; aspect-ratio:150/56}
+  #rp4{display:block; width:100%; aspect-ratio:360/220; background:#fff; border:1px solid var(--line); border-radius:10px}
+  .rpbar{height:5px; background:#e2e8f0; border-radius:3px; margin-top:6px; overflow:hidden}
+  .rpbar i{display:block; height:100%; width:0; background:#94a3b8}
   .later-box{margin-top:14px; padding:28px; text-align:center; color:var(--t2); font-size:14px; line-height:1.7}
   .limits{margin-top:14px}
   .limits summary{cursor:pointer; font-weight:600; color:var(--t1); font-size:14px}
@@ -96,11 +112,11 @@
     <button class="tabb tabname" type="button" data-tab="2" aria-pressed="false">반응 속도식</button>
   </div></div>
   <div class="tgrp tabname"><span class="gh tabname">02 1차 반응의 반감기</span><div class="row">
-    <button class="tabb later tabname" type="button" data-tab="3" aria-pressed="false">1차 반응의 반감기</button>
+    <button class="tabb tabname" type="button" data-tab="3" aria-pressed="false">1차 반응의 반감기</button>
   </div></div>
-  <div class="tgrp"><span class="gh">03 유효 충돌과 활성화 에너지</span><div class="row">
-    <button class="tabb later" type="button" data-tab="4" aria-pressed="false">유효 충돌</button>
-    <button class="tabb later" type="button" data-tab="5" aria-pressed="false">활성화 에너지</button>
+  <div class="tgrp tabname"><span class="gh tabname">03 유효 충돌과 활성화 에너지</span><div class="row">
+    <button class="tabb tabname" type="button" data-tab="4" aria-pressed="false">유효 충돌</button>
+    <button class="tabb later tabname" type="button" data-tab="5" aria-pressed="false">활성화 에너지</button>
   </div></div>
 </nav>
 
@@ -173,6 +189,83 @@
     <li>반응이 일어나면 원자가 가까운 분자 자리로 한꺼번에 옮겨 가게 그렸습니다(실제로는 분자끼리 부딪쳐 바뀝니다).</li>
     <li>[재기]는 매번 처음 분자 수로 새로 채워 다시 잽니다.</li>
     <li>분자 수가 적어 잴 때마다 값이 흔들립니다. 그래서 10번 재어 평균을 냅니다.</li>
+  </ul></details>
+</section>
+
+<!-- 탭 ③ -->
+<section class="pane" id="pane3" hidden>
+  <p class="tabdesc">2N₂O₅(g) → 4NO₂(g) + O₂(g) — 용기 속 N₂O₅ 분자가 하나씩 분해됩니다. 처음 분자 수를 바꿔 가며, 남은 N₂O₅가 절반이 될 때마다 걸린 시간을 재 보세요.</p>
+  <div class="lay">
+    <div class="card">
+      <div class="stagewrap">
+        <canvas class="st" id="st3" aria-label="N₂O₅ 분자가 든 용기. 누르면 그 자리의 분자에 표시를 답니다"></canvas>
+        <div class="ovl" id="clock3">반응 전</div>
+      </div>
+      <div class="btnrow">
+        <span class="seglab">처음 N₂O₅</span>
+        <span class="seg" id="n03"><button type="button" data-n0="32" aria-pressed="false">32개</button><button type="button" data-n0="64" aria-pressed="false">64개</button><button type="button" data-n0="128" aria-pressed="true">128개</button></span>
+        <button type="button" class="pri" id="go3">반응 시작</button>
+        <button type="button" id="slow3" aria-pressed="false">느리게</button>
+      </div>
+      <p class="note" id="tally3"></p>
+      <p class="note">용기를 누르면 그 자리의 N₂O₅ 분자에 고리 표시가 붙습니다(5개까지). 표시한 분자가 언제 분해되는지 지켜보세요.</p>
+      <p class="note" id="legend3"></p>
+    </div>
+    <div class="card">
+      <h2>반응 시간에 따른 N₂O₅ 분자 수</h2>
+      <div class="graph"><canvas id="g3" aria-label="반응 시간–N₂O₅ 분자 수 그래프"></canvas></div>
+      <div class="lgd" id="lgd3"></div>
+      <h2 style="margin-top:12px" id="th3">분자 수가 절반이 되는 데 걸린 시간</h2>
+      <div class="tblwrap"><table class="exp" id="tbl3"></table></div>
+      <p class="note">부피가 일정하므로 분자 수가 절반이면 몰농도도 절반입니다. 시간은 가장 가까운 초로 적었습니다.</p>
+      <div class="reveal"><button type="button" id="rev3" disabled>이름 보기</button><span class="why" id="revwhy3">한 번의 실행에서 분자 수가 처음의 1/8이 되면 켜집니다.</span><div class="out" id="revout3" hidden></div></div>
+    </div>
+  </div>
+  <details class="limits card"><summary>가정과 한계</summary><ul>
+    <li>분해되는 N₂O₅는 살아 있는 분자 가운데 무작위로 고릅니다. 오래 있던 분자와 방금 남은 분자, 주변에 분자가 많은 분자와 적은 분자 모두 분해될 가능성이 같습니다.</li>
+    <li>실제 용기에는 분자가 셀 수 없이 많아 분자 수가 매끈하게 줄어듭니다. 이 화면은 분자가 적어서, 매 순간 줄어들 «평균» 개수만큼 분해되도록 맞췄습니다(어느 분자가 분해될지는 무작위).</li>
+    <li>N₂O₅ 두 개가 분해될 때 O₂ 하나가 생기므로, 화면에서는 두 번째 분해마다 O₂를 그렸습니다. 생긴 NO₂와 O₂는 용기에 남지만, 화면을 가리지 않도록 잠시 보인 뒤 옅어지게 그렸습니다(생긴 수는 아래 글로 셉니다).</li>
+    <li>모든 분자의 빠르기를 같은 정도로 두었습니다. 분자 수가 줄어도 분자가 느려지지 않습니다.</li>
+  </ul></details>
+</section>
+
+<!-- 탭 ④ -->
+<section class="pane" id="pane4" hidden>
+  <p class="tabdesc">2HI(g) → H₂(g) + I₂(g) — HI 분자들이 쉬지 않고 서로 부딪칩니다. 부딪친 횟수와 생성물이 생긴 횟수를 비교하고, 그림 (가)(나)(다)와 같은 충돌을 붙잡아 느리게 다시 보세요.</p>
+  <div class="lay">
+    <div class="card">
+      <div class="stagewrap">
+        <canvas class="st" id="st4" aria-label="HI 분자들이 부딪치는 용기(큰 용기의 한 부분)"></canvas>
+        <div class="ovl" id="ctr4"></div>
+      </div>
+      <div class="btnrow">
+        <button type="button" id="zero4">횟수 다시 세기</button>
+        <button type="button" id="slow4" aria-pressed="false">느리게</button>
+      </div>
+      <p class="note" id="legend4"></p>
+      <p class="note">점선 안은 큰 용기의 한 부분이라, 반응해 줄어든 HI만큼 둘레에서 HI가 들어옵니다. 생긴 H₂와 I₂는 잠시 뒤 큰 용기 쪽으로 퍼져 옅어집니다.</p>
+    </div>
+    <div class="card">
+      <h2>충돌 붙잡아 다시 보기</h2>
+      <p class="note" style="margin:0 0 6px">그림을 고르면 용기 속에서 그렇게 부딪치는 <b>다음 충돌</b>을 붙잡아 느리게(5배 느리게 · 3배 크게) 다시 보여 줍니다. 흐린 분자는 그 근처의 다른 분자입니다. 용기 속 분자는 그동안에도 계속 움직입니다.</p>
+      <div class="catch" id="catch4">
+        <button type="button" data-cat="ga" aria-pressed="false"><canvas id="mini_ga" aria-hidden="true"></canvas>(가)</button>
+        <button type="button" data-cat="na" aria-pressed="false"><canvas id="mini_na" aria-hidden="true"></canvas>(나)</button>
+        <button type="button" data-cat="da" aria-pressed="false"><canvas id="mini_da" aria-hidden="true"></canvas>(다)</button>
+      </div>
+      <canvas id="rp4" aria-label="붙잡은 충돌을 느리게 다시 보는 화면"></canvas>
+      <div class="rpbar"><i id="rpbar4"></i></div>
+      <div class="counter" id="rpst4">위 그림 하나를 고르세요.</div>
+      <div class="btnrow"><button type="button" id="again4" disabled>한 번 더 보기</button></div>
+      <div class="reveal"><button type="button" id="rev4" disabled>이름 보기</button><span class="why" id="revwhy4">(가)(나)(다) 충돌을 모두 다시 보면 켜집니다.</span><div class="out" id="revout4" hidden></div></div>
+    </div>
+  </div>
+  <details class="limits card"><summary>가정과 한계</summary><ul>
+    <li>실제 HI는 보통의 조건에서 부딪쳐도 생성물이 거의 생기지 않습니다(분해가 아주 느립니다). 이 화면은 생성물이 생기는 충돌이 보이도록 그 비율을 실제보다 훨씬 크게 잡았습니다.</li>
+    <li>모든 분자의 질량을 같게 두었습니다(실제로는 I가 H보다 훨씬 무겁습니다).</li>
+    <li>둘레의 큰 용기와 맞닿아 있어서, 반응으로 분자가 빠지고 새로 들어와도 분자들의 평균 빠르기는 늘 같게 유지된다고 두었습니다.</li>
+    <li>분자는 원자 공끼리 닿을 때 부딪칩니다. 부딪쳐도 분자가 돌지 않게(회전은 그대로) 두었습니다.</li>
+    <li>이 화면은 큰 용기의 한 부분입니다(점선 = 벽이 아닌 경계). 생긴 H₂와 I₂가 다시 HI가 되는 반응은 다루지 않습니다.</li>
   </ul></details>
 </section>
 
