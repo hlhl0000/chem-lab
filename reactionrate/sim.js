@@ -649,7 +649,7 @@ var RRC = (function () {
 })();
 /* ==== CORE END ==== */
 
-/* ==== ART BEGIN (Astra RR_ART 1.3.0 — 원본 그대로 · 수정 금지) ==== */
+/* ==== ART BEGIN (Astra RR_ART 1.3.1 — 원본 그대로 · 수정 금지) ==== */
 (function (root) {
   'use strict';
   var PI = Math.PI, radii = {H: 3.2, N: 4.5, O: 4.05, I: 5.45};
@@ -744,25 +744,54 @@ var RRC = (function () {
     ctx.lineCap='round'; ctx.lineWidth=1.25; ctx.strokeStyle='#b5b4ad'; ctx.stroke();
     ctx.lineWidth=0.65; ctx.strokeStyle='#f8f3dc'; ctx.stroke(); ctx.restore();
   }
-  /* v1.3.0 (main finish — Codex usage limit): ball-and-stick atoms + bonds whose look follows bond order continuously.
-     order >= 0.9 solid rod · 0.5 round dots (textbook ···) · <= 0.1 nothing. Dots are anchored at the bond midpoint so they do not crawl. */
-  var STRUCT={atomScale:0.45,lw:0.65,period:1.25,colour:'#5f6b7a'};
-  function halfBond(c,x0,y0,x1,y1,dash,gap){c.setLineDash(gap>0?[dash,gap]:[]);c.lineDashOffset=0;c.beginPath();c.moveTo(x0,y0);c.lineTo(x1,y1);c.stroke();}
+  /* v1.3.1 — Astra: midpoint-anchored capsules grow symmetrically into rods.
+     One path avoids a double-dark midpoint. No integer dot redistribution or
+     pixel snapping: moving endpoints reveal the pattern underneath the balls.
+     Rod light comes from the same upper-left direction as the ball shading. */
+  var STRUCT={atomScale:0.45,lw:0.72,period:1.35,colour:'#5f6b7a'};
+  function bondPath(c,half,dash) {
+    var j, n=Math.ceil(half/STRUCT.period), p, lo, hi, r=STRUCT.lw/2;
+    c.beginPath();
+    for(j=-n;j<=n;j++){
+      p=j*STRUCT.period; lo=Math.max(-half,p-dash/2); hi=Math.min(half,p+dash/2);
+      if(lo>hi){continue;}
+      c.moveTo(lo,-r); c.lineTo(hi,-r); c.arc(hi,0,r,-PI/2,PI/2);
+      c.lineTo(lo,r); c.arc(lo,0,r,PI/2,3*PI/2); c.closePath();
+    }
+  }
+  function bondTone(r,g,b,k){return 'rgb('+Math.round(95+(r-95)*k)+','+Math.round(107+(g-107)*k)+','+Math.round(122+(b-122)*k)+')';}
   function structure(ctx,atoms,bonds,x,y,s) {
-    var scale, as, i, b, A, B, o, k, mx, my, dash, gap, alpha;
+    var scale, as, i, b, A, B, o, k, mx, my, dash, alpha, dx, dy, len, g, light, bridge;
     s=s||defaultOptions; scale=Math.max(0,number(s.scale,1)); if(!scale||!atoms){return;}
     as=Math.max(0.05,Math.min(1,number(s.atomScale,STRUCT.atomScale)));
     ctx.save(); ctx.translate(x,y); ctx.scale(scale,scale);
     if(s.alpha!==undefined){ctx.globalAlpha*=Math.max(0,Math.min(1,number(s.alpha,1)));}
-    ctx.lineCap='round'; ctx.strokeStyle=STRUCT.colour; ctx.lineWidth=STRUCT.lw;
+    ctx.setLineDash([]); ctx.lineCap='round'; ctx.lineWidth=STRUCT.lw;
     for(i=0;bonds&&i<bonds.length;i++){
       b=bonds[i]; A=atoms[b[0]]; B=atoms[b[1]]; o=Math.max(0,Math.min(1,number(b[2],0)));
       if(!A||!B||o<=0.1){continue;}
       alpha=o<0.5?(o-0.1)/0.4:1; k=o>=0.9?1:(o>0.5?(o-0.5)/0.4:0);
-      dash=k*STRUCT.period; gap=k>=1?0:STRUCT.period-dash;
+      alpha=alpha*alpha*(3-2*alpha); k=k*(2-k);
+      dash=k*(STRUCT.period-STRUCT.lw-0.08);
+      bridge=Math.max(0,(k-0.35)/0.65); bridge=bridge*bridge*(3-2*bridge);
+      dx=B[1]-A[1]; dy=B[2]-A[2]; len=Math.sqrt(dx*dx+dy*dy);
+      if(!len){continue;}
       mx=(A[1]+B[1])/2; my=(A[2]+B[2])/2;
-      ctx.save(); ctx.globalAlpha*=alpha;
-      halfBond(ctx,mx,my,A[1],A[2],dash,gap); halfBond(ctx,mx,my,B[1],B[2],dash,gap);
+      ctx.save(); ctx.globalAlpha*=alpha; ctx.translate(mx,my); ctx.rotate(Math.atan2(dy,dx));
+      ctx.fillStyle=STRUCT.colour;
+      if(k>0){
+        /* Cross-section shading fades in with the rod; dots stay high-contrast. */
+        light=(dy-dx)/len/Math.sqrt(2);
+        g=ctx.createLinearGradient(0,-STRUCT.lw/2,0,STRUCT.lw/2);
+        g.addColorStop(0,bondTone(89-9*light,100.5-9.5*light,116-10*light,k));
+        g.addColorStop(0.5+0.15*light,bondTone(172,182,195,k));
+        g.addColorStop(1,bondTone(89+9*light,100.5+9.5*light,116+10*light,k));
+        ctx.fillStyle=g;
+      }
+      bondPath(ctx,len/2,dash); ctx.fill();
+      /* Fill the gaps without merging overlapping antialiased capsule edges.
+         Both coverage and opacity only increase; there is no solid/dash switch. */
+      if(bridge>0){ctx.globalAlpha*=bridge;ctx.fillRect(-len/2,-STRUCT.lw/2,len,STRUCT.lw);}
       ctx.restore();
     }
     ctx.setLineDash([]);
@@ -776,7 +805,7 @@ var RRC = (function () {
     return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" aria-hidden="true"><defs><radialGradient id="'+id+'" cx="34%" cy="30%" r="72%"><stop stop-color="'+p[0]+'"/><stop offset=".53" stop-color="'+p[1]+'"/><stop offset="1" stop-color="'+p[2]+'"/></radialGradient></defs><circle cx="12" cy="12" r="10" fill="url(#'+id+')" stroke="'+p[3]+'" stroke-width=".8"/></svg>';
   }
   function icon(size) { size=Math.max(1,number(size,64)); return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><g fill="currentColor" fill-opacity=".12"><circle cx="18" cy="18" r="6"/><circle cx="11" cy="24" r="5"/><circle cx="25" cy="24" r="5"/><circle cx="44" cy="12" r="5"/><circle cx="51" cy="17" r="4"/><circle cx="39" cy="30" r="5"/><circle cx="47" cy="33" r="4"/></g><path d="M10 39v15h45M15 40c10 0 9 10 19 10h17"/></svg>'; }
-  root.RR_ART={contract:1,version:'1.3.0',structure:structure,structureDefaults:function(){return {atomScale:STRUCT.atomScale,lineWidth:STRUCT.lw,period:STRUCT.period,colour:STRUCT.colour};},shape:shape,molecule:molecule,flash:flash,impact:impact,legendSwatch:legendSwatch,svg:{icon:icon},info:function(){return {cacheEntries:keys.length};}};
+  root.RR_ART={contract:1,version:'1.3.1',structure:structure,structureDefaults:function(){return {atomScale:STRUCT.atomScale,lineWidth:STRUCT.lw,period:STRUCT.period,colour:STRUCT.colour};},shape:shape,molecule:molecule,flash:flash,impact:impact,legendSwatch:legendSwatch,svg:{icon:icon},info:function(){return {cacheEntries:keys.length};}};
 })(window);
 /* ==== ART END ==== */
 
