@@ -123,6 +123,17 @@ var RFC = (function () {
   Tab1.prototype.pairs = function () { var a = [], b = [], ps = this.box.ps, i, j, out = []; ps.forEach(function (p) { (p.k === "A" ? a : b).push(p); }); for (i = 0; i < a.length; i++) for (j = 0; j < b.length; j++) out.push([a[i], b[j]]); return out; };
   Tab1.prototype.step = function (dt) { this.box.step(dt); if (this.meter.on) { var fin = this.meter.tick(dt); return fin; } return false; };
 
+  /* ════════ 탭 ①-2 농도를 바꾸며 충돌수 — A 는 그대로, B 의 입자 수(= 같은 부피에서 농도)를 2~20 으로 ════════ */
+  var C6 = { W: 440, H: 300, R: 12, S: 125, NA: 8, NB0: 4, NBMIN: 2, NBMAX: 20, NBSTEP: 2, MEAS: 60, FF: 4 };
+  function Tab6(seed) { this.seed = seed || 61; this.set(C6.NB0); }
+  Tab6.prototype.set = function (nb) {
+    nb = Math.max(C6.NBMIN, Math.min(C6.NBMAX, nb)); this.nb = nb; this.round = (this.round || 0) + 1;
+    this.box = new Box({ W: C6.W, H: C6.H, S: C6.S, seed: this.seed + nb * 101 + this.round * 7, count: "AB", inject: this.inject });
+    var i; for (i = 0; i < C6.NA; i++) this.box.add("A", C6.R); for (i = 0; i < nb; i++) this.box.add("B", C6.R);
+    this.meter = new Meter(C6.MEAS);
+  };
+  Tab6.prototype.step = function (dt) { this.box.step(dt); return this.meter.on ? this.meter.tick(dt) : false; };
+
   /* ════════ 탭 ② 압력과 충돌수 — 같은 입자 수, 부피 절반(피스톤) ════════ */
   var C2 = { W: 560, H: 300, R: 11, S: 105, NA: 12, NB: 12, MEAS: 30, FF: 3, X1: [560, 280] };
   function Tab2(seed) { this.seed = seed || 21; this.set(0); }
@@ -211,7 +222,7 @@ var RFC = (function () {
 
   return {
     rng: rng, gauss: gauss, Box: Box, Meter: Meter, solidLayout: solidLayout, maxwellE: maxwellE, Hist: Hist,
-    C1: C1, C2: C2, C3: C3, C4: C4, C5: C5, Tab1: Tab1, Tab2: Tab2, Tab3: Tab3, Tab4: Tab4, Tab5: Tab5
+    C1: C1, C2: C2, C3: C3, C4: C4, C5: C5, C6: C6, Tab1: Tab1, Tab2: Tab2, Tab3: Tab3, Tab4: Tab4, Tab5: Tab5, Tab6: Tab6
   };
 })();
 /* ==== CORE END ==== */
@@ -551,6 +562,51 @@ var RFC = (function () {
     };
   })();
 
+  /* ════════ 탭 ①-2 농도를 바꾸며 측정 ════════ */
+  var T6 = (function () {
+    var C = RFC.C6, tab = new RFC.Tab6(61), st = new Stage($("st6"), C.W, C.H), g = new Stage($("g6"), 520, 300), fx = new FX(), rows = {}, ff = 1, sl = $("nb6");
+    function pick(nb) { if (tab.meter.on) return; nb = Math.max(C.NBMIN, Math.min(C.NBMAX, nb)); sl.value = nb; $("nbv6").textContent = nb + "개"; if (nb !== tab.nb) { tab.set(nb); fx.list = []; } table(); }
+    sl.addEventListener("input", function () { pick(+sl.value); });
+    $("nbm6").addEventListener("click", function () { pick(tab.nb - C.NBSTEP); });
+    $("nbp6").addEventListener("click", function () { pick(tab.nb + C.NBSTEP); });
+    function table() {
+      var ks = Object.keys(rows).map(Number).sort(function (a, b) { return a - b; }), h = "<tr><th>B의 입자 수</th><th>A의 입자 수</th><th>단위 시간당 충돌수</th></tr>";
+      if (!ks.length) h += '<tr><td class="e" colspan="3">아직 센 값이 없습니다</td></tr>';
+      ks.forEach(function (k) { h += "<tr" + (k === tab.nb ? ' class="now"' : "") + "><td>" + k + "</td><td>" + C.NA + '</td><td class="v">' + rows[k] + "</td></tr>"; });
+      $("tb6").innerHTML = h;
+    }
+    function graph() {
+      var c = g.begin(), W = g.W, H = g.H, L = 58, R = 16, T = 14, B = 44, gw = W - L - R, gh = H - T - B, ks = Object.keys(rows).map(Number), ym = 200, i;
+      ks.forEach(function (k) { ym = Math.max(ym, rows[k]); }); ym = Math.ceil(ym * 1.15 / 200) * 200;
+      function X(n) { return L + n / C.NBMAX * gw; } function Y(v) { return T + gh - v / ym * gh; }
+      c.strokeStyle = "#e2e8f0"; c.lineWidth = 1; c.font = font("600", 12); c.fillStyle = COL.sub; c.textAlign = "right"; c.textBaseline = "middle";
+      for (i = 0; i <= ym; i += ym / 4) { c.beginPath(); c.moveTo(L, Y(i)); c.lineTo(L + gw, Y(i)); c.stroke(); c.fillText(String(Math.round(i)), L - 6, Y(i)); }
+      c.textAlign = "center"; c.textBaseline = "top";
+      for (i = 0; i <= C.NBMAX; i += 4) { c.beginPath(); c.moveTo(X(i), T); c.lineTo(X(i), T + gh); c.stroke(); c.fillText(String(i), X(i), T + gh + 4); }
+      c.strokeStyle = "#94a3b8"; c.beginPath(); c.moveTo(L, T); c.lineTo(L, T + gh); c.lineTo(L + gw, T + gh); c.stroke();
+      c.save(); c.strokeStyle = "#94a3b8"; c.setLineDash([4, 4]); c.beginPath(); c.moveTo(X(tab.nb), T); c.lineTo(X(tab.nb), T + gh); c.stroke(); c.restore();
+      ks.forEach(function (k) { c.beginPath(); c.arc(X(k), Y(rows[k]), 6, 0, 7); c.fillStyle = COL.B; c.fill(); c.strokeStyle = "#3b1d5c"; c.lineWidth = 1.5; c.stroke(); });
+      c.fillStyle = COL.sub; c.font = font("600", 13); c.textAlign = "right"; c.textBaseline = "bottom"; c.fillText("B의 입자 수 (B의 농도) →", L + gw, H - 2);
+      c.save(); c.translate(15, T + gh / 2); c.rotate(-Math.PI / 2); c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("단위 시간당 충돌수 →", 0, 0); c.restore();
+    }
+    $("go6").addEventListener("click", function () { tab.box.resetCount(); tab.meter.start(); ff = C.FF; fx.list = []; });
+    $("clr6").addEventListener("click", function () { if (tab.meter.on) return; rows = {}; table(); });
+    $("lgd6").innerHTML = "<span>" + swatch("A") + " A</span> · <span>" + swatch("B") + " B</span> · 작은 고리 = A와 B가 부딪친 자리";
+    table();
+    return {
+      frame: function (dt) {
+        if (run(tab, dt, ff)) { rows[tab.nb] = tab.box.cnt.coll; ff = 1; table(); }
+        fx.take(tab.box.drain(), 0, 0);
+        var c = st.begin(); drawBox(c, tab.box, 0, 0, {}); fx.draw(c, dt);
+        $("c6").textContent = tab.meter.on ? tab.box.cnt.coll : (tab.meter.done && rows[tab.nb] != null ? rows[tab.nb] : 0);
+        measUI(6, tab.meter, ff); graph();
+        var on = tab.meter.on; sl.disabled = on; $("nbm6").disabled = on; $("nbp6").disabled = on; $("go6").disabled = on; $("clr6").disabled = on;
+      },
+      state: function () { return { nb: tab.nb, rows: rows, coll: tab.box.cnt.coll, meas: tab.meter.on, n: tab.box.ps.length, na: tab.box.ps.filter(function (p) { return p.k === "A"; }).length }; },
+      tab: tab, pick: pick
+    };
+  })();
+
   /* ════════ 탭 ② ════════ */
   var T2 = (function () {
     var C = RFC.C2, M = 64, tab = new RFC.Tab2(21), st = new Stage($("st2"), C.W + M, C.H), fx = new FX(), rows = {}, ff = 1, p0 = null, pNow = null;
@@ -735,7 +791,7 @@ var RFC = (function () {
   })();
 
   /* ── 탭 전환 · 고리 ── */
-  var TABS = { 1: T1, 2: T2, 3: T3, 4: T4, 5: T5 }, cur = "1";
+  var TABS = { 1: T1, 2: T2, 3: T3, 4: T4, 5: T5, 6: T6 }, cur = "1";
   function showTab(n) {
     cur = String(n);
     Array.prototype.forEach.call(document.querySelectorAll(".tabb"), function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-tab") === cur ? "true" : "false"); });
