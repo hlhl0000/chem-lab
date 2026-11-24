@@ -303,6 +303,16 @@ const SIMS = [
     tags: ["반응 속도","몰농도","그래프의 기울기","입자 운동","분자 수와 농도","절반이 되는 시간","분자 충돌","에너지 장벽"]
   },
   {
+    id: "ratefactors",
+    title: "농도·온도·촉매와 반응 속도",
+    cat: "화학 반응과 에너지",
+    path: "ratefactors/",
+    icon: "ratefactors",
+    ready: true,
+    desc: "A·B 입자 수를 바꾸며 같은 시간 동안 A와 B가 부딪치는 횟수를 세고, 피스톤으로 부피를 줄이거나 고체를 잘게 나누어 충돌수를 비교합니다. 두 온도의 용기에서 활성화 에너지 이상의 분자와 반응 횟수를 세어 운동 에너지에 따른 분자 수 막대와 함께 보고, 촉매를 넣어 활성화 에너지가 달라질 때 반응이 얼마나 일어나는지 비교합니다.",
+    tags: ["반응 속도","농도","충돌수","압력","표면적","온도","활성화 에너지","운동 에너지","촉매"]
+  },
+  {
     id: "predprey",
     title: "개체군 변동과 생태계평형",
     cat: "통합과학",
@@ -336,6 +346,7 @@ const ICONS = {
          <path d="M16 50v-6M24 50v-8M32 50v-5M40 50v-7M48 50v-6" stroke="currentColor"
          stroke-width="3" stroke-linecap="round"/>`,
   reactionrate:`<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><g fill="currentColor" fill-opacity=".12"><circle cx="18" cy="18" r="6"/><circle cx="11" cy="24" r="5"/><circle cx="25" cy="24" r="5"/><circle cx="44" cy="12" r="5"/><circle cx="51" cy="17" r="4"/><circle cx="39" cy="30" r="5"/><circle cx="47" cy="33" r="4"/></g><path d="M10 39v15h45M15 40c10 0 9 10 19 10h17"/></g>`,
+  ratefactors:`<g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="52" height="33" rx="4"/><g fill="currentColor" fill-opacity=".12"><circle cx="18" cy="18" r="4.5"/><circle cx="30" cy="29" r="4"/><circle cx="45" cy="18" r="4.5"/></g><circle cx="45" cy="18" r="8" stroke-width="2" opacity=".55"/><path d="M11 28l4-2M25 14l4-2M39 30l4-2M8 45v12h49M13 53c7 0 8-8 14-8s8 9 25 9M39 43v14"/></g>`,
   mineral:`<path d="M32 5l24 15v24L32 59 8 44V20z" fill="none" stroke="currentColor"
            stroke-width="4" stroke-linejoin="round"/>
            <path d="M32 5v54M8 20l48 24M56 20L8 44" stroke="currentColor" stroke-width="2" opacity=".38"/>

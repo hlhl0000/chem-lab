@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>농도·온도·촉매와 반응 속도</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* 색: shared/style.css 토큰 우선. 입자·그래프 색은 sim.js 머리의 COL 표 한 곳에서만 정한다. */
+  .page{padding:18px 0 40px}
+  .head h1{font-size:22px; margin:0 0 4px; color:var(--t1)}
+  .head .sub{color:var(--t2); font-size:14px; margin:0; line-height:1.6}
+  .tabbar{display:flex; gap:14px; flex-wrap:wrap; margin-top:14px; align-items:flex-end}
+  .tgrp{display:flex; flex-direction:column; gap:3px}
+  .tgrp .gh{font-size:11.5px; color:var(--t3); font-weight:700; padding-left:4px}
+  .tgrp .row{display:flex; gap:6px; flex-wrap:wrap}
+  .tabb{font-family:inherit; font-size:14px; font-weight:600; padding:10px 14px; min-height:44px;
+    border-radius:10px 10px 0 0; border:1px solid var(--line); border-bottom:none; background:#eef2f7; color:var(--t2); cursor:pointer}
+  .tabb[aria-pressed="true"]{background:var(--panel); color:var(--accent-dark); box-shadow:inset 0 3px 0 var(--accent)}
+  .tabdesc{font-size:13.5px; color:var(--t2); line-height:1.65; margin:8px 0 0;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px}
+  .pane[hidden]{display:none}
+  .lay{display:grid; gap:14px; margin-top:12px; align-items:start; grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr)}
+  .lay > .card{min-width:0}
+  @media(max-width:1023px){ .lay{grid-template-columns:minmax(0,1fr)} }
+  .card h2{font-size:14px; margin:0 0 8px; color:var(--t1)}
+  .note{font-size:12.5px; color:var(--t3); margin:8px 0 0; line-height:1.6}
+  .st{display:block; width:100%; background:#fff; border-radius:10px; border:1px solid #94a3b8}
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 0; align-items:center}
+  .btnrow button{font-family:inherit; font-size:14px; font-weight:600; min-height:44px; padding:8px 14px; border-radius:9px;
+    border:1px solid var(--line); background:#fff; color:var(--t1); cursor:pointer}
+  .btnrow button.pri{background:var(--accent); border-color:var(--accent); color:#fff}
+  .btnrow button[disabled]{opacity:.45; cursor:not-allowed}
+  .btnrow button[aria-pressed="true"]{background:var(--accent-dark); color:#fff; border-color:var(--accent-dark)}
+  .btnrow label{display:inline-flex; gap:6px; align-items:center; min-height:44px; font-size:14px; color:var(--t1); cursor:pointer}
+  .btnrow input[type=checkbox]{width:20px; height:20px}
+  .seglab{font-size:13px; color:var(--t2); font-weight:700}
+  .seg{display:inline-flex; flex-wrap:wrap; gap:0; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+  .seg button{border:none !important; border-radius:0 !important; border-right:1px solid var(--line) !important; min-width:64px}
+  .seg button:last-child{border-right:none !important}
+  .meas{margin-top:10px; background:#f8fafc; border:1px solid var(--line); border-radius:9px; padding:8px 10px}
+  .meas .bar{height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; margin-top:6px}
+  .meas .bar i{display:block; height:100%; width:0; background:#64748b}
+  .meas .lab{font-size:13px; color:var(--t2); display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap}
+  .meas .lab b{color:var(--t1)}
+  .ctr{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; margin-top:8px}
+  .ctr.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ctr div{background:#fff; border:1px solid var(--line); border-radius:9px; padding:6px 10px; font-size:13px; color:var(--t2)}
+  .ctr div b{display:block; font-size:24px; color:var(--t1); font-variant-numeric:tabular-nums; line-height:1.25}
+  .tblwrap{overflow-x:auto; max-width:100%; margin-top:8px}
+  table.exp{width:100%; border-collapse:collapse; font-size:13.5px}
+  table.exp th, table.exp td{border:1px solid var(--line); padding:6px 6px; text-align:center; vertical-align:middle}
+  table.exp th{background:#f1f5f9; color:var(--t1); font-weight:600; font-size:12.5px}
+  table.exp td.v{font-weight:700; color:var(--t1); font-variant-numeric:tabular-nums}
+  table.exp td.e{color:var(--t3)}
+  table.exp tr.now td{background:#eff6ff}
+  .graph canvas{display:block; width:100%; background:#fff; border:1px solid var(--line); border-radius:10px}
+  .lgd{display:flex; gap:12px; font-size:12.5px; color:var(--t2); margin-top:6px; flex-wrap:wrap; align-items:center}
+  .lgd span{display:inline-flex; gap:5px; align-items:center}
+  .lgd i.sw{display:inline-block; width:14px; height:14px; border-radius:3px}
+  .lgd svg{vertical-align:middle}
+  .limits{margin-top:14px}
+  .limits summary{cursor:pointer; font-weight:600; color:var(--t1); font-size:14px; min-height:44px; display:flex; align-items:center}
+  .limits li{font-size:13px; color:var(--t2); line-height:1.65; margin:4px 0}
+  @media(max-width:600px){ .tabb{padding:8px 10px; font-size:13px} .ctr div b{font-size:20px} }
+</style>
+</head>
+<body>
+<div class="wrap page">
+
+<div class="head">
+  <h1>농도·온도·촉매와 반응 속도</h1>
+  <p class="sub">입자의 수·빠르기·장벽을 바꾸며 같은 시간 동안 일어나는 충돌과 반응을 세어 봅니다.</p>
+</div>
+
+<nav class="tabbar" id="tabbar" aria-label="탭">
+  <div class="tgrp"><span class="gh">01 농도와 반응 속도</span><div class="row">
+    <button class="tabb" type="button" data-tab="1" aria-pressed="true">농도와 충돌수</button>
+    <button class="tabb" type="button" data-tab="2" aria-pressed="false">압력과 충돌수</button>
+    <button class="tabb" type="button" data-tab="3" aria-pressed="false">표면적과 충돌수</button>
+  </div></div>
+  <div class="tgrp"><span class="gh">02 온도와 반응 속도</span><div class="row">
+    <button class="tabb" type="button" data-tab="4" aria-pressed="false">온도와 반응</button>
+  </div></div>
+  <div class="tgrp"><span class="gh">03 촉매와 반응 속도</span><div class="row">
+    <button class="tabb" type="button" data-tab="5" aria-pressed="false">촉매와 반응</button>
+  </div></div>
+</nav>
+
+<!-- ① 농도와 충돌수 -->
+<section class="pane" id="pane1" data-pane="1">
+  <p class="tabdesc">A와 B의 입자 수를 고르고 [같은 시간 동안 세기]를 누르세요. A와 B가 부딪칠 때만 셉니다. 점선은 A와 B가 서로 부딪칠 수 있는 짝입니다.</p>
+  <div class="lay">
+    <div class="card">
+      <canvas class="st" id="st1" aria-label="A와 B 입자가 움직이는 용기"></canvas>
+      <div class="btnrow"><span class="seglab">입자 수 (A, B)</span>
+        <span class="seg" role="group" aria-label="입자 수" id="cond1"></span>
+        <label><input type="checkbox" id="pair1" checked> 짝 점선</label>
+      </div>
+      <div class="btnrow"><button type="button" class="pri" id="go1">같은 시간 동안 세기</button><button type="button" id="clr1">표 비우기</button></div>
+      <p class="note" id="lgd1"></p>
+    </div>
+    <div class="card">
+      <h2>같은 시간 동안 센 A–B 충돌수</h2>
+      <div class="meas"><div class="lab"><span id="ml1">세기 전</span><b id="mf1"></b></div><div class="bar"><i id="mb1"></i></div></div>
+      <div class="ctr"><div>A–B 충돌수<b id="c1">0</b></div></div>
+      <div class="tblwrap"><table class="exp" id="tb1"></table></div>
+    </div>
+  </div>
+</section>
+
+<!-- ② 압력과 충돌수 -->
+<section class="pane" id="pane2" data-pane="2" hidden>
+  <p class="tabdesc">기체 A와 B가 든 용기입니다. 피스톤을 밀어 부피를 절반으로 줄인 뒤 같은 시간 동안 A–B 충돌수를 세어 처음과 비교하세요. 입자 수는 바뀌지 않습니다.</p>
+  <div class="lay">
+    <div class="card">
+      <canvas class="st" id="st2" aria-label="피스톤이 달린 기체 용기"></canvas>
+      <div class="btnrow"><span class="seglab">피스톤</span>
+        <span class="seg" role="group" aria-label="부피" id="cond2"></span>
+      </div>
+      <div class="btnrow"><button type="button" class="pri" id="go2">같은 시간 동안 세기</button><button type="button" id="clr2">표 비우기</button></div>
+      <p class="note" id="lgd2"></p>
+    </div>
+    <div class="card">
+      <h2>같은 시간 동안 센 A–B 충돌수</h2>
+      <div class="meas"><div class="lab"><span id="ml2">세기 전</span><b id="mf2"></b></div><div class="bar"><i id="mb2"></i></div></div>
+      <div class="ctr"><div>A–B 충돌수<b id="c2">0</b></div><div>압력<b id="p2">—</b></div></div>
+      <div class="tblwrap"><table class="exp" id="tb2"></table></div>
+      <p class="note">압력은 같은 시간 동안 기체 입자가 벽에 부딪친 횟수(벽 길이당)를 처음 부피일 때와 비교한 값입니다. 처음 부피에서 먼저 세면 나옵니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ③ 표면적과 충돌수 -->
+<section class="pane" id="pane3" data-pane="3" hidden>
+  <p class="tabdesc">가운데 고체 반응물의 양은 그대로 두고 조각 수만 바꿉니다. 기체 B가 고체 표면에 부딪친 횟수를 같은 시간 동안 세어 비교하세요.</p>
+  <div class="lay">
+    <div class="card">
+      <canvas class="st" id="st3" aria-label="고체 조각과 기체 B가 든 용기"></canvas>
+      <div class="btnrow"><span class="seglab">고체</span>
+        <span class="seg" role="group" aria-label="고체 조각" id="cond3"></span>
+      </div>
+      <div class="btnrow"><button type="button" class="pri" id="go3">같은 시간 동안 세기</button><button type="button" id="clr3">표 비우기</button></div>
+      <p class="note" id="lgd3"></p>
+    </div>
+    <div class="card">
+      <h2>같은 시간 동안 센 B–고체 충돌수</h2>
+      <div class="meas"><div class="lab"><span id="ml3">세기 전</span><b id="mf3"></b></div><div class="bar"><i id="mb3"></i></div></div>
+      <div class="ctr"><div>B–고체 충돌수<b id="c3">0</b></div><div>고체의 겉면 길이<b id="e3">—</b></div></div>
+      <div class="tblwrap"><table class="exp" id="tb3"></table></div>
+      <p class="note">겉면 길이는 기체와 맞닿는 고체 테두리의 길이를 덩어리 1개일 때와 비교한 값입니다. 화면은 평면이라 표면적 대신 테두리 길이로 나타냈습니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ④ 온도와 반응 -->
+<section class="pane" id="pane4" data-pane="4" hidden>
+  <p class="tabdesc">같은 반응물을 온도 T₁(왼쪽)과 T₂(오른쪽)에 두었습니다. T₂가 더 높은 온도입니다. 분자의 움직임을 비교하고 [같은 시간 동안 세기]로 충돌수와 반응한 분자 수를 세어 보세요.</p>
+  <div class="lay">
+    <div class="card">
+      <canvas class="st" id="st4" aria-label="온도 T1과 T2의 두 용기"></canvas>
+      <div class="btnrow">
+        <label><input type="checkbox" id="hot4" checked> 활성화 에너지(Eₐ) 이상인 분자 표시</label>
+      </div>
+      <div class="btnrow"><button type="button" class="pri" id="go4">같은 시간 동안 세기</button><button type="button" id="clr4">표 비우기</button></div>
+      <p class="note" id="lgd4"></p>
+    </div>
+    <div class="card">
+      <h2>같은 시간 동안 센 값</h2>
+      <div class="meas"><div class="lab"><span id="ml4">세기 전</span><b id="mf4"></b></div><div class="bar"><i id="mb4"></i></div></div>
+      <div class="ctr two"><div>T₁ 충돌수<b id="c4a">0</b></div><div>T₂ 충돌수<b id="c4b">0</b></div><div>T₁ 반응한 분자 수<b id="r4a">0</b></div><div>T₂ 반응한 분자 수<b id="r4b">0</b></div></div>
+      <div class="tblwrap"><table class="exp" id="tb4"></table></div>
+    </div>
+  </div>
+  <div class="card graph" style="margin-top:14px">
+    <h2>운동 에너지에 따른 분자 수</h2>
+    <canvas id="g4" aria-label="온도 T1과 T2에서 운동 에너지에 따른 분자 수 막대. 세로선은 활성화 에너지"></canvas>
+    <div class="lgd" id="gl4"></div>
+    <p class="note">두 용기의 분자 운동 에너지를 0.25초마다 세어 평균한 막대입니다. 두 용기의 분자 수는 같습니다. 진하게 칠한 부분이 Eₐ 이상의 운동 에너지를 가진 분자입니다.</p>
+  </div>
+</section>
+
+<!-- ⑤ 촉매와 반응 -->
+<section class="pane" id="pane5" data-pane="5" hidden>
+  <p class="tabdesc">두 용기는 온도와 반응물 분자 수가 같습니다. 오른쪽에만 촉매를 넣었습니다. 촉매의 종류를 고르고 같은 시간 동안 충돌수와 반응한 분자 수를 비교해 보세요.</p>
+  <div class="lay">
+    <div class="card">
+      <canvas class="st" id="st5" aria-label="촉매가 없는 용기와 촉매를 넣은 용기"></canvas>
+      <div class="btnrow"><span class="seglab">오른쪽 용기의 촉매</span>
+        <span class="seg" role="group" aria-label="촉매" id="cond5"></span>
+        <label><input type="checkbox" id="hot5" checked> 활성화 에너지 이상인 분자 표시</label>
+      </div>
+      <div class="btnrow"><button type="button" class="pri" id="go5">같은 시간 동안 세기</button><button type="button" id="clr5">표 비우기</button></div>
+      <p class="note" id="lgd5"></p>
+    </div>
+    <div class="card">
+      <h2>같은 시간 동안 센 값</h2>
+      <div class="meas"><div class="lab"><span id="ml5">세기 전</span><b id="mf5"></b></div><div class="bar"><i id="mb5"></i></div></div>
+      <div class="ctr two"><div>촉매 없음 충돌수<b id="c5a">0</b></div><div>촉매 넣음 충돌수<b id="c5b">0</b></div><div>촉매 없음 반응한 분자 수<b id="r5a">0</b></div><div>촉매 넣음 반응한 분자 수<b id="r5b">0</b></div><div>촉매 입자 수<b id="k5">0</b></div></div>
+      <div class="tblwrap"><table class="exp" id="tb5"></table></div>
+    </div>
+  </div>
+  <div class="lay">
+    <div class="card graph">
+      <h2>운동 에너지에 따른 분자 수</h2>
+      <canvas id="g5" aria-label="운동 에너지에 따른 분자 수 막대와 촉매 유무에 따른 활성화 에너지 세로선"></canvas>
+      <div class="lgd" id="gl5"></div>
+    </div>
+    <div class="card graph">
+      <h2>반응 경로에 따른 엔탈피</h2>
+      <canvas id="h5" aria-label="촉매가 없을 때와 촉매를 넣었을 때의 반응 경로와 엔탈피"></canvas>
+      <div class="lgd" id="hl5"></div>
+    </div>
+  </div>
+</section>
+
+<details class="limits card"><summary>가정과 한계</summary><ul>
+  <li>입자는 늘 움직입니다. 셀 때만 시간을 빠르게 돌려(빨리 감기) 짧은 시간 안에 충분히 셉니다. 모든 조건을 같은 시간 동안 셉니다.</li>
+  <li>용기 벽은 온도를 일정하게 지켜 주는 벽입니다. 그래서 입자 수가 적어도 빠르기의 분포가 그 온도의 분포를 따릅니다.</li>
+  <li>농도·압력·표면적 탭은 충돌만 셉니다. 충돌해도 반응시키지 않아 입자 수가 그대로입니다.</li>
+  <li>온도·촉매 탭에서는 활성화 에너지 이상의 운동 에너지를 가진 분자가 끼인 충돌만 반응합니다. 반응물 수를 일정하게 하려고 반응한 자리에 반응물을 다시 채웁니다.</li>
+  <li>반응이 보이도록 두 온도의 차이를 실제보다 크게 하고 활성화 에너지를 낮춘 모형입니다. T₁·T₂에는 실제 온도 값이 없습니다.</li>
+  <li>화면은 평면이지만 분자의 운동 에너지는 보이지 않는 세 번째 방향의 빠르기까지 넣어 셉니다(교과서 그래프와 같은 모양이 되도록).</li>
+  <li>촉매가 반응 경로를 바꾸는 과정(흡착 등)은 그리지 않고, 활성화 에너지가 달라진 결과만 보입니다. 촉매 입자는 반응에 쓰여 없어지지 않습니다.</li>
+</ul></details>
+
+</div>
+
+<script src="../sims.js"></script>
+<script src="../shared/nav.js" data-base=".." data-current="ratefactors"></script>
+<script src="../shared/qr.js" data-base=".." data-current="ratefactors"></script>
+<script src="sim.js"></script>
+</body>
+</html>
